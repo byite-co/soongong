@@ -59,6 +59,12 @@ abstract final class AppAccent {
   /// dark background colour (6.6:1). Documented in docs/design-tokens.md §7.
   static const Color onBlueDark = AppNeutral.n950;
 
+  /// Toast action text. The prototype uses #8FA0FF on both toasts; on the
+  /// dark toast (light #F4F4F6 background) that is only 2.3:1, so the dark
+  /// theme uses [blueText] (6.1:1). Light toast keeps #8FA0FF (7.8:1).
+  static const Color toastAction = Color(0xFF8FA0FF);
+  static const Color toastActionDark = blueText;
+
   static const Color ok = Color(0xFF12A05C);
   static const Color okDark = Color(0xFF2BD48A);
   static const Color okText = Color(0xFF0B7A45);

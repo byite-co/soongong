@@ -32,7 +32,7 @@
 | `--scrim` | `rgba(17,17,20,.42)` | `rgba(0,0,0,.66)` | `scrim` | |
 | `--shadow` | `0 1px 2px rgba(0,0,0,.04)` | `none` | `shadow` | |
 | `--r1` `--r2` `--r3` `--r4` | `#E4E4E9` `#C9C9D2` `#9D9DAB` `#3D5AFE` | `#1C1C24` `#2A2A36` `#454560` `#7A8CFF` | `ringTrack1..3` · `ringFill` | n400·n500 |
-| 토스트 | bg `var(--tx)` · fg `var(--bg)` · 액션 `#8FA0FF` | 동일 규칙 | `toastBg` `toastFg` `toastAction` | |
+| 토스트 | bg `var(--tx)` · fg `var(--bg)` · 액션 `#8FA0FF` | bg `#F4F4F6` · fg `#0B0B0F` · 액션 **`#2F49E0`**(편차, 7장) | `toastBg` `toastFg` `toastAction` | |
 
 ## 2. 무채색 스케일 (`AppNeutral`)
 
@@ -127,3 +127,5 @@
 | 과목색 다크 | 없음 | 파생값(3장) | 다크 테마 필수 |
 | 작은 버튼 42px | 42 | 시각 42 + 히트 44 | 터치 타깃 44 |
 | 다크 주 버튼 글자 | `#FFFFFF` on `#7A8CFF` (2.6:1) | `#0B0B0F` on `#7A8CFF` (6.6:1) — `AppColors.dark.onPri` | 텍스트 대비 4.5:1 |
+| 다크 토스트 액션 | `#8FA0FF` on `#F4F4F6` (2.3:1) | `#2F49E0` on `#F4F4F6` (6.1:1) — `AppColors.dark.toastAction` [S01b] | 텍스트 대비 4.5:1 |
+| 작은 버튼·토스트 액션 탭 영역 | 시각 42 · 텍스트만 | 탭 위젯 자체가 44×44 이상(시각 요소는 그대로) [S01b] | 터치 타깃 44 |

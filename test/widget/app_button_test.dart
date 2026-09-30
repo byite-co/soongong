@@ -51,8 +51,56 @@ void main() {
     await tester.tap(find.text('취소'));
     expect(tapped, isTrue);
     expect(find.text('삭제'), findsOneWidget);
-    // Touch target ≥ 44 for every button.
-    for (final e in find.byType(AppButton).evaluate()) {
+  });
+
+  testWidgets('small: visual box is 42 but the tap area is ≥ 44 and hits',
+      (tester) async {
+    var taps = 0;
+    await pumpThemed(
+      tester,
+      Center(
+        child: AppButton(
+          label: '작게',
+          size: AppButtonSize.small,
+          expand: false,
+          onPressed: () => taps++,
+        ),
+      ),
+    );
+    final tapArea = find.descendant(
+      of: find.byType(AppButton),
+      matching: find.byType(GestureDetector),
+    );
+    final areaRect = tester.getRect(tapArea);
+    expect(areaRect.height, greaterThanOrEqualTo(44));
+    expect(areaRect.width, greaterThanOrEqualTo(44));
+
+    // The painted box is 42 tall, centred inside the tap area.
+    final visualRect = tester.getRect(
+      find.descendant(of: tapArea, matching: find.byType(AnimatedScale)),
+    );
+    expect(visualRect.height, 42);
+    expect(visualRect.top, greaterThan(areaRect.top));
+
+    // Tapping just outside the painted box but inside the 44 area hits.
+    await tester.tapAt(Offset(areaRect.center.dx, areaRect.top + 0.5));
+    await tester.pump();
+    await tester.tapAt(Offset(areaRect.center.dx, areaRect.bottom - 0.5));
+    await tester.pump();
+    expect(taps, 2);
+  });
+
+  testWidgets('every size exposes a ≥ 44 tap area', (tester) async {
+    await pumpThemed(
+      tester,
+      Column(
+        children: <Widget>[
+          for (final s in AppButtonSize.values)
+            AppButton(label: s.name, size: s, onPressed: () {}),
+        ],
+      ),
+    );
+    for (final e in find.byType(GestureDetector).evaluate()) {
       expect(e.size!.height, greaterThanOrEqualTo(44));
     }
   });

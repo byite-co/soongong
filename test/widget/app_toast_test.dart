@@ -29,6 +29,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('기록을 삭제했습니다'), findsOneWidget);
     expect(find.text(CommonStrings.undo), findsOneWidget);
+    // Action tap area ≥ 44×44 (S01b).
+    final action = find.ancestor(
+      of: find.text(CommonStrings.undo),
+      matching: find.byType(GestureDetector),
+    );
+    final size = tester.getSize(action.first);
+    expect(size.height, greaterThanOrEqualTo(44));
+    expect(size.width, greaterThanOrEqualTo(44));
     await tester.tap(find.text(CommonStrings.undo));
     await tester.pump();
     expect(undone, 1);

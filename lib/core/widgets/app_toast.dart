@@ -157,9 +157,9 @@ class AppToast extends StatelessWidget {
         color: c.toastBg,
         borderRadius: BorderRadius.circular(AppRadius.toast),
         child: Padding(
-          padding: const EdgeInsets.symmetric(
+          padding: EdgeInsets.symmetric(
             horizontal: AppSpacing.s14,
-            vertical: AppSpacing.s12,
+            vertical: actionLabel != null ? AppSpacing.s4 : AppSpacing.s12,
           ),
           child: Row(
             children: <Widget>[
@@ -177,19 +177,33 @@ class AppToast extends StatelessWidget {
                 ),
               ),
               if (actionLabel != null) ...<Widget>[
-                const SizedBox(width: AppSpacing.s10),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onAction,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppSpacing.s8,
-                      horizontal: AppSpacing.s4,
-                    ),
-                    child: Text(
-                      actionLabel!,
-                      style: AppTypography.withWeight(AppTypography.label, 600)
-                          .copyWith(color: c.toastAction, height: 1.2),
+                const SizedBox(width: AppSpacing.s6),
+                // Action tap area ≥ 44×44 (S01b); the visual row stays compact
+                // because the toast's own vertical padding is reduced by the
+                // action's overflow (it is centred, not stacked).
+                Semantics(
+                  button: true,
+                  label: actionLabel,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onAction,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        minWidth: AppSpacing.touchTarget,
+                        minHeight: AppSpacing.touchTarget,
+                      ),
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.s4,
+                          ),
+                          child: Text(
+                            actionLabel!,
+                            style: AppTypography.withWeight(AppTypography.label, 600)
+                                .copyWith(color: c.toastAction, height: 1.2),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),

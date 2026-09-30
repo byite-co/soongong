@@ -147,7 +147,25 @@ class _AppButtonState extends State<AppButton> {
     );
 
     final reduced = AppMotion.reduced(context);
-    final button = Semantics(
+    final visual = AnimatedScale(
+      scale: _pressed && !reduced ? 0.97 : 1,
+      duration: reduced ? Duration.zero : const Duration(milliseconds: 90),
+      child: Container(
+        height: widget.size.height,
+        width: widget.expand ? double.infinity : null,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(widget.size.radius),
+        ),
+        alignment: Alignment.center,
+        child: child,
+      ),
+    );
+
+    // The tap area itself is ≥ 44 tall (S01b): the visual box (42 for
+    // `small`) is centred inside the GestureDetector, not padded outside it.
+    return Semantics(
       button: true,
       enabled: _enabled,
       label: label,
@@ -157,28 +175,17 @@ class _AppButtonState extends State<AppButton> {
         onTapCancel: () => setState(() => _pressed = false),
         onTapUp: (_) => setState(() => _pressed = false),
         onTap: _enabled ? _handleTap : null,
-        child: AnimatedScale(
-          scale: _pressed && !reduced ? 0.97 : 1,
-          duration: reduced ? Duration.zero : const Duration(milliseconds: 90),
-          child: Container(
-            height: widget.size.height,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16),
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(widget.size.radius),
-            ),
-            alignment: Alignment.center,
-            child: child,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minHeight: AppSpacing.touchTarget,
+            minWidth: AppSpacing.touchTarget,
+          ),
+          child: Center(
+            widthFactor: widget.expand ? null : 1,
+            child: visual,
           ),
         ),
       ),
-    );
-
-    // Touch target ≥ 44 (small buttons are 42 tall visually).
-    final hitPad = (AppSpacing.touchTarget - widget.size.height) / 2;
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: hitPad > 0 ? hitPad : 0),
-      child: button,
     );
   }
 }

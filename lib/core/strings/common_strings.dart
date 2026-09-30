@@ -21,6 +21,9 @@ abstract final class CommonStrings {
   static const String saveFailedKeepInput =
       '저장하지 못했습니다 · 입력은 그대로 있습니다';
 
+  // Modal confirm failure (input is kept; user may retry or cancel)
+  static const String actionFailedRetry = '실행하지 못했습니다 · 다시 시도할 수 있습니다';
+
   // Delete
   static const String deleted = '삭제했습니다';
   static const String deleteFailed = '삭제하지 못했습니다';

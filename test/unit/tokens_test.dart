@@ -32,7 +32,10 @@ void main() {
       test('${c.brightness.name}: button text on pri / acc ≥ 4.5', () {
         expect(contrast(c.onPri, c.pri), greaterThanOrEqualTo(4.5));
         expect(contrast(c.onAcc, c.acc), greaterThanOrEqualTo(4.5));
+      });
+      test('${c.brightness.name}: toast text and action on toast bg ≥ 4.5', () {
         expect(contrast(c.toastFg, c.toastBg), greaterThanOrEqualTo(4.5));
+        expect(contrast(c.toastAction, c.toastBg), greaterThanOrEqualTo(4.5));
       });
       test('${c.brightness.name}: 8 distinct subject colors', () {
         expect(c.subjects.length, AppSubjectColors.count);

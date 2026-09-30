@@ -1,34 +1,39 @@
-// AppModal (S01): confirmation dialog — title · body · primary/secondary
-// buttons · destructive style. Modals are not routes (CLAUDE.md §4).
-
-import 'dart:async';
+// AppModal (S01 · S01b): confirmation dialog — title · body · primary /
+// secondary buttons · destructive style · in-progress lock.
+// Modals are not routes (CLAUDE.md §4).
+//
+// Lock (S01b): while [onConfirm] runs, the barrier tap, the back gesture and
+// the secondary button are all ignored. `true` is returned only after
+// [onConfirm] completed without throwing (or immediately when there is no
+// [onConfirm]); `false` means the action did not run. An exception keeps the
+// modal open and shows an error line so the user can retry or cancel.
 
 import 'package:flutter/material.dart';
 
+import '../logging/app_logger.dart';
 import '../strings/common_strings.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import 'app_button.dart';
 
-/// Returns `true` when the primary action completed, `false` when the
-/// secondary action was chosen, `null` when dismissed.
-Future<bool?> showAppModal(
+Future<bool> showAppModal(
   BuildContext context, {
   required String title,
   String? body,
   required String primaryLabel,
   String secondaryLabel = CommonStrings.cancel,
   bool destructive = false,
-  FutureOr<void> Function()? onPrimary,
+  Future<void> Function()? onConfirm,
   bool barrierDismissible = true,
   bool useRootNavigator = true,
-}) {
+}) async {
   final c = context.colors;
   final reduced = AppMotion.reduced(context);
-  return showGeneralDialog<bool>(
+  final result = await showGeneralDialog<bool>(
     context: context,
     useRootNavigator: useRootNavigator,
-    barrierDismissible: barrierDismissible,
+    // The barrier is handled inside the page so it can be locked at runtime.
+    barrierDismissible: false,
     barrierLabel: title,
     barrierColor: c.scrim,
     transitionDuration: reduced ? Duration.zero : AppMotion.pop,
@@ -41,21 +46,111 @@ Future<bool?> showAppModal(
         child: child,
       ),
     ),
-    pageBuilder: (ctx, _, _) => AppModal(
+    pageBuilder: (_, _, _) => _AppModalPage(
       title: title,
       body: body,
       primaryLabel: primaryLabel,
       secondaryLabel: secondaryLabel,
       destructive: destructive,
-      onPrimary: () async {
-        if (onPrimary != null) await onPrimary();
-        if (ctx.mounted) Navigator.of(ctx).pop(true);
-      },
-      onSecondary: () => Navigator.of(ctx).pop(false),
+      onConfirm: onConfirm,
+      barrierDismissible: barrierDismissible,
     ),
   );
+  return result ?? false;
 }
 
+class _AppModalPage extends StatefulWidget {
+  const _AppModalPage({
+    required this.title,
+    required this.body,
+    required this.primaryLabel,
+    required this.secondaryLabel,
+    required this.destructive,
+    required this.onConfirm,
+    required this.barrierDismissible,
+  });
+
+  final String title;
+  final String? body;
+  final String primaryLabel;
+  final String secondaryLabel;
+  final bool destructive;
+  final Future<void> Function()? onConfirm;
+  final bool barrierDismissible;
+
+  @override
+  State<_AppModalPage> createState() => _AppModalPageState();
+}
+
+class _AppModalPageState extends State<_AppModalPage> {
+  bool _running = false;
+  String? _error;
+
+  void _dismiss() {
+    if (_running) return;
+    Navigator.of(context).pop(false);
+  }
+
+  Future<void> _confirm() async {
+    if (_running) return;
+    final cb = widget.onConfirm;
+    if (cb == null) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+    setState(() {
+      _running = true;
+      _error = null;
+    });
+    try {
+      await cb();
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e, st) {
+      appLog.w('AppModal onConfirm failed', error: e, stackTrace: st);
+      if (mounted) {
+        setState(() {
+          _running = false;
+          _error = CommonStrings.actionFailedRetry;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _dismiss();
+      },
+      child: Stack(
+        children: <Widget>[
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.barrierDismissible && !_running ? _dismiss : null,
+              child: const SizedBox.expand(),
+            ),
+          ),
+          AppModal(
+            title: widget.title,
+            body: widget.body,
+            primaryLabel: widget.primaryLabel,
+            secondaryLabel: widget.secondaryLabel,
+            destructive: widget.destructive,
+            running: _running,
+            errorText: _error,
+            onPrimary: _confirm,
+            onSecondary: _dismiss,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Visual modal (stateless). [running] locks the secondary button and shows
+/// progress on the primary one; [errorText] fills the error slot.
 class AppModal extends StatelessWidget {
   const AppModal({
     super.key,
@@ -64,6 +159,8 @@ class AppModal extends StatelessWidget {
     required this.primaryLabel,
     this.secondaryLabel = CommonStrings.cancel,
     this.destructive = false,
+    this.running = false,
+    this.errorText,
     this.onPrimary,
     this.onSecondary,
   });
@@ -73,7 +170,9 @@ class AppModal extends StatelessWidget {
   final String primaryLabel;
   final String secondaryLabel;
   final bool destructive;
-  final FutureOr<void> Function()? onPrimary;
+  final bool running;
+  final String? errorText;
+  final VoidCallback? onPrimary;
   final VoidCallback? onSecondary;
 
   @override
@@ -124,13 +223,26 @@ class AppModal extends StatelessWidget {
                           ),
                         ),
                       ),
+                    if (errorText != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.s10),
+                        child: Semantics(
+                          liveRegion: true,
+                          child: Text(
+                            errorText!,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.withWeight(AppTypography.label, 600)
+                                .copyWith(color: c.accTx),
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: AppSpacing.s20),
                     Row(
                       children: <Widget>[
                         Expanded(
                           child: AppButton.secondary(
                             label: secondaryLabel,
-                            onPressed: onSecondary,
+                            onPressed: running ? null : onSecondary,
                           ),
                         ),
                         const SizedBox(width: AppSpacing.s8),
@@ -138,10 +250,12 @@ class AppModal extends StatelessWidget {
                           child: destructive
                               ? AppButton.destructive(
                                   label: primaryLabel,
+                                  busy: running,
                                   onPressed: onPrimary,
                                 )
                               : AppButton(
                                   label: primaryLabel,
+                                  busy: running,
                                   onPressed: onPrimary,
                                 ),
                         ),

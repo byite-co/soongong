@@ -131,7 +131,7 @@ class AppColors extends ThemeExtension<AppColors> {
     ringFill: AppAccent.blue,
     toastBg: AppNeutral.n900,
     toastFg: AppNeutral.n100,
-    toastAction: Color(0xFF8FA0FF),
+    toastAction: AppAccent.toastAction,
     subjects: AppSubjectColors.light,
   );
 
@@ -168,7 +168,7 @@ class AppColors extends ThemeExtension<AppColors> {
     ringFill: AppAccent.blueDark,
     toastBg: AppNeutral.darkTx,
     toastFg: AppNeutral.n950,
-    toastAction: Color(0xFF8FA0FF),
+    toastAction: AppAccent.toastActionDark,
     subjects: AppSubjectColors.dark,
   );
 
