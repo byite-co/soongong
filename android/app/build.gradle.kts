@@ -28,17 +28,17 @@ android {
     // Flavors (S01 §4-2): dev → co.byite.soongong.dev / prod → co.byite.soongong.
     // Client config is injected with --dart-define-from-file=env/app.<flavor>.json (D12);
     // the flavor itself only changes the application id and the launcher label.
+    // The label (@string/app_name) lives in src/<flavor>/res/values/strings.xml —
+    // AGP 9 disables `resValue` by default (S01b).
     flavorDimensions += "env"
     productFlavors {
         create("dev") {
             dimension = "env"
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
-            resValue("string", "app_name", "순공 dev")
         }
         create("prod") {
             dimension = "env"
-            resValue("string", "app_name", "순공")
         }
     }
 
