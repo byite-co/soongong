@@ -10,6 +10,10 @@ on:
         type: choice
         options: [debug, profile, release]
 
+concurrency:
+  group: build-android-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   FLUTTER_VERSION: 3.47.5 # D12 — keep in sync with .fvmrc / docs/versions.md
 
@@ -36,6 +40,9 @@ jobs:
 
       - name: Codegen (build_runner)
         run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Generated files are committed and up to date
+        run: sh tool/ci/check_clean_tree.sh
 
       # Client env: public values only (Supabase URL / anon key / RevenueCat public keys).
       # Uses the repository secret APP_DEV_ENV_JSON when present, otherwise the example file.
