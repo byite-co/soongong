@@ -3,10 +3,20 @@
 // Modals are not routes (CLAUDE.md §4).
 //
 // Lock (S01b): while [onConfirm] runs, the barrier tap, the back gesture and
-// the secondary button are all ignored. `true` is returned only after
-// [onConfirm] completed without throwing (or immediately when there is no
-// [onConfirm]); `false` means the action did not run. An exception keeps the
-// modal open and shows an error line so the user can retry or cancel.
+// the secondary button are all ignored.
+//
+// Return value (wording fixed in S02):
+//   `true`  — [onConfirm] completed without throwing (or there is no
+//             [onConfirm] and the primary button was tapped).
+//   `false` — the confirm flow did not end in success. This covers both
+//             "never ran" (cancel · barrier tap · back) and "ran, threw, and
+//             the user then cancelled": an exception keeps the modal open
+//             with an error line so the user can retry or cancel, and a
+//             cancel after a failed attempt also resolves `false`.
+// `false` is therefore NOT a guarantee that [onConfirm] never executed — a
+// partial side effect of a thrown attempt may exist. A caller that needs the
+// "not executed" guarantee must catch inside [onConfirm] and roll back (or
+// make the action idempotent) there; the modal only reports the outcome.
 
 import 'package:flutter/material.dart';
 
@@ -16,6 +26,12 @@ import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import 'app_button.dart';
 
+/// Shows a confirmation modal. Resolves `true` when [onConfirm] completed
+/// (or the primary button was tapped without an [onConfirm]); `false` when
+/// the confirm flow did not end in success — not run (cancel · barrier ·
+/// back) or run-threw-then-cancelled. `false` does not guarantee that
+/// [onConfirm] never ran; handle exceptions inside [onConfirm] if that
+/// guarantee is needed (see the file header).
 Future<bool> showAppModal(
   BuildContext context, {
   required String title,

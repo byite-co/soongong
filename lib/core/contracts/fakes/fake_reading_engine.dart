@@ -1,8 +1,11 @@
 // Fake ReadingEngine (S01 · S01b). Scenario + delay are chosen in the dev
 // menu. The sample result is fixed and contains 3 low-confidence items.
 //
-// submit() order (S01b · D16/D17): tombstone → same-id idempotency →
-// active request exists → unsaved (done) result exists → quota → scenario.
+// submit() order (S01b · S02 · D16/D17): tombstone → same-id idempotency →
+// active request exists → unsaved (done) result exists → quota →
+// (re-activate a retryable failure | register a new request). A retryable
+// failure is re-activated only after it passed the same active / unsaved /
+// quota checks as a brand-new request.
 
 import 'dart:async';
 import 'dart:ui' show Rect;
@@ -52,6 +55,10 @@ class FakeReadingEngine implements ReadingEngine {
   final DateTime Function() _now;
   final Map<String, _FakeRequest> _requests = <String, _FakeRequest>{};
   final Set<String> _tombstones = <String>{};
+
+  /// wrong_item ids that were soft-deleted by [updateMarks] (an item that
+  /// became correct). Never reused (D16).
+  final Set<String> _wrongItemTombstones = <String>{};
   int _used = 0;
 
   static String payloadKeyOf(ReadingJob job) =>
@@ -69,7 +76,8 @@ class FakeReadingEngine implements ReadingEngine {
       return const SubmitRequestDeleted();
     }
 
-    // 2. same requestId → idempotent (same payload) / mismatch
+    // 2. same requestId → idempotent (same payload) / mismatch. A retryable
+    //    failure falls through: re-activation must pass steps 3–5 first.
     final key = payloadKeyOf(job);
     final existing = _requests[job.requestId];
     if (existing != null) {
@@ -80,10 +88,7 @@ class FakeReadingEngine implements ReadingEngine {
           return const SubmitAccepted();
         case FakeRequestState.failed:
           if (!existing.retryable) return const SubmitInvalidState('failed');
-          existing
-            ..state = FakeRequestState.active
-            ..retryable = false;
-          return const SubmitAccepted();
+          break; // retryable → 3–5, then 6 re-activates
         case FakeRequestState.saved:
           return const SubmitInvalidState('saved');
         case FakeRequestState.discarded:
@@ -105,7 +110,14 @@ class FakeReadingEngine implements ReadingEngine {
     if (_used >= quotaLimit) return const SubmitQuotaExhausted();
     if (job.photoPaths.isEmpty) return const SubmitPayloadMismatch();
 
-    // 6. scenario — every scenario accepts; the status stream carries the rest.
+    // 6. re-activate the retryable failure, or register a new request. Every
+    //    scenario accepts; the status stream carries the rest.
+    if (existing != null) {
+      existing
+        ..state = FakeRequestState.active
+        ..retryable = false;
+      return const SubmitAccepted();
+    }
     _requests[job.requestId] = _FakeRequest(job, key);
     return const SubmitAccepted();
   }
@@ -261,9 +273,13 @@ class FakeReadingEngine implements ReadingEngine {
   /// Applies the full mark set to the saved items (D16):
   /// - an item that newly becomes non-correct → new [WrongItemDraft] using
   ///   `ConfirmedMark.wrongItemId` (missing id → [MarksFailed]);
-  /// - an item that becomes correct → removed;
+  /// - an item that becomes correct → removed (its id becomes a tombstone);
   /// - an item that stays non-correct → mark updated, id kept;
   /// - items not mentioned in [marks] are left untouched.
+  ///
+  /// Rejected with [MarksFailed] (nothing applied): a new id that is already
+  /// in use, a new id that is a tombstone (X→O→X must bring a fresh uuid), and
+  /// two new items sharing one id in the same call.
   @override
   Future<UpdateMarksOutcome> updateMarks(
     String requestId,
@@ -283,6 +299,7 @@ class FakeReadingEngine implements ReadingEngine {
     };
     final result = Map<String, WrongItemDraft>.of(byKey);
     final seen = <String>{};
+    final newIds = <String>{};
 
     for (final m in marks) {
       final k = keyOf(m.pageIndex, m.number);
@@ -310,6 +327,12 @@ class FakeReadingEngine implements ReadingEngine {
       if (byKey.values.any((it) => it.id == newId)) {
         return MarksFailed('wrong_item_id_reused:$newId');
       }
+      if (_wrongItemTombstones.contains(newId)) {
+        return MarksFailed('wrong_item_id_tombstoned:$newId');
+      }
+      if (!newIds.add(newId)) {
+        return MarksFailed('wrong_item_id_duplicate:$newId');
+      }
       result[k] = WrongItemDraft(
         id: newId,
         pageIndex: m.pageIndex,
@@ -325,6 +348,13 @@ class FakeReadingEngine implements ReadingEngine {
       if (!ids.contains(e.wrongItemId)) {
         return MarksFailed('unknown_wrong_item:${e.wrongItemId}');
       }
+    }
+
+    // Items that became correct are soft-deleted on the server: keep their
+    // ids as tombstones so they are never reused.
+    final keptIds = result.values.map((it) => it.id).toSet();
+    for (final it in byKey.values) {
+      if (!keptIds.contains(it.id)) _wrongItemTombstones.add(it.id);
     }
 
     req
