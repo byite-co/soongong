@@ -1,5 +1,8 @@
-// Fake ReadingEngine (S01). Scenario + delay are chosen in the dev menu.
-// The sample result is fixed and contains 3 low-confidence items.
+// Fake ReadingEngine (S01 · S01b). Scenario + delay are chosen in the dev
+// menu. The sample result is fixed and contains 3 low-confidence items.
+//
+// submit() order (S01b · D16/D17): tombstone → same-id idempotency →
+// active request exists → unsaved (done) result exists → quota → scenario.
 
 import 'dart:async';
 import 'dart:ui' show Rect;
@@ -16,14 +19,17 @@ enum FakeReadingScenario {
   saveConflict,
 }
 
-enum _FakeRequestState { active, done, failed, saved, discarded, cancelled }
+/// Server-side state names. `done` = completed but not yet saved
+/// (`done_unsaved` on the server, D17: blocks new requests).
+enum FakeRequestState { active, done, failed, saved, discarded, cancelled }
 
 class _FakeRequest {
   _FakeRequest(this.job, this.payloadKey);
 
   final ReadingJob job;
   final String payloadKey;
-  _FakeRequestState state = _FakeRequestState.active;
+  FakeRequestState state = FakeRequestState.active;
+  bool retryable = false;
   ReadingResult? result;
   List<ConfirmedMark> marks = const <ConfirmedMark>[];
   List<WrongItemDraft> items = const <WrongItemDraft>[];
@@ -51,32 +57,64 @@ class FakeReadingEngine implements ReadingEngine {
   static String payloadKeyOf(ReadingJob job) =>
       '${job.subjectId}|${job.rangeText}|${job.photoPaths.join(',')}|${job.origin}';
 
+  /// Server state name of a request (dev/test aid).
+  FakeRequestState? stateOf(String requestId) => _requests[requestId]?.state;
+
   @override
   Future<SubmitOutcome> submit(ReadingJob job) async {
     await Future<void>.delayed(delay);
+
+    // 1. tombstone (server 410 request_deleted)
     if (_tombstones.contains(job.requestId)) {
       return const SubmitRequestDeleted();
     }
+
+    // 2. same requestId → idempotent (same payload) / mismatch
     final key = payloadKeyOf(job);
     final existing = _requests[job.requestId];
     if (existing != null) {
       if (existing.payloadKey != key) return const SubmitPayloadMismatch();
-      return switch (existing.state) {
-        _FakeRequestState.active || _FakeRequestState.done => const SubmitAccepted(),
-        _FakeRequestState.saved => const SubmitInvalidState('saved'),
-        _FakeRequestState.discarded => const SubmitRequestDeleted(),
-        _FakeRequestState.failed => const SubmitAccepted(),
-        _FakeRequestState.cancelled => const SubmitInvalidState('cancelled'),
-      };
+      switch (existing.state) {
+        case FakeRequestState.active:
+        case FakeRequestState.done:
+          return const SubmitAccepted();
+        case FakeRequestState.failed:
+          if (!existing.retryable) return const SubmitInvalidState('failed');
+          existing
+            ..state = FakeRequestState.active
+            ..retryable = false;
+          return const SubmitAccepted();
+        case FakeRequestState.saved:
+          return const SubmitInvalidState('saved');
+        case FakeRequestState.discarded:
+          return const SubmitRequestDeleted();
+        case FakeRequestState.cancelled:
+          return const SubmitInvalidState('cancelled');
+      }
     }
-    final active = _requests.values
-        .where((r) => r.state == _FakeRequestState.active)
-        .toList();
-    if (active.isNotEmpty) return SubmitActiveExists(active.first.job.requestId);
+
+    // 3. another active request
+    final active = _firstIn(FakeRequestState.active);
+    if (active != null) return SubmitActiveExists(active.job.requestId);
+
+    // 4. an unsaved result blocks new requests (D17)
+    final unsaved = _firstIn(FakeRequestState.done);
+    if (unsaved != null) return SubmitActiveExists(unsaved.job.requestId);
+
+    // 5. quota
     if (_used >= quotaLimit) return const SubmitQuotaExhausted();
     if (job.photoPaths.isEmpty) return const SubmitPayloadMismatch();
+
+    // 6. scenario — every scenario accepts; the status stream carries the rest.
     _requests[job.requestId] = _FakeRequest(job, key);
     return const SubmitAccepted();
+  }
+
+  _FakeRequest? _firstIn(FakeRequestState state) {
+    for (final r in _requests.values) {
+      if (r.state == state) return r;
+    }
+    return null;
   }
 
   @override
@@ -91,20 +129,23 @@ class FakeReadingEngine implements ReadingEngine {
       return;
     }
     switch (req.state) {
-      case _FakeRequestState.done:
-      case _FakeRequestState.saved:
+      case FakeRequestState.done:
+      case FakeRequestState.saved:
         yield Done(req.result!);
         return;
-      case _FakeRequestState.failed:
-        yield const Failed('reading_failed', retryable: false);
+      case FakeRequestState.failed:
+        yield Failed(
+          req.retryable ? 'upload_failed' : 'reading_failed',
+          retryable: req.retryable,
+        );
         return;
-      case _FakeRequestState.discarded:
+      case FakeRequestState.discarded:
         yield const Deleted();
         return;
-      case _FakeRequestState.cancelled:
+      case FakeRequestState.cancelled:
         yield const NotFound();
         return;
-      case _FakeRequestState.active:
+      case FakeRequestState.active:
         break;
     }
 
@@ -112,10 +153,12 @@ class FakeReadingEngine implements ReadingEngine {
     for (final p in <double>[0.2, 0.6]) {
       yield Sending(p);
       await Future<void>.delayed(delay);
-      if (req.state != _FakeRequestState.active) break;
+      if (req.state != FakeRequestState.active) break;
     }
     if (scenario == FakeReadingScenario.sendFail) {
-      req.state = _FakeRequestState.failed;
+      req
+        ..state = FakeRequestState.failed
+        ..retryable = true;
       yield const Failed('upload_failed', retryable: true);
       return;
     }
@@ -130,12 +173,14 @@ class FakeReadingEngine implements ReadingEngine {
       yield const TakingLong();
       await Future<void>.delayed(delay * 3);
     }
-    if (req.state == _FakeRequestState.cancelled) {
+    if (req.state == FakeRequestState.cancelled) {
       yield const NotFound();
       return;
     }
     if (scenario == FakeReadingScenario.fail) {
-      req.state = _FakeRequestState.failed;
+      req
+        ..state = FakeRequestState.failed
+        ..retryable = false;
       yield const Failed('reading_failed', retryable: false);
       return;
     }
@@ -144,8 +189,8 @@ class FakeReadingEngine implements ReadingEngine {
   }
 
   void _complete(_FakeRequest req) {
-    if (req.state != _FakeRequestState.active) return;
-    req.state = _FakeRequestState.done;
+    if (req.state != FakeRequestState.active) return;
+    req.state = FakeRequestState.done;
     req.result = sampleResult(
       req.job,
       _now(),
@@ -160,18 +205,21 @@ class FakeReadingEngine implements ReadingEngine {
     final req = _requests[requestId];
     if (req == null) return const CancelAlreadyFailed();
     if (scenario == FakeReadingScenario.cancelRace &&
-        req.state == _FakeRequestState.active) {
+        req.state == FakeRequestState.active) {
       _complete(req); // completion wins the race
     }
-    return switch (req.state) {
-      _FakeRequestState.active => () {
-          req.state = _FakeRequestState.cancelled;
-          return const CancelCancelled();
-        }(),
-      _FakeRequestState.done || _FakeRequestState.saved =>
-        CancelAlreadyDone(req.result!),
-      _ => const CancelAlreadyFailed(),
-    };
+    switch (req.state) {
+      case FakeRequestState.active:
+        req.state = FakeRequestState.cancelled;
+        return const CancelCancelled();
+      case FakeRequestState.done:
+      case FakeRequestState.saved:
+        return CancelAlreadyDone(req.result!);
+      case FakeRequestState.failed:
+      case FakeRequestState.discarded:
+      case FakeRequestState.cancelled:
+        return const CancelAlreadyFailed();
+    }
   }
 
   @override
@@ -184,25 +232,38 @@ class FakeReadingEngine implements ReadingEngine {
     final req = _requests[requestId];
     if (req == null) return const SaveFailed('not_found');
     if (scenario == FakeReadingScenario.saveConflict &&
-        req.state == _FakeRequestState.done) {
-      req.state = _FakeRequestState.saved;
-      req.marks = marks;
-      req.items = items;
+        req.state == FakeRequestState.done) {
+      // The server already holds a save for this request (e.g. a retried
+      // save whose first attempt succeeded): transition happened server-side.
+      req
+        ..state = FakeRequestState.saved
+        ..marks = marks
+        ..items = items;
       return SaveAlreadySaved(marks: req.marks, serverItems: req.items);
     }
-    return switch (req.state) {
-      _FakeRequestState.done => () {
-          req.state = _FakeRequestState.saved;
-          req.marks = marks;
-          req.items = items;
-          return const SaveSaved();
-        }(),
-      _FakeRequestState.saved =>
-        SaveAlreadySaved(marks: req.marks, serverItems: req.items),
-      _ => SaveNotUnsaved(req.state.name),
-    };
+    switch (req.state) {
+      case FakeRequestState.done:
+        req
+          ..state = FakeRequestState.saved
+          ..marks = marks
+          ..items = items;
+        return const SaveSaved();
+      case FakeRequestState.saved:
+        return SaveAlreadySaved(marks: req.marks, serverItems: req.items);
+      case FakeRequestState.active:
+      case FakeRequestState.failed:
+      case FakeRequestState.discarded:
+      case FakeRequestState.cancelled:
+        return SaveNotUnsaved(req.state.name);
+    }
   }
 
+  /// Applies the full mark set to the saved items (D16):
+  /// - an item that newly becomes non-correct → new [WrongItemDraft] using
+  ///   `ConfirmedMark.wrongItemId` (missing id → [MarksFailed]);
+  /// - an item that becomes correct → removed;
+  /// - an item that stays non-correct → mark updated, id kept;
+  /// - items not mentioned in [marks] are left untouched.
   @override
   Future<UpdateMarksOutcome> updateMarks(
     String requestId,
@@ -212,31 +273,80 @@ class FakeReadingEngine implements ReadingEngine {
     await Future<void>.delayed(delay);
     final req = _requests[requestId];
     if (req == null) return const MarksFailed('not_found');
-    if (req.state != _FakeRequestState.saved) {
+    if (req.state != FakeRequestState.saved) {
       return MarksNotSaved(req.state.name);
     }
-    req.marks = marks;
-    final byKey = <String, ConfirmedMark>{
-      for (final m in marks) '${m.pageIndex}:${m.number}': m,
+
+    String keyOf(int page, int number) => '$page:$number';
+    final byKey = <String, WrongItemDraft>{
+      for (final it in req.items) keyOf(it.pageIndex, it.number): it,
     };
-    req.items = req.items
-        .map(
-          (it) {
-            final m = byKey['${it.pageIndex}:${it.number}'];
-            return m == null
-                ? it
-                : WrongItemDraft(
-                    id: it.id,
-                    pageIndex: it.pageIndex,
-                    number: it.number,
-                    mark: m.mark,
-                    confidence: it.confidence,
-                    userConfirmed: true,
-                  );
-          },
-        )
-        .toList();
+    final result = Map<String, WrongItemDraft>.of(byKey);
+    final seen = <String>{};
+
+    for (final m in marks) {
+      final k = keyOf(m.pageIndex, m.number);
+      if (!seen.add(k)) return MarksFailed('duplicate_mark:$k');
+      final existing = byKey[k];
+      if (m.mark == Mark.correct) {
+        result.remove(k);
+        continue;
+      }
+      if (existing != null) {
+        result[k] = WrongItemDraft(
+          id: existing.id,
+          pageIndex: existing.pageIndex,
+          number: existing.number,
+          mark: m.mark,
+          confidence: existing.confidence,
+          userConfirmed: true,
+        );
+        continue;
+      }
+      final newId = m.wrongItemId;
+      if (newId == null || newId.isEmpty) {
+        return MarksFailed('missing_wrong_item_id:$k');
+      }
+      if (byKey.values.any((it) => it.id == newId)) {
+        return MarksFailed('wrong_item_id_reused:$newId');
+      }
+      result[k] = WrongItemDraft(
+        id: newId,
+        pageIndex: m.pageIndex,
+        number: m.number,
+        mark: m.mark,
+        confidence: _confidenceOf(req.result, m.pageIndex, m.number),
+        userConfirmed: true,
+      );
+    }
+
+    final ids = result.values.map((it) => it.id).toSet();
+    for (final e in entries) {
+      if (!ids.contains(e.wrongItemId)) {
+        return MarksFailed('unknown_wrong_item:${e.wrongItemId}');
+      }
+    }
+
+    req
+      ..marks = marks
+      ..items = result.values.toList()
+      ..items.sort(
+        (a, b) => a.pageIndex != b.pageIndex
+            ? a.pageIndex.compareTo(b.pageIndex)
+            : a.number.compareTo(b.number),
+      );
     return MarksUpdated(req.items);
+  }
+
+  static double _confidenceOf(ReadingResult? result, int page, int number) {
+    if (result == null) return 1;
+    for (final p in result.pages) {
+      if (p.index != page) continue;
+      for (final it in p.items) {
+        if (it.number == number) return it.confidence;
+      }
+    }
+    return 1;
   }
 
   @override
@@ -244,8 +354,9 @@ class FakeReadingEngine implements ReadingEngine {
     await Future<void>.delayed(delay);
     final req = _requests.remove(requestId);
     if (req != null) {
-      req.state = _FakeRequestState.discarded;
-      req.result = null;
+      req
+        ..state = FakeRequestState.discarded
+        ..result = null;
     }
     _tombstones.add(requestId);
   }
@@ -253,7 +364,7 @@ class FakeReadingEngine implements ReadingEngine {
   @override
   Future<QuotaSnapshot> quota() async {
     final reserved =
-        _requests.values.where((r) => r.state == _FakeRequestState.active).length;
+        _requests.values.where((r) => r.state == FakeRequestState.active).length;
     return QuotaSnapshot(
       used: _used,
       reserved: reserved,
