@@ -1,0 +1,64 @@
+name: build-android
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_mode:
+        description: debug | profile | release
+        default: debug
+        required: true
+        type: choice
+        options: [debug, profile, release]
+
+env:
+  FLUTTER_VERSION: 3.47.5 # D12 — keep in sync with .fvmrc / docs/versions.md
+
+jobs:
+  apk-dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Codegen (build_runner)
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      # Client env: public values only (Supabase URL / anon key / RevenueCat public keys).
+      # Uses the repository secret APP_DEV_ENV_JSON when present, otherwise the example file.
+      - name: Prepare env/app.dev.json
+        env:
+          APP_DEV_ENV_JSON: ${{ secrets.APP_DEV_ENV_JSON }}
+        run: |
+          if [ -n "$APP_DEV_ENV_JSON" ]; then
+            printf '%s' "$APP_DEV_ENV_JSON" > env/app.dev.json
+          else
+            cp env/app.dev.example.json env/app.dev.json
+          fi
+
+      - name: Build dev APK
+        run: >
+          flutter build apk
+          --flavor dev
+          --${{ inputs.build_mode }}
+          --dart-define-from-file=env/app.dev.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: soongong-dev-${{ inputs.build_mode }}-apk
+          path: build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error
+          retention-days: 14

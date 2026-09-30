@@ -1,0 +1,31 @@
+# 순공 (SoonGong)
+
+순공시간 측정 · 플래너 · AI 판독(오답 → 복습) Flutter 앱. 제품 원칙과 세션 규칙은 [`CLAUDE.md`](CLAUDE.md), 결정 기록은 [`docs/decisions.md`](docs/decisions.md).
+
+## 시작하기
+
+```sh
+fvm use                                   # .fvmrc → Flutter 3.47.5 (또는 같은 버전의 flutter 사용)
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+cp env/app.dev.example.json env/app.dev.json   # 공개 키만 채운다 (env/README.md)
+flutter run --flavor dev --dart-define-from-file=env/app.dev.json
+```
+
+검사: `flutter analyze --fatal-infos` · `dart run tool/check_forbidden_phrases.dart` · `flutter test`
+
+## 구조
+
+- `lib/core/` — theme(토큰) · widgets(공통 위젯) · contracts(인터페이스 + Fake) · router · strings · dev(dev 메뉴·위젯 카탈로그 `/_gallery`)
+- `lib/features/<feature>/` — `<feature>_routes.dart` · presentation / application / domain
+- `lib/data/` — drift DB · repositories · sync
+- `docs/` — decisions · design-tokens · versions · reference · handoff
+
+## Flavor
+
+| flavor | Android applicationId | iOS bundle id / scheme | 용도 |
+|---|---|---|---|
+| dev | `co.byite.soongong.dev` | `co.byite.soongong.dev` / `dev` | 개발 · dev 메뉴 · `/_gallery` |
+| prod | `co.byite.soongong` | `co.byite.soongong` / `prod` | 출시 |
+
+CI: `.github/workflows/analyze-test.yml`(PR) · `build-android.yml`(수동, dev APK 아티팩트).

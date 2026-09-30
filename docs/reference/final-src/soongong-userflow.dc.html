@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+html,body{margin:0;background:#FFFFFF}
+body{font-family:'Pretendard Variable',Pretendard,-apple-system,'Apple SD Gothic Neo',system-ui,sans-serif;-webkit-font-smoothing:antialiased;word-break:keep-all;color:#1F2430}
+a{color:#3B5BDB}a:hover{color:#2947B8}
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#FFFFFF"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect x="20" y="70" width="46" height="60" rx="8" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="3"></rect><path d="M72 100h28" stroke="#3A4150" stroke-width="3"></path><path d="M96 94l8 6-8 6z" fill="#3A4150"></path><polygon points="112,86 160,86 150,114 102,114" fill="#FFE6CC" stroke="#D79B00" stroke-width="3"></polygon><polygon points="131,124 156,150 131,176 106,150" fill="#D5E8D4" stroke="#82B366" stroke-width="3"></polygon></svg></template>
+</helmet>
+<div style="position:relative;width:{{ W }}px;height:{{ H }}px;background:#FFFFFF">
+  <div style="position:absolute;left:40px;top:28px;display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:12px;font-weight:500;letter-spacing:.06em;color:#7A8090">순공 · 유저플로우 다이어그램</div>
+    <div style="font-size:24px;font-weight:700;letter-spacing:-.02em">화면 · 액션 · 조건</div>
+    <div style="display:flex;gap:18px;margin-top:8px;align-items:center;font-size:12px;color:#5C6370">
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:22px;height:14px;border-radius:4px;background:#DAE8FC;border:1px solid #6C8EBF"></span>페이지 · 모달 · 시트 (실제 화면)</span>
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:22px;height:14px;background:#FFE6CC;border:1px solid #D79B00;transform:skewX(-18deg)"></span>유저 액션</span>
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:14px;background:#D5E8D4;border:1px solid #82B366;transform:rotate(45deg) scale(.8)"></span>조건 (Yes / No)</span>
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:22px;height:14px;border-radius:999px;background:#F2F3F7;border:1px dashed #9AA1B0"></span>다른 흐름으로 이동</span>
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:999px;background:#EEE9FF;border:1px solid #8B78D9"></span>프리미엄 게이트 뒤</span>
+    </div>
+  </div>
+
+  <svg style="position:absolute;left:0;top:0;pointer-events:none" width="{{ W }}" height="{{ H }}" viewBox="0 0 {{ W }} {{ H }}">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#3A4150"></path></marker></defs>
+    <sc-for list="{{ edges }}" as="e" hint-placeholder-count="60">
+      <path d="{{ e.d }}" fill="none" stroke="#3A4150" stroke-width="1.5" marker-end="url(#ah)"></path>
+    </sc-for>
+    <sc-for list="{{ labels }}" as="l" hint-placeholder-count="20">
+      <rect x="{{ l.bx }}" y="{{ l.by }}" width="{{ l.bw }}" height="18" rx="4" fill="#FFFFFF"></rect>
+      <text x="{{ l.x }}" y="{{ l.y }}" font-size="12" font-weight="700" fill="#1F2430" text-anchor="middle">{{ l.t }}</text>
+    </sc-for>
+  </svg>
+
+  <sc-for list="{{ lanes }}" as="ln" hint-placeholder-count="10">
+    <div style="position:absolute;left:40px;top:{{ ln.y }}px;width:{{ ln.w }}px;border-top:1px solid #E6E8EE;padding-top:8px;display:flex;align-items:baseline;gap:10px"><span style="font-size:11px;font-weight:700;color:#7A8090;letter-spacing:.06em">{{ ln.num }}</span><span style="font-size:15px;font-weight:700;letter-spacing:-.02em">{{ ln.title }}</span><span style="font-size:12px;color:#7A8090">{{ ln.sub }}</span></div>
+  </sc-for>
+
+  <sc-for list="{{ pages }}" as="n" hint-placeholder-count="40">
+    <div style="position:absolute;left:{{ n.x }}px;top:{{ n.y }}px;width:{{ n.w }}px;height:300px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px">
+      <div style="width:{{ n.tw }}px;height:{{ n.th }}px;border-radius:14px;overflow:hidden;background:#F5F5F7;border:1px solid {{ n.bd }};box-shadow:0 1px 2px rgba(0,0,0,.04);position:relative">
+        <div style="position:absolute;left:0;top:0;width:{{ n.fw }}px;height:{{ n.fh }}px;transform:scale({{ n.sc }});transform-origin:0 0;pointer-events:none;overflow:hidden">
+          <dc-import name="SoonGong Prototype" embed="{{ true }}" screen="{{ n.screen }}" state="{{ n.state }}" theme="{{ n.theme }}" overlay="{{ n.overlay }}" plan="{{ n.plan }}" device="{{ n.device }}" hint-size="390px,844px" style="position:absolute;left:0;top:0;width:{{ n.fw }}px;height:{{ n.fh }}px"></dc-import>
+        </div>
+      </div>
+      <div style="width:{{ n.w }}px;box-sizing:border-box;padding:5px 8px;border-radius:6px;background:{{ n.bg }};border:1px solid {{ n.bd }};font-size:11.5px;font-weight:600;line-height:1.3;text-align:center;color:#1F2430">{{ n.label }}</div>
+    </div>
+  </sc-for>
+
+  <sc-for list="{{ actions }}" as="n" hint-placeholder-count="40">
+    <div style="position:absolute;left:{{ n.x }}px;top:{{ n.y }}px;width:130px;height:46px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11.5px;font-weight:500;line-height:1.3;color:#1F2430;padding:0 10px;box-sizing:border-box;background:#FFE6CC;border:1px solid #D79B00;clip-path:polygon(10% 0,100% 0,90% 100%,0 100%)">{{ n.label }}</div>
+  </sc-for>
+
+  <sc-for list="{{ conds }}" as="n" hint-placeholder-count="12">
+    <div style="position:absolute;left:{{ n.x }}px;top:{{ n.y }}px;width:130px;height:76px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:500;line-height:1.3;color:#1F2430;padding:0 22px;box-sizing:border-box;background:#D5E8D4;border:1px solid #82B366;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)">{{ n.label }}</div>
+  </sc-for>
+
+  <sc-for list="{{ refs }}" as="n" hint-placeholder-count="12">
+    <div style="position:absolute;left:{{ n.x }}px;top:{{ n.y }}px;width:130px;height:36px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11.5px;font-weight:600;color:#5C6370;border-radius:999px;background:#F2F3F7;border:1px dashed #9AA1B0;padding:0 10px;box-sizing:border-box">{{ n.label }}</div>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const CW = 222, X0 = 60, PW = 150, PH = 300, AW = 130, AH = 46, DW = 130, DH = 76, RW = 130, RH = 36;
+    const nodes = {}, edges = [], labels = [], lanes = [];
+    let laneY = 130;
+    // helpers: col → x, row (0 main, 1 sub) → center y
+    const P = (id, col, row, label, screen, state, extra) => { nodes[id] = Object.assign({ id, t: 'page', col, row, label, screen, state: state || '', theme: 'a', overlay: '', plan: 'paid', ai: false, device: '' }, extra || {}); };
+    const A = (id, col, row, label) => { nodes[id] = { id, t: 'act', col, row, label }; };
+    const C = (id, col, row, label) => { nodes[id] = { id, t: 'cond', col, row, label }; };
+    const R = (id, col, row, label) => { nodes[id] = { id, t: 'ref', col, row, label }; };
+    const E = (a, b, lab) => edges.push({ a, b, lab });
+    const lane = (num, title, sub, hasSub, build) => {
+      const cy0 = laneY + 50 + PH / 2, cy1 = cy0 + PH + 40;
+      const before = Object.keys(nodes).length;
+      build();
+      let maxRow = 0; Object.keys(nodes).slice(before).forEach(k => { const n = nodes[k]; n.cy = cy0 + n.row * (PH + 40); maxRow = Math.max(maxRow, n.row); });
+      lanes.push({ key: num, num, title, sub, y: laneY, w: 2700 });
+      laneY += 50 + PH + maxRow * (PH + 40) + 70;
+    };
+    const AI = { ai: true }, FREE = { plan: 'free' };
+
+    lane('00', '시작 · 로그인 · 온보딩', '로그인 필수 · 기록은 계정에 동기화(사진 제외) · 로그인 시 구독 자동 복원', true, () => {
+      R('r00', 0, 0, '앱 첫 실행'); P('login', 1, 0, '로그인 · Apple / Google / 카카오 / 이메일', 'login', 'default', {}); C('c00', 2, 0, '기존 계정?'); P('ob1', 3, 0, '온보딩 1 · 순공 측정', 'onboard', '1', {}); P('ob2', 4, 0, '온보딩 2 · 판독 동의 (3문장)', 'onboard', '2', {}); P('ob3', 5, 0, '온보딩 3 · 카메라 권한', 'onboard', '3', {}); P('homeEmpty', 6, 0, '홈 · 빈 상태', 'home', 'empty', {});
+      R('r00b', 3, 1, '기존 계정 → 기록 91세션 불러옴 · 구독 자동 복원 → 홈'); A('a00', 1, 1, '이메일로 계속'); P('lgEmail', 2, 1, '이메일 입력 → 기존/신규 판별', 'login', 'email', {}); P('lgPw', 3, 2, '비밀번호 · 기존 계정 · 재설정 링크', 'login', 'pw', {}); P('lgSignup', 4, 2, '비밀번호 · 새 계정 만들기', 'login', 'signup', {});
+      P('lgBusy', 1, 2, '로그인 중', 'login', 'busy', {}); P('lgFail', 2, 2, '로그인 실패 · 다시 시도 / 다른 방법', 'login', 'fail', {}); P('lgReset', 5, 1, '재설정 메일 발송 안내', 'login', 'reset', {});
+      A('a02', 4, 1, '건너뛰기 (판독 꺼짐)'); A('a03', 5, 2, '수동 타이머로 시작'); R('r03', 6, 1, '개인정보 › 카메라 OFF 상태로 홈');
+      R('r04', 8, 0, '설정 › 계정'); P('acctLogout', 9, 0, '로그아웃 확인 · 사진은 기기에서 삭제', 'settings', '', { overlay: 'acctLogout' }); P('acctDelete', 9, 1, '계정 삭제 확인 · 동기화 기록 전체 삭제', 'settings', '', { overlay: 'acctDelete' }); R('r05', 10, 0, '→ 로그인 화면');
+      E('r00', 'login'); E('login', 'c00'); E('c00', 'ob1', '신규'); E('c00', 'r00b', '기존'); E('ob1', 'ob2'); E('ob2', 'ob3'); E('ob3', 'homeEmpty'); E('login', 'a00'); E('a00', 'lgEmail'); E('lgEmail', 'lgPw', '기존'); E('lgEmail', 'lgSignup', '신규'); E('lgPw', 'lgReset', '잊었어요'); E('login', 'lgBusy'); E('lgBusy', 'lgFail', '실패'); E('lgFail', 'login', '다시');
+      E('ob2', 'a02'); E('a02', 'ob3'); E('ob3', 'a03'); E('a03', 'r03'); E('r04', 'acctLogout'); E('r04', 'acctDelete'); E('acctLogout', 'r05'); E('acctDelete', 'r05');
+    });
+
+    lane('01', '홈 → 집중 세션', '시작 준비 → 측정 → 자리 비움 → 기록·정정', true, () => {
+      P('home', 0, 0, '홈 (무료)', 'home', 'default', FREE); A('a11', 1, 0, '집중 시작 버튼 클릭'); C('c11', 2, 0, '카메라 권한 있나?'); P('setupOn', 3, 0, '집중 시작 준비 · 카메라 ON', 'setup', 'on');
+      A('a12', 4, 0, '시작 버튼 클릭'); C('c12', 5, 0, '카메라 정상?'); P('focus', 6, 0, '집중 중 · 착석 (일시정지 ↔ 이어서는 같은 화면)', 'focus', 'sit'); C('c13', 7, 0, '자리 비움 감지?'); A('a13', 8, 0, '종료 버튼 클릭'); P('summary', 9, 0, '집중 기록', 'summary', 'default'); A('a14', 10, 0, '저장 버튼 클릭'); R('r11', 11, 0, '홈으로');
+      P('setupDen', 2, 1, '준비 · 권한 거부', 'setup', 'denied'); A('a15', 3, 1, '수동 타이머로 시작 → 집중 중');
+      P('errCam', 5, 1, '오류 · 카메라 점유', 'setup', 'cambusy'); A('a16', 6, 1, '다시 시도 / 수동으로');
+      P('away', 7, 1, '자리 비움 감지 → 복귀 시 자동 재개(집중 중)', 'focus', 'away'); P('awayLong', 8, 1, '5분 초과 · 계속하기 / 종료하기 제안', 'focus', 'away', { overlay: 'awayLong' }); R('r12', 8, 2, '계속하기 → 집중 중 (측정 재개)');
+      A('a18', 9, 1, '잘못 감지 구간 되돌리기'); P('toast', 10, 1, '감도 조정 토스트 → 정정 이력', 'summary', 'default', { overlay: 'toast' });
+      E('home', 'a11'); E('a11', 'c11'); E('c11', 'setupOn', 'Yes'); E('c11', 'setupDen', 'No'); E('setupDen', 'a15');
+      E('setupOn', 'a12'); E('a12', 'c12'); E('c12', 'focus', 'Yes'); E('c12', 'errCam', 'No'); E('errCam', 'a16');
+      E('focus', 'c13'); E('c13', 'a13', 'No'); E('c13', 'away', 'Yes'); E('away', 'awayLong', '5분'); E('awayLong', 'a13', '종료'); E('awayLong', 'r12', '계속'); E('a13', 'summary'); E('summary', 'a14'); E('a14', 'r11'); E('summary', 'a18'); E('a18', 'toast');
+    });
+
+    lane('02', '플래너', '월간 → 접힘 → 등록 시트 · 3D · 반복 일정', true, () => {
+      R('r21', 0, 0, '홈 · 탭바'); A('a21', 1, 0, '플래너 탭 클릭'); P('planner', 2, 0, '플래너 · 월간', 'planner', ''); A('a22', 3, 0, '날짜 탭 / 세로 드래그'); P('planFold', 4, 0, '플래너 · 접힘 + 날짜 상세', 'planner', '', { overlay: 'planFold' });
+      A('a23', 5, 0, '+ 버튼 클릭'); P('addSheet', 6, 0, '등록 시트 · 공부/할 일/자습/일정', 'planner', '', { overlay: 'addSheet' }); A('a24', 7, 0, '날짜 칩 클릭'); P('datePick', 8, 0, '날짜 선택 미니 달력', 'planner', '', { overlay: 'datePick' });
+      A('a25', 2, 1, '좌우 스와이프'); P('plan3d', 3, 1, '플래너 · 3D 시간 보기', 'planner', '', { overlay: 'plan3d' });
+      A('a26', 6, 1, '종류: 일정 › 반복 선택'); P('repeatSheet', 7, 1, '반복 일정 · 요일·시간·종료', 'planner', '', { overlay: 'repeatSheet' });
+      E('r21', 'a21'); E('a21', 'planner'); E('planner', 'a22'); E('a22', 'planFold'); E('planFold', 'a23'); E('a23', 'addSheet'); E('addSheet', 'a24'); E('a24', 'datePick');
+      E('planner', 'a25'); E('a25', 'plan3d'); E('addSheet', 'a26'); E('a26', 'repeatSheet');
+    });
+
+    lane('03', '타임테이블 · 세션 상세 · 제안 받기', '', true, () => {
+      A('a31', 0, 0, '타임테이블 탭 클릭'); P('tt', 1, 0, '타임테이블 · 주간 24시', 'timetable', ''); A('a32', 2, 0, '순공 블록 탭'); P('session', 3, 0, '세션 상세', 'session', ''); A('a33', 4, 0, '기록 삭제 클릭'); P('sessDel', 5, 0, '기록 삭제 확인 모달', 'session', '', { overlay: 'sessDel' });
+      R('r31', 7, 0, '플래너'); A('a34', 8, 0, '제안 받기 칩 클릭'); C('c31', 9, 0, '프리미엄인가?'); P('suggest', 10, 0, '제안 받기 시트 → 플래너에 추가 + 토스트', 'planner', '', Object.assign({ overlay: 'suggest' }, AI));
+      R('r32', 9, 1, '페이월 시트 → 7일 무료 → 제안');
+      E('a31', 'tt'); E('tt', 'a32'); E('a32', 'session'); E('session', 'a33'); E('a33', 'sessDel');
+      E('r31', 'a34'); E('a34', 'c31'); E('c31', 'suggest', 'Yes'); E('c31', 'r32', 'No');
+    });
+
+    lane('04', '성취 축 · 촬영 → 사진 확인 → 판독 요청', '프리미엄 · 조건은 순서대로: 잔여 횟수 → 인터넷 → 판독 중', true, () => {
+      R('r41', 0, 0, '플래너 공부 행 / 홈 / 오답'); A('a41', 1, 0, '카메라 버튼 클릭'); C('c41', 2, 0, '프리미엄인가?'); P('capture', 3, 0, '촬영 · 선택 수 배지', 'capture', '', AI); A('a42', 4, 0, '촬영 / 앨범(OS) 클릭'); P('photos', 5, 0, '사진 확인 · 현재/목록 · 과목·범위', 'photos', 'default', AI); A('a48', 6, 0, '판독 요청 클릭'); C('c42', 7, 0, '잔여 횟수?'); C('c43', 8, 0, '인터넷 연결?'); P('sending', 9, 0, '전송 중 · 전송 취소', 'photos', 'default', Object.assign({ overlay: 'sending' }, AI)); C('c44', 10, 0, '전송 됐나?'); P('reading', 11, 0, '판독 중 · N장', 'reading', '', AI);
+      P('paywall', 2, 1, '페이월 시트 → 7일 무료 → 촬영', 'home', 'default', Object.assign({ overlay: 'paywall' }, FREE, AI)); P('pwConsent', 2, 2, '페이월 · 동의 단계 (온보딩 건너뜀)', 'home', 'default', Object.assign({ overlay: 'pwConsent' }, FREE, AI));
+      P('capDenied', 3, 1, '카메라 권한 꺼짐 → 앨범 / 기기 설정 → 복귀 재확인', 'capture', 'denied', Object.assign({ overlay: 'capSettings' }, AI)); A('a46', 3, 2, '정답지 버튼'); P('answer', 4, 2, '정답지 · 곧 제공 시트', 'capture', '', Object.assign({ overlay: 'answer' }, AI));
+      P('phEmpty', 5, 1, '사진 없음 → 촬영 / 앨범', 'photos', 'empty', AI); P('phMissing', 5, 2, '범위 비어 있음 → 요청 불가 안내', 'photos', 'missing', AI); P('phPlanner', 4, 1, '플래너 진입 · 할 일·과목·범위 이어받음', 'photos', 'planner', AI);
+      A('a49', 6, 1, '재촬영 / 삭제 / 추가 / 썸네일 이동'); R('r42', 6, 2, '취소 → 출발 화면 (플래너/오답)');
+      P('quota', 7, 1, '판독 소진 → 요금제 / 닫기', 'capture', '', Object.assign({ overlay: 'quota' }, AI)); P('errOff', 8, 1, '오프라인 · 다시 시도(연결 재확인) / 사진 두고 나중에', 'photos', 'default', Object.assign({ overlay: 'capOfflineDlg' }, AI));
+      P('sendFail', 10, 1, '전송 실패 · 사진·입력 유지 · 다시 보내기 / 닫기', 'photos', 'default', Object.assign({ overlay: 'sendFail' }, AI)); R('r43', 9, 1, '전송 취소 → 사진 확인 (입력 유지)');
+      E('r41', 'a41'); E('a41', 'c41'); E('c41', 'capture', 'Yes'); E('c41', 'paywall', 'No'); E('paywall', 'pwConsent', '미동의'); E('capture', 'a42'); E('a42', 'photos'); E('capture', 'capDenied', '권한 없음'); E('capture', 'a46'); E('a46', 'answer');
+      E('photos', 'a48'); E('photos', 'a49'); E('a49', 'photos'); E('photos', 'phEmpty', '0장'); E('photos', 'phMissing', '범위 없음'); E('phPlanner', 'photos'); E('a49', 'r42');
+      E('a48', 'c42'); E('c42', 'quota', '없음'); E('c42', 'c43', '있음'); E('c43', 'errOff', '없음'); E('c43', 'sending', '있음'); E('sending', 'c44'); E('sending', 'r43', '취소'); E('c44', 'reading', 'Yes'); E('c44', 'sendFail', 'No'); E('sendFail', 'a48', '다시 보내기');
+    });
+
+    lane('04b', '판독 중 · 이탈 · 미저장 결과 재진입', '요청은 화면을 닫아도 유지 · 취소만 요청을 없앰', true, () => {
+      P('rd1', 0, 0, '판독 중', 'reading', '', AI); C('c45', 1, 0, '판독 결과?'); P('rdResult', 2, 0, '판독 결과 확인 (새 결과)', 'result', '', AI);
+      P('rdLong', 1, 1, '오래 걸림 안내 · 닫아도 요청 유지', 'reading', 'long', Object.assign({ overlay: 'rdLong' }, AI)); P('rdFail', 2, 1, '판독 실패 · 다시 찍기(촬영) / 취소(사진 확인) · 횟수 미차감', 'reading', '', Object.assign({ overlay: 'readFail' }, AI));
+      A('a4b1', 4, 0, '닫고 나중에 확인 클릭'); P('hbReading', 5, 0, '홈 · 판독 진행 중 카드', 'home', 'default', Object.assign({ overlay: 'jobReading' }, AI)); R('r4b1', 6, 0, '처리 끝남 (앱 안)'); P('hbDone', 7, 0, '홈 · 확인 대기 결과 카드 · 저장 전', 'home', 'default', Object.assign({ overlay: 'jobDone' }, AI)); A('a4b2', 8, 0, '카드 탭'); R('r4b2', 9, 0, '→ 판독 결과 확인 (레인 04c)');
+      A('a4b3', 4, 1, '요청 취소 클릭'); P('rdCancel', 5, 1, '취소 확인 · 사진·입력은 사진 확인에 남음', 'reading', '', Object.assign({ overlay: 'rdCancel' }, AI)); R('r4b3', 6, 1, '취소 → 사진 확인 · 요청 없음 · 횟수 미차감');
+      R('r4b4', 4, 2, '카드 탭(진행 중) → 판독 중 화면으로 복귀');
+      E('rd1', 'c45'); E('c45', 'rdResult', '성공'); E('c45', 'rdFail', '실패'); E('rd1', 'rdLong', '지연'); E('rd1', 'a4b1'); E('a4b1', 'hbReading'); E('hbReading', 'r4b1'); E('r4b1', 'hbDone'); E('hbDone', 'a4b2'); E('a4b2', 'r4b2'); E('rd1', 'a4b3'); E('a4b3', 'rdCancel'); E('rdCancel', 'r4b3', '요청 취소'); E('hbReading', 'r4b4');
+    });
+
+    lane('04c', '판독 결과 확인 · 저장 · 관리', '확인 미완료 ≠ 저장 가능 · 오답 0개는 실패와 다름', true, () => {
+      P('rs1', 0, 0, '결과 확인 · 확인 필요 3 · 저장 불가', 'result', '', AI); A('a4c1', 1, 0, '확인 필요 문항으로 → 탭해 확정'); P('rs2', 2, 0, '결과 · 저장 가능', 'result', 'ready', AI); A('a4c2', 3, 0, '오답 N문항 저장 클릭'); P('rsSaving', 4, 0, '저장 중', 'result', 'ready', Object.assign({ overlay: 'rsSaving' }, AI)); C('c4c1', 5, 0, '저장 됐나?'); P('wrongDetail', 6, 0, '오답 상세 (저장됨)', 'wrongdetail', '', AI);
+      P('rsMulti', 0, 1, '2페이지 · 탭 전환 · 확인 필요 점', 'result', 'multi', AI); P('rsZoom', 1, 1, '원본 확대 · 페이지 이동 · 확인 필요 테두리', 'result', 'multi', Object.assign({ overlay: 'rsZoom' }, AI)); P('rsZero', 2, 1, '오답 0개 · 이력만 저장 · 큐 추가 없음', 'result', 'zero', AI);
+      P('rsSaveFail', 5, 1, '저장 실패 · 마크 유지 · 다시 저장', 'result', 'ready', Object.assign({ overlay: 'rsSaveFail' }, AI)); R('r4c1', 6, 1, '오답 0개 저장 → 오답 누적');
+      A('a4c3', 0, 2, '뒤로/닫기 클릭 (새 결과)'); P('rsLeave', 1, 2, '저장 전 이탈 · 계속 / 나중에(홈 카드) / 버리기', 'result', '', Object.assign({ overlay: 'rsLeave' }, AI)); R('r4c2', 2, 2, '나중에 → 홈 확인 대기 카드 · 버리기 → 결과 삭제, 사진은 보관');
+      R('r4c3', 8, 0, '오답 상세 › 판독 결과 카드'); A('a4c4', 9, 0, '결과 열기 · 마크 수정'); P('rsEdit', 10, 0, '결과 수정 모드 · 변경 저장 / 변경 취소', 'result', 'edit', AI); P('rsEditCancel', 11, 0, '변경 취소 확인 → 원본 유지 · 상세로', 'result', 'edit', Object.assign({ overlay: 'rsEditDirty' }, AI));
+      A('a4c5', 9, 1, '이 판독 결과 삭제'); P('wdDelRes', 10, 1, '영향 범위 확인 · 오답 7 · 큐 3 · 재풀이 2 / 사진·세션은 남음', 'wrongdetail', '', Object.assign({ overlay: 'wdDelRes' }, AI)); R('r4c4', 11, 1, '삭제 → 오답 누적으로 복귀');
+      A('a4c6', 9, 2, '같은 범위 다시 찍기'); P('wdRere', 10, 2, '이미 판독한 범위 · 새 회차 / 기존 결과 수정', 'wrongdetail', '', Object.assign({ overlay: 'wdRere' }, AI)); R('r4c5', 11, 2, '새 회차 → 촬영 (범위 이어받음)');
+      E('rs1', 'a4c1'); E('a4c1', 'rs2'); E('rs2', 'a4c2'); E('a4c2', 'rsSaving'); E('rsSaving', 'c4c1'); E('c4c1', 'wrongDetail', 'Yes'); E('c4c1', 'rsSaveFail', 'No'); E('rsSaveFail', 'a4c2', '다시 저장'); E('rsMulti', 'rsZoom'); E('rsZero', 'r4c1'); E('a4c3', 'rsLeave'); E('rsLeave', 'r4c2');
+      E('r4c3', 'a4c4'); E('a4c4', 'rsEdit'); E('rsEdit', 'rsEditCancel', '변경 취소'); E('r4c3', 'a4c5'); E('a4c5', 'wdDelRes'); E('wdDelRes', 'r4c4'); E('r4c3', 'a4c6'); E('a4c6', 'wdRere'); E('wdRere', 'r4c5');
+    });
+
+    lane('04d', '복습 진행 · 완료 · 재풀이 기록 관리', '책에서 풀고 결과만 기록 · 저장된 기록과 입력 중 선택을 구분', true, () => {
+      P('rv1', 0, 0, '복습 큐', 'review', 'flat', AI); A('a4d1', 1, 0, '복습 시작 클릭'); P('rr1', 2, 0, '복습 진행 · 문항 · 이전 기록 · 선택 전', 'reviewrun', 'default', AI); A('a4d2', 3, 0, '맞음/부분/또 틀림 선택'); P('rr2', 4, 0, '선택 후 · 기록하고 다음', 'reviewrun', 'picked', AI); C('c4d1', 5, 0, '저장 됐나?'); R('r4d1', 6, 0, '다음 문항 → 반복'); P('rrDone', 7, 0, '복습 완료 · 처리 수 · 큐 변화', 'reviewrun', 'done', AI); R('r4d2', 8, 0, '복습 큐로 / 홈으로');
+      P('rvEmpty', 0, 1, '복습할 것 없음 · 다음 예정 · 촬영 안내', 'review', 'empty', AI); P('rrFail', 5, 1, '기록 저장 실패 · 선택 유지 · 다시 시도', 'reviewrun', 'savefail', AI); R('r4d3', 3, 1, '건너뛰기 → 다음 문항 (기록 없음)');
+      A('a4d3', 2, 2, '닫기(×) 클릭'); P('rrExit', 3, 2, '중간 종료 확인 · 저장된 N문항 유지 · 현재 선택은 미기록', 'reviewrun', 'picked', Object.assign({ overlay: 'rrExit' }, AI)); R('r4d4', 4, 2, '끝내기 → 복습 큐');
+      R('r4d5', 10, 0, '오답 상세 › 해결됨 문항'); A('a4d4', 11, 0, '해결됨 탭'); P('rtEdit', 12, 0, '재풀이 기록 수정 · 변경 저장 / 닫기(원본 유지)', 'wrongdetail', '', Object.assign({ overlay: 'wdEditLog' }, AI)); A('a4d5', 13, 0, '이 기록 취소'); P('rtVoid', 14, 0, '기록 취소 확인 → 미해결로 · 큐 재계산', 'wrongdetail', '', Object.assign({ overlay: 'rtVoid' }, AI));
+      P('rtSaving', 12, 1, '기록 저장 중', 'wrongdetail', '', Object.assign({ overlay: 'rtSaving' }, AI)); P('rtFail', 13, 1, '저장 실패 · 선택 유지 · 다시 시도', 'wrongdetail', '', Object.assign({ overlay: 'rtFail' }, AI));
+      E('rv1', 'a4d1'); E('a4d1', 'rr1'); E('rr1', 'a4d2'); E('a4d2', 'rr2'); E('rr2', 'c4d1'); E('c4d1', 'r4d1', 'Yes'); E('c4d1', 'rrFail', 'No'); E('rrFail', 'c4d1', '다시 시도'); E('r4d1', 'rrDone', '마지막'); E('rrDone', 'r4d2'); E('rr1', 'r4d3'); E('a4d3', 'rrExit'); E('rrExit', 'r4d4');
+      E('r4d5', 'a4d4'); E('a4d4', 'rtEdit'); E('rtEdit', 'a4d5'); E('a4d5', 'rtVoid'); E('rtEdit', 'rtSaving', '변경 저장'); E('rtSaving', 'rtFail', '실패');
+    });
+
+    lane('04e', '사진 관리 · 승인 대기 · 가져오기 충돌', '삭제 진행/실패/재시도 · 승인 대기는 요금제에서 확인 · 같은 날짜 별개 기록은 유지', true, () => {
+      R('r4e1', 0, 0, '개인정보 › 보관 사진'); A('a4e1', 1, 0, '삭제 클릭'); P('phBusy', 2, 0, '삭제 중', 'privacy', 'on', Object.assign({ overlay: 'phBusy' }, AI)); C('c4e1', 3, 0, '삭제 됐나?'); R('r4e2', 4, 0, '목록에서 제거 · 오답 기록은 유지'); P('phFail', 4, 1, '실패 · 다시 시도 버튼', 'privacy', 'on', Object.assign({ overlay: 'phFail' }, AI));
+      A('a4e2', 1, 1, '모두 지금 삭제'); P('phBulk', 2, 1, '일부 실패 · 남은 사진 표시 · 재시도', 'privacy', 'on', Object.assign({ overlay: 'phBulk' }, AI));
+      R('r4e3', 6, 0, '구매 결과: 승인 대기'); P('plPending', 7, 0, '요금제 · 승인 대기 행 · 상태 확인', 'plan', '', Object.assign({ overlay: 'plPending' }, FREE)); C('c4e2', 8, 0, 'App Store 상태?'); R('r4e4', 9, 0, '승인 → 프리미엄 · 활성화 알림'); P('plDenied', 9, 1, '승인되지 않음 · 다시 요청', 'plan', '', Object.assign({ overlay: 'plDenied' }, FREE)); R('r4e5', 9, 2, '아직 대기 → 그대로 (앱은 기간으로 판단하지 않음)');
+      R('r4e6', 11, 0, '가져오기 › 파일 확인'); P('impConflict', 12, 0, '가져올 내용 · 새 기록 / 완전히 같은 기록 / 같은 날짜 다른 기록(유지)', 'privacy', 'on', Object.assign({ overlay: 'impConflict' }, {})); A('a4e3', 13, 0, '가져오기 클릭'); P('impRunning', 14, 0, '합치는 중 · 중복 실행 방지', 'privacy', 'on', { overlay: 'impRunning' }); R('r4e7', 15, 0, '완료 요약 (3단계)');
+      E('r4e1', 'a4e1'); E('a4e1', 'phBusy'); E('phBusy', 'c4e1'); E('c4e1', 'r4e2', 'Yes'); E('c4e1', 'phFail', 'No'); E('phFail', 'a4e1', '다시 시도'); E('r4e1', 'a4e2'); E('a4e2', 'phBulk');
+      E('r4e3', 'plPending'); E('plPending', 'c4e2'); E('c4e2', 'r4e4', '승인'); E('c4e2', 'plDenied', '거절'); E('c4e2', 'r4e5', '대기'); E('plDenied', 'plPending', '다시 요청');
+      E('r4e6', 'impConflict'); E('impConflict', 'a4e3'); E('a4e3', 'impRunning'); E('impRunning', 'r4e7');
+    });
+
+    lane('05', '복습 큐 · 통계', '', true, () => {
+      R('r51', 0, 0, '홈 복습 카드'); P('review', 1, 0, '복습 큐', 'review', 'flat', AI); A('a51', 2, 0, '문항 탭'); P('retry', 3, 0, '재풀이 기록 시트', 'review', 'flat', Object.assign({ overlay: 'retry' }, AI)); A('a52', 4, 0, '맞음/부분/또 틀림 → 기록');
+      A('a53', 6, 0, '통계 탭 클릭'); C('c51', 7, 0, '프리미엄인가?'); P('statsP', 8, 0, '통계 · 프리미엄 (오답 섹션)', 'stats', 'default', AI); A('a54', 9, 0, '시간×성취 미리 보기 클릭'); P('cross', 10, 0, '시간 × 성취 교차 뷰', 'stats', 'default', Object.assign({ overlay: 'crossView' }, AI));
+      P('statsF', 7, 1, '통계 · 무료 (오답 티저)', 'stats', 'default', FREE);
+      E('r51', 'review'); E('review', 'a51'); E('a51', 'retry'); E('retry', 'a52'); E('a53', 'c51'); E('c51', 'statsP', 'Yes'); E('c51', 'statsF', 'No'); E('statsP', 'a54'); E('a54', 'cross');
+    });
+
+    lane('06', '설정', '목표 시간 · 주 시작 · 요금제 · 도움말 · 과목', true, () => {
+      A('a61', 0, 0, '홈 우상단 설정 클릭'); P('settings', 1, 0, '설정 (무료)', 'settings', '', FREE); A('a62', 2, 0, '하루 목표 시간 클릭'); C('c61', 3, 0, '프리미엄인가?'); P('goal', 4, 0, '목표 시간 시트', 'settings', '', Object.assign({ overlay: 'goal' }, AI));
+      A('a63', 1, 1, '주 시작 요일 클릭'); P('week', 2, 1, '주 시작 요일 시트', 'settings', '', { overlay: 'week' }); R('r61', 3, 1, '페이월 시트 → 체험 후 목표 시트로');
+      A('a67', 1, 2, '알림 클릭'); P('notif', 2, 2, '알림 설정 시트', 'settings', '', { overlay: 'notif' });
+      R('r62', 6, 0, '설정'); A('a64', 7, 0, '요금제 클릭'); C('c62', 8, 0, '구독 중인가?'); P('planP', 9, 0, '요금제 · 구독 중', 'plan', ''); A('a65', 10, 0, '구독 해지 클릭'); P('cancelSub', 11, 0, '해지 확인 → 종료일까지 유지 (해지 예약)', 'plan', '', { overlay: 'cancelSub' }); P('cancelled', 12, 0, '요금제 · 해지 예약 · 해지 취소 가능', 'plan', '', { overlay: 'cancelled' });
+      P('planF', 8, 1, '요금제 · 무료 → 7일 무료', 'plan', '', FREE);
+      R('r63', 13, 1, '설정'); A('a66', 14, 1, '도움말 · 문의 클릭'); P('help', 15, 1, '도움말 · 문의', 'help', '');
+      E('a61', 'settings'); E('settings', 'a62'); E('a62', 'c61'); E('c61', 'goal', 'Yes'); E('c61', 'r61', 'No'); E('settings', 'a63'); E('a63', 'week'); E('settings', 'a67');
+      E('r62', 'a64'); E('a64', 'c62'); E('c62', 'planP', 'Yes'); E('c62', 'planF', 'No'); E('planP', 'a65'); E('a65', 'cancelSub'); E('cancelSub', 'cancelled'); E('r63', 'a66'); E('a66', 'help'); E('settings', 'a67'); E('a67', 'notif');
+    });
+
+    lane('07', '요금 상태 · 과목 관리', '', true, () => {
+      R('r71', 0, 0, '체험 7일 경과'); P('expired', 1, 0, '체험 만료 시트', 'settings', '', Object.assign({ overlay: 'expired' }, FREE)); A('a71', 2, 0, '월 4,900원으로 계속 클릭'); C('c71', 3, 0, '결제 승인됐나?'); R('r72', 4, 0, '프리미엄 유지');
+      P('payfail', 3, 1, '결제 실패 시트 · 기록은 보존 · 재시도는 구매 흐름', 'settings', '', Object.assign({ overlay: 'payfail' }, FREE));
+      R('r73', 6, 0, '설정'); A('a72', 7, 0, '과목 관리 클릭'); P('subjects', 8, 0, '과목 관리', 'subjects', ''); A('a73', 9, 0, '과목 행 탭'); P('subjEdit', 10, 0, '과목 편집 시트', 'subjects', '', { overlay: 'subjEdit' });
+      A('a74', 8, 1, '과목 추가 클릭'); P('subjAdd', 9, 1, '과목 추가 시트', 'subjects', '', { overlay: 'subjAdd' }); A('a75', 11, 0, '과목 삭제 클릭'); P('subjDel', 12, 0, '과목 삭제 확인 모달', 'subjects', '', { overlay: 'subjDel' });
+      E('r71', 'expired'); E('expired', 'a71'); E('a71', 'c71'); E('c71', 'r72', 'Yes'); E('c71', 'payfail', 'No');
+      E('r73', 'a72'); E('a72', 'subjects'); E('subjects', 'a73'); E('a73', 'subjEdit'); E('subjects', 'a74'); E('a74', 'subjAdd'); E('subjEdit', 'a75'); E('a75', 'subjDel');
+    });
+
+    lane('08', '카메라와 개인정보', '데이터 통제', true, () => {
+      R('r81', 0, 0, '설정'); A('a81', 1, 0, '카메라와 개인정보 클릭'); P('privOn', 2, 0, '개인정보 · 카메라 ON', 'privacy', 'on'); A('a82', 3, 0, '정정 이력 클릭'); P('corr', 4, 0, '정정 이력', 'corrections', '');
+      A('a83', 2, 1, '착석 감지 토글 끔'); P('privOff', 3, 1, '개인정보 · OFF (수동)', 'privacy', 'off');
+      R('r82', 6, 0, '개인정보'); A('a84', 7, 0, '보관 중 사진 보기 클릭'); P('photos', 8, 0, '보관 사진 시트', 'privacy', 'on', Object.assign({ overlay: 'photos' }, AI)); A('a85', 9, 0, '모두 지금 삭제 클릭'); P('delPhotos', 10, 0, '사진 삭제 확인 모달', 'privacy', 'on', Object.assign({ overlay: 'delPhotos' }, AI));
+      R('r83', 12, 0, '개인정보'); A('a86', 13, 0, '모든 기록 삭제 클릭'); P('delDlg', 14, 0, '모든 기록 삭제 확인', 'privacy', 'on', { overlay: 'delDlg' });
+      A('a87', 12, 1, '내 기록 내보내기 클릭'); P('expSheet', 13, 1, '내보내기 시트 · CSV/JSON', 'privacy', 'on', { overlay: 'expSheet' });
+      A('a88', 6, 1, '기록 가져오기 클릭'); P('imp', 7, 1, '가져오기 시트', 'privacy', 'on', { overlay: 'importSheet' }); A('a89', 8, 1, '파일 고르기 (OS)'); P('impFile', 9, 1, '파일 확인 → 가져오기', 'privacy', 'on', { overlay: 'importFile' });
+      E('r81', 'a81'); E('a81', 'privOn'); E('privOn', 'a82'); E('a82', 'corr'); E('privOn', 'a83'); E('a83', 'privOff');
+      E('r82', 'a84'); E('a84', 'photos'); E('r82', 'a88'); E('a88', 'imp'); E('imp', 'a89'); E('a89', 'impFile'); E('photos', 'a85'); E('a85', 'delPhotos'); E('r83', 'a86'); E('a86', 'delDlg'); E('r83', 'a87'); E('a87', 'expSheet');
+    });
+
+    lane('09', '게이트 · 확인 보강 (분석 A·B·D 반영)', '페이월 동의 · 해지 확인 · 판독 소진/실패 · 가져오기 · 알림 · 삭제 확인', true, () => {
+      R('r91', 0, 0, '온보딩 2 건너뜀'); A('a91', 1, 0, '프리미엄 진입점 클릭'); P('pwC', 2, 0, '페이월 · 동의 단계', 'home', 'default', Object.assign({ overlay: 'pwConsent' }, FREE, AI)); C('c91', 3, 0, '동의 체크했나?'); R('r92', 4, 0, '체험 시작 → 원래 시트로');
+      R('r93', 6, 0, '촬영'); A('a92', 7, 0, '촬영 클릭 (20/20 사용)'); P('quotaN', 8, 0, '판독 소진 시트 · 닫기 → 촬영으로 / 요금제 보기', 'capture', '', Object.assign({ overlay: 'quota' }, AI)); R('r93b', 9, 0, '요금제');
+      R('r93c', 6, 1, '집중 시작 준비 · 카메라 점유'); P('camBusyN', 7, 1, '오류 · 수동 타이머로 → 수동 모드 준비 상태 (닫기만 아님)', 'setup', 'cambusy', {}); R('r93d', 8, 1, '다시 시도 → 카메라 ON 재시도');
+      R('r94', 11, 0, '개인정보'); A('a94', 12, 0, '기록 가져오기 클릭'); P('impN', 13, 0, '가져오기 · 파일 확인 → 합치기', 'privacy', 'on', { overlay: 'importFile' });
+      R('r95', 0, 1, '요금제 · 구독 중'); A('a95', 1, 1, '구독 해지 클릭'); P('cancelN', 2, 1, '해지 확인 → 종료일까지 유지 (레인 06과 동일 규칙)', 'plan', '', { overlay: 'cancelSub' });
+      R('r96', 10, 1, '과목 편집'); A('a96', 11, 1, '과목 삭제 클릭'); P('subjDelN', 12, 1, '삭제 확인 → 기록은 기타로', 'subjects', '', { overlay: 'subjDel' });
+      R('r98', 14, 1, '오답 상세 · 사진 삭제 후'); P('photoDel', 15, 1, '"삭제됨" 표시 · 오답 유지', 'wrongdetail', '', Object.assign({ overlay: 'photoDeleted' }, AI));
+      E('r91', 'a91'); E('a91', 'pwC'); E('pwC', 'c91'); E('c91', 'r92', 'Yes'); E('r93', 'a92'); E('a92', 'quotaN'); E('quotaN', 'r93b', '요금제'); E('r93c', 'camBusyN'); E('camBusyN', 'r93d', '다시 시도'); E('r94', 'a94'); E('a94', 'impN');
+      E('r95', 'a95'); E('a95', 'cancelN'); E('r96', 'a96'); E('a96', 'subjDelN'); E('r98', 'photoDel');
+    });
+
+    lane('10', '편집 · 복구 · 측정 중단 (보강 2차)', '변경 취소·삭제 확인 · 복구 분기 · 재연결 결과', true, () => {
+      R('r101', 0, 0, '플래너 날짜 상세'); A('a101', 1, 0, '항목 제목 탭'); P('editItem', 2, 0, '등록 시트 · 편집 모드', 'planner', '', { overlay: 'editItem' }); C('c104', 3, 0, '바꾼 내용 있나?'); P('editCancel', 4, 0, '변경 취소 확인 · 원본 유지', 'planner', '', { overlay: 'editCancel' });
+      P('editDelete', 2, 1, '이 항목 삭제 확인', 'planner', '', { overlay: 'editDelete' }); R('r116', 4, 1, 'No → 바로 닫기');
+      R('r107', 0, 2, '플래너 · 기간 띠 (시험)'); A('a108', 1, 2, '띠 행 탭'); P('bandEdit', 2, 2, '기간 일정 수정 · 시작/끝 · 삭제', 'planner', '', { overlay: 'bandEdit' }); R('r115', 3, 2, '등록 시트 · 새 항목 작성 중 닫기'); P('discard', 4, 2, '작성 내용 버리기 확인', 'planner', '', { overlay: 'discardSheet' });
+      R('r102', 6, 0, '타임테이블 반복 일정'); A('a103', 7, 0, '일정 행 탭 / × 삭제'); P('evEdit', 8, 0, '반복 일정 수정 · 요일·시간', 'timetable', '', { overlay: 'evEdit' }); A('a104', 9, 0, '저장 / 삭제 클릭'); P('evScope', 10, 0, '전체 적용 확인 (수정) / 전체 삭제 확인 → 5초 되돌리기 · 첫 출시는 전체 단위만', 'timetable', '', { overlay: 'evScope' });
+      R('r104', 6, 1, '앱 재실행'); C('c102', 7, 1, '미완료 세션 있나?'); P('recover', 8, 1, '세션 복구 · 바깥 탭 = 유지하고 닫기', 'home', 'default', { overlay: 'recover' }); C('c106', 9, 1, '카메라 사용 가능?'); R('r109', 10, 1, 'Yes → 집중 중 · No → 측정 중단 화면');
+      R('r117', 8, 2, '마무리 → 집중 기록 (새 세션)'); P('recoverConfirm', 9, 2, '버리기 → 확인 · 취소 시 복구 화면으로', 'home', 'default', { overlay: 'recoverConfirm' });
+      R('r110', 6, 3, '집중 기록 (새 세션)'); A('a110', 7, 3, '버리기 클릭'); P('sumDiscard', 8, 3, '기록 버리기 확인 → 홈', 'summary', 'default', { overlay: 'sumDiscard' }); R('r111', 9, 3, '세션 상세 › 구간 정정'); P('sumEdit', 10, 3, '집중 기록 · 정정 모드 (변경 저장 / 변경 취소)', 'summary', 'default', { overlay: 'sumEdit' }); P('sumEditCancel', 11, 3, '변경 취소 확인 → 세션 상세 · 원본 유지', 'summary', 'default', { overlay: 'sumEditCancel' });
+      R('r103', 12, 0, '집중 중'); C('c101', 13, 0, '카메라 끊김?'); P('lost', 14, 0, '측정 중단 · 재연결 / 수동 / 종료', 'focus', 'lost'); C('c105', 15, 0, '재연결 성공?'); R('r108', 16, 0, 'Yes → 집중 중 (측정 재개)');
+      P('lostFail', 15, 1, 'No → 재연결 실패 · 중단 유지 · 수동/종료만', 'focus', 'lostfail'); R('r118', 14, 1, '수동 → 집중 중(수동) · 종료 → 집중 기록');
+      R('r106', 13, 2, '설정 › 알림'); P('nfDenied', 14, 2, '기기 알림 권한 꺼짐 → 기기 설정 → 복귀 갱신', 'settings', '', { overlay: 'nfDenied' });
+      E('r101', 'a101'); E('a101', 'editItem'); E('editItem', 'c104', '닫기'); E('c104', 'editCancel', 'Yes'); E('c104', 'r116', 'No'); E('editItem', 'editDelete', '삭제'); E('r107', 'a108'); E('a108', 'bandEdit'); E('r115', 'discard');
+      E('r102', 'a103'); E('a103', 'evEdit'); E('evEdit', 'a104'); E('a104', 'evScope');
+      E('r104', 'c102'); E('c102', 'recover', 'Yes'); E('recover', 'c106', '이어서'); E('c106', 'r109'); E('recover', 'recoverConfirm', '버리기'); E('recover', 'r117', '마무리'); E('r110', 'a110'); E('a110', 'sumDiscard'); E('r111', 'sumEdit'); E('sumEdit', 'sumEditCancel', '취소');
+      E('r103', 'c101'); E('c101', 'lost', 'Yes'); E('lost', 'c105', '재연결'); E('c105', 'r108', 'Yes'); E('c105', 'lostFail', 'No'); E('lost', 'r118');
+      E('r106', 'nfDenied');
+    });
+
+    lane('10b', '구매 · 복원 결과 분기', '구매: 성공 / 대기 / 실패 / 취소 · 복원: 성공 / 없음 / 확인 실패', true, () => {
+      R('r105', 0, 0, '페이월 › 7일 무료 · 재구독 안내 › 재구독 · 만료 시트 › 계속 (모두 같은 흐름)'); P('buying', 1, 0, '구매 진행 중 · 중복 클릭 방지', 'home', 'default', Object.assign({ overlay: 'buying' }, FREE, AI)); C('c103', 2, 0, 'App Store 결과?');
+      R('r112', 3, 0, '성공 → 프리미엄 · 원래 목적지로'); P('pending', 3, 1, '승인 대기 (보호자 승인) → 무료 유지 · 승인 시 자동 전환', 'home', 'default', Object.assign({ overlay: 'pending' }, FREE, AI)); P('pwFail', 3, 2, '결제 실패 · 청구 없음 → 다시 시도(출발 화면으로) / 닫기', 'home', 'default', Object.assign({ overlay: 'pwFail' }, FREE)); R('r113', 3, 3, '취소 → 토스트 · 페이월 유지');
+      R('r114', 5, 0, '페이월 / 요금제 › 구매 복원'); C('c107', 6, 0, 'App Store 조회 결과?'); P('restoreOk', 7, 0, '복원 성공 → 프리미엄 · 기록 이어짐', 'plan', '', { overlay: 'restoreOk' }); P('restoreNone', 7, 1, '복원할 구매 없음 → 무료 유지', 'plan', '', Object.assign({ overlay: 'restoreNone' }, FREE)); P('restoreErr', 7, 2, '확인 실패 · 다시 결제하지 말 것 · [다시 복원] → 조회 재실행', 'plan', '', Object.assign({ overlay: 'restoreErr' }, FREE));
+      E('r105', 'buying'); E('buying', 'c103'); E('c103', 'r112', '성공'); E('c103', 'pending', '대기'); E('c103', 'pwFail', '실패'); E('c103', 'r113', '취소');
+      E('r114', 'c107'); E('c107', 'restoreOk', '있음'); E('c107', 'restoreNone', '없음'); E('c107', 'restoreErr', '오류'); E('restoreErr', 'c107', '다시 복원');
+    });
+
+    lane('11', '파일 오류 · 문의 실패 · 빈 상태 · 전체 삭제', '', true, () => {
+      R('r111a', 0, 0, '가져오기 › 파일 고르기 (OS)'); C('c111', 1, 0, '파일 검사'); R('r111f', 2, 0, '정상 → 파일 확인 (2단계)'); P('impBad', 2, 1, '형식 오류 → 다른 파일 고르기 (1단계)', 'privacy', 'on', { overlay: 'impBad' }); P('impVer', 2, 2, '새 버전 파일 → App Store 이동 (OS) / 닫기', 'privacy', 'on', { overlay: 'impVer' }); P('impDupe', 2, 3, '중복 파일 → 2단계 + 안내 배너 · 버튼 재탭 필요', 'privacy', 'on', { overlay: 'impDupeNote' });
+      R('r111b', 0, 1, '선택 취소 → 토스트 · 시트 유지');
+      R('r111c', 4, 0, '가져오기 › 합치기'); C('c112', 5, 0, '저장 성공?'); R('r111g', 6, 0, 'Yes → 완료 화면 (3단계)'); P('impSave', 6, 1, '저장 실패 → 같은 파일로 합치기 재실행 · 기존 기록 유지', 'privacy', 'on', { overlay: 'impSave' });
+      R('r111d', 4, 2, '내보내기 › 형식 선택'); C('c113', 5, 2, '파일 저장됨?'); R('r111h', 6, 2, 'Yes → 완료 토스트'); P('expFail', 6, 3, '실패 토스트 → [다시 시도] 같은 형식으로 저장 재실행', 'privacy', 'on', { overlay: 'expFailToastRetry' });
+      P('hpFail', 8, 0, '문의 전송 실패 · 내용 유지 · 대체 메일', 'help', 'fail'); P('crEmpty', 9, 0, '정정 이력 없음 · 다음 행동', 'corrections', 'empty'); P('ttEmpty', 10, 0, '타임테이블 기록 없음 · 집중 시작 / 반복 일정', 'timetable', 'empty');
+      R('r111e', 8, 1, '개인정보 › 모든 기록 삭제'); P('delAllDlg', 9, 1, '삭제 범위 명시 · 세션/플래너/오답/사진/과목/설정 · 구독 유지', 'privacy', 'on', { overlay: 'delDlg' }); P('delAll', 10, 1, '완료 → 홈 빈 상태 (측정 중엔 진입 불가)', 'home', 'empty');
+      E('r111a', 'c111'); E('c111', 'r111f', '정상'); E('c111', 'impBad', '형식'); E('c111', 'impVer', '버전'); E('c111', 'impDupe', '중복'); E('r111c', 'c112'); E('c112', 'r111g', 'Yes'); E('c112', 'impSave', 'No'); E('impSave', 'c112', '재시도'); E('expFail', 'c113', '재시도'); E('r111d', 'c113'); E('c113', 'r111h', 'Yes'); E('c113', 'expFail', 'No'); E('r111e', 'delAllDlg'); E('delAllDlg', 'delAll');
+    });
+
+    lane('11b', '구독 종료 후 · 읽기 전용 접근', '처음부터 무료인 사용자(페이월)와 다른 경로', true, () => {
+      const EX = { plan: 'expired' };
+      R('r120', 0, 0, '구독 종료 사용자 · 홈/통계 오답 카드'); A('a120', 1, 0, '오답 카드 탭'); P('roWrongs', 2, 0, '오답 누적 · 읽기 전용 배지 · 재구독 링크', 'wrongs', '', Object.assign({}, EX, AI)); A('a121', 3, 0, '범위 행 탭'); P('roDetail', 4, 0, '오답 상세 · 해결 버튼 없음(미해결 표시)', 'wrongdetail', '', Object.assign({}, EX, AI));
+      R('r121', 6, 0, '개인정보'); A('a122', 7, 0, '보관 중 사진 보기'); P('roPhotos', 8, 0, '보관 사진 · 확인·삭제 가능', 'privacy', 'on', Object.assign({ overlay: 'photos' }, EX));
+      R('r122', 0, 1, '멈춘 기능 진입 (촬영·복습·제안·목표 시간·개인정보 재구독)'); P('resub', 1, 1, '재구독 안내 · 가능/불가 목록 · 성공 시 원래 시트로 복귀', 'wrongs', '', Object.assign({ overlay: 'resub' }, EX)); C('c120', 2, 1, '재구독?'); R('r123', 3, 1, '구매 진행 중 → App Store 결과 (성공/취소/실패/대기 · 레인 10)'); R('r124', 3, 2, '기록만 볼게요 → 원래 화면으로 복귀');
+      P('roPlan', 6, 1, '요금제 · 구독 종료 · 가능/불가 목록 · 월 4,900원 재구독', 'plan', '', Object.assign({ overlay: 'roPlan' }, EX)); P('roHome', 8, 1, '홈 카드 · 기존 오답 보기 · 읽기 전용', 'home', 'default', EX); P('roSettings', 7, 1, '설정 · 무료 · 오답 23문항 읽기 전용', 'settings', '', EX);
+      E('r120', 'a120'); E('a120', 'roWrongs'); E('roWrongs', 'a121'); E('a121', 'roDetail'); E('r121', 'a122'); E('a122', 'roPhotos'); E('r122', 'resub'); E('resub', 'c120'); E('c120', 'r123', 'Yes'); E('c120', 'r124', 'No'); E('roPlan', 'roSettings'); E('roSettings', 'roHome');
+    });
+
+    lane('12', '태블릿 가로 · 2열 변형', '1024 × 768 · 사이드바 + 2열 (홈·타임테이블은 기존)', false, () => {
+      const T = { device: 'tablet' };
+      P('t1', 0, 0, '통계 · 오답 | 순공·과목·패턴', 'stats', 'default', Object.assign({}, T, AI)); P('t2', 2, 0, '판독 결과 · 원본 사진 | 문항 격자', 'result', '', Object.assign({}, T, AI)); P('t3', 4, 0, '오답 상세 · 문항 | 연결·다음 단계', 'wrongdetail', '', Object.assign({}, T, AI)); P('t4', 6, 0, '온보딩 · 600px 가운데', 'onboard', '2', T);
+      P('t5', 8, 0, '홈 · 링 | 목록', 'home', 'default', T); P('t6', 10, 0, '타임테이블 · 주간 | 반복 일정', 'timetable', '', T); P('t7', 12, 0, '플래너 · 넓은 달력', 'planner', '', T);
+    });
+
+    lane('13', '상태 변형', '흐름 밖에서 나타나는 화면 상태 (화살표 없음)', false, () => {
+      P('s1', 0, 0, '홈 · 목표 초과 (자습)', 'home', 'over'); P('s2', 1, 0, '홈 · 할 일 없음', 'home', 'notodo'); P('s3', 2, 0, '홈 · 로딩', 'home', 'loading'); P('s4', 3, 0, '홈 · 다크', 'home', 'default', { theme: 'b' });
+      P('s5', 4, 0, '준비 · 수동 모드', 'setup', 'manual'); P('s6', 5, 0, '집중 중 · 일시정지', 'focus', 'paused'); P('s7', 6, 0, '집중 중 · 목표 달성', 'focus', 'goal'); P('s8', 7, 0, '기록 · 3분 미만', 'summary', 'short'); P('s9', 8, 0, '기록 · 구간 수정 시트', 'summary', 'default', { overlay: 'segSheet' });
+      P('s10', 9, 0, '플래너 · 다크', 'planner', '', { theme: 'b' }); P('s11', 10, 0, '통계 · 3일 미만', 'stats', 'sparse'); P('s12', 11, 0, '통계 · 로딩', 'stats', 'loading'); P('s13', 12, 0, '설정 · 프리미엄', 'settings', ''); P('s14', 13, 0, '홈 · 프리미엄', 'home', 'default', AI);
+    });
+
+    // geometry
+    const dim = { page: [PW, PH], act: [AW, AH], cond: [DW, DH], ref: [RW, RH] };
+    Object.values(nodes).forEach(n => { let [w, hh] = dim[n.t]; const tab = n.t === 'page' && n.device === 'tablet'; if (tab) w = 300; n.cx = X0 + n.col * CW + PW / 2 + (tab ? (300 - PW) / 2 : 0); n.w = w; n.h = hh; n.x = n.cx - w / 2; n.y = n.cy - hh / 2;
+      if (n.t === 'page') { n.fw = tab ? 1024 : 390; n.fh = tab ? 768 : 844; n.sc = tab ? 300 / 1024 : .31; n.tw = Math.round(n.fw * n.sc); n.th = Math.round(n.fh * n.sc); } });
+    const pages = [], actions = [], conds = [], refs = [];
+    Object.values(nodes).forEach(n => {
+      const o = Object.assign({ key: n.id }, n);
+      if (n.t === 'page') { o.bg = n.ai ? '#EEE9FF' : '#DAE8FC'; o.bd = n.ai ? '#8B78D9' : '#6C8EBF'; pages.push(o); }
+      else if (n.t === 'act') actions.push(o); else if (n.t === 'cond') conds.push(o); else refs.push(o);
+    });
+    const edgeOut = edges.map((e, i) => {
+      const a = nodes[e.a], b = nodes[e.b]; if (!a || !b) return null;
+      let d, lx, ly;
+      if (Math.abs(a.cy - b.cy) < 4) { // same row → right to left
+        const x1 = a.cx + a.w / 2, x2 = b.cx - b.w / 2; d = 'M' + x1 + ' ' + a.cy + ' L' + x2 + ' ' + a.cy; lx = (x1 + x2) / 2; ly = a.cy - 8;
+      } else if (Math.abs(a.cx - b.cx) < 4 && b.cy > a.cy) { // same col → down
+        const y1 = a.cy + a.h / 2, y2 = b.cy - b.h / 2; d = 'M' + a.cx + ' ' + y1 + ' L' + a.cx + ' ' + y2; lx = a.cx + 16; ly = (y1 + y2) / 2 + 4;
+      } else if (Math.abs(a.cx - b.cx) < 4) { // same col → up
+        const y1 = a.cy - a.h / 2, y2 = b.cy + b.h / 2; d = 'M' + a.cx + ' ' + y1 + ' L' + a.cx + ' ' + y2; lx = a.cx + 16; ly = (y1 + y2) / 2 + 4;
+      } else if (b.cy > a.cy) { // below-right: down then right
+        const y1 = a.cy + a.h / 2, x2 = b.cx - b.w / 2; d = 'M' + a.cx + ' ' + y1 + ' L' + a.cx + ' ' + b.cy + ' L' + x2 + ' ' + b.cy; lx = (a.cx + x2) / 2; ly = b.cy - 8;
+      } else { // above-right: right then up
+        const x1 = a.cx + a.w / 2, y2 = b.cy + b.h / 2; d = 'M' + x1 + ' ' + a.cy + ' L' + b.cx + ' ' + a.cy + ' L' + b.cx + ' ' + y2; lx = (x1 + b.cx) / 2; ly = a.cy - 8;
+      }
+      if (e.lab) { const bw = e.lab.length * 7 + 10; labels.push({ key: 'l' + i, t: e.lab, x: lx, y: ly, bx: lx - bw / 2, by: ly - 13, bw }); }
+      return { key: 'e' + i, d };
+    }).filter(Boolean);
+    return { W: 17 * CW + 120, H: laneY + 40, pages, actions, conds, refs, edges: edgeOut, labels, lanes };
+  }
+}
+</script>
+</body>
+</html>

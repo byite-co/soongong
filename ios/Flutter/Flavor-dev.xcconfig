@@ -1,0 +1,4 @@
+// Flavor: dev (S01). Shared by the Debug-dev / Release-dev / Profile-dev configurations.
+PRODUCT_BUNDLE_IDENTIFIER = co.byite.soongong.dev
+APP_DISPLAY_NAME = 순공 dev
+FLAVOR = dev

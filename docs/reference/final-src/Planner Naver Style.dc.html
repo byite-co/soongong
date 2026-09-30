@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+html,body{margin:0;background:transparent}
+body{font-family:'Pretendard Variable',Pretendard,-apple-system,'Apple SD Gothic Neo',system-ui,sans-serif;-webkit-font-smoothing:antialiased;word-break:keep-all}
+a{color:#9DA6FF}a:hover{color:#C3C9FF}
+button{font:inherit;color:inherit;background:none;border:none;padding:0;text-align:inherit;cursor:pointer}
+input{font:inherit;color:inherit;outline:none}
+::-webkit-scrollbar{width:0;height:0}
+.ph{text-wrap:pretty;word-break:keep-all;overflow-wrap:anywhere}
+.ph [style*="text-align:center"]{text-wrap:balance}
+.ph{--bg:#F5F5F7;--sf:#FFFFFF;--ln:#E6E6EB;--tx:#111114;--tx2:#4E4E58;--tx3:#6E6E7A;--pri:#3D5AFE;--pri-tx:#2F49E0;--pri-weak:#EEF1FF;--acc:#FF6B3D;--acc-tx:#B8431A;--acc-weak:#FFF1EA;--sunk:#EFEFF2;--sun:#C0392B;--sat:#2F49E0;--ink:#1A0E08;--scrim:rgba(17,17,20,.42);--pri-dk:#7484D4;--acc-dk:#F2916E;--blk:#4A5EC2;--blk-top:#FFFFFF;--plan-blk:#C9CCD9;--plan-dk:#DDDFE8;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--tx);position:relative;display:flex;flex-direction:column;font-variant-numeric:tabular-nums}
+.ph.dark{--bg:#0B0B0F;--sf:#141419;--ln:rgba(255,255,255,.08);--tx:#F4F4F6;--tx2:#B4B4BE;--tx3:#8C8C98;--pri:#7A8CFF;--pri-tx:#9DAAFF;--pri-weak:rgba(122,140,255,.14);--acc:#FF7A4D;--acc-tx:#FFA07A;--acc-weak:rgba(255,122,77,.14);--sunk:#15151C;--sun:#FF7B7B;--sat:#9DAAFF;--scrim:rgba(0,0,0,.66);--pri-dk:#6C7CD0;--acc-dk:#F0895F;--blk:#4B5DB8;--blk-top:#1B1B24;--plan-blk:#2A2B36;--plan-dk:#3A3B4A}
+@keyframes sheetIn{from{transform:translateY(24px);opacity:0}}
+@keyframes fadeIn{from{opacity:0}}
+.cap{color:#C9C9D2;max-width:900px}
+.cap h3{margin:0;font-size:15px;font-weight:700;color:#F2F2F6}
+.cap ul{margin:10px 0 0;padding:0 0 0 16px;font-size:12.5px;line-height:1.6;color:#A6A6B2}
+</style>
+</helmet>
+    <div class="ph {{ themeCls }}" data-screen-label="08 플래너">
+      <div style="height:52px;flex:none"></div>
+      <div style="flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 20px">
+        <button onClick="{{ noop }}" style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:22px;font-weight:700;letter-spacing:-.02em">2026. 8.</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--tx3)"><path d="m6 9 6 6 6-6"></path></svg>
+        </button>
+        <div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="font-size:12px;color:var(--tx3);white-space:nowrap">{{ doneLabel }} <b style="color:var(--tx);font-weight:600">{{ doneTotal }}</b></span><sc-if value="{{ hasSuggest }}" hint-placeholder-val="{{ false }}"><button onClick="{{ onSuggestTap }}" aria-label="제안 받기" style="height:34px;padding:0 10px;border-radius:10px;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--pri-tx);background:var(--pri-weak)" style-active="transform:scale(.96)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path></svg>제안</button></sc-if><button onClick="{{ toggle3d }}" aria-label="순공 3D" style="width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:{{ b3Bg }};color:{{ b3Col }};transition:background .2s,color .2s" style-active="transform:scale(.94)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path><path d="m3.3 7 8.7 5 8.7-5"></path><path d="M12 22V12"></path></svg></button></div>
+      </div>
+      <sc-if value="{{ mode3d }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:12px;padding:10px 20px 0;font-size:11.5px;color:var(--tx3)"><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--blk)"></span>순공 · 높이 = 시간</span><sc-if value="{{ planLegend }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--plan-blk)"></span>계획(예정)</span></sc-if><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--acc)"></span>오늘</span></div></sc-if>
+      <div style="flex:none;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));padding:10px 12px 0">
+        <div style="text-align:center;font-size:11px;font-weight:500;color:var(--sun);padding-bottom:6px">일</div><div style="text-align:center;font-size:11px;font-weight:500;color:var(--tx3);padding-bottom:6px">월</div><div style="text-align:center;font-size:11px;font-weight:500;color:var(--tx3);padding-bottom:6px">화</div><div style="text-align:center;font-size:11px;font-weight:500;color:var(--tx3);padding-bottom:6px">수</div><div style="text-align:center;font-size:11px;font-weight:500;color:var(--tx3);padding-bottom:6px">목</div><div style="text-align:center;font-size:11px;font-weight:500;color:var(--tx3);padding-bottom:6px">금</div><div style="text-align:center;font-size:11px;font-weight:500;color:var(--sat);padding-bottom:6px">토</div>
+      </div>
+      <div onPointerDown="{{ dragStart }}" style="flex:0 0 auto;min-height:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(6,minmax(0,1fr));padding:{{ gridPad }};border-top:1px solid var(--ln);transition:{{ gridTrans }},padding .35s cubic-bezier(.2,.8,.25,1),transform .45s cubic-bezier(.2,.8,.25,1);height:{{ gridH }};touch-action:none;position:relative;transform:{{ gridTilt }};transform-origin:50% 100%">
+        <sc-for list="{{ cells }}" as="c" hint-placeholder-count="42">
+          <button onClick="{{ c.pick }}" style="min-width:0;min-height:0;position:relative;border-bottom:1px solid var(--ln);background:transparent;pointer-events:{{ c.pe }};overflow:visible;display:flex;align-items:center;justify-content:center" style-active="opacity:.85">
+            <span style="position:absolute;right:3px;top:3px;height:calc(100% - 6px);width:{{ c.dx }};background:{{ c.side }};transform-origin:right top;transform:skewY(63.4deg);transition:width .35s cubic-bezier(.2,.8,.25,1);opacity:{{ c.faceOp }}"></span>
+            <span style="position:absolute;left:3px;right:3px;bottom:3px;height:{{ c.h }};background:{{ c.front }};transform-origin:bottom left;transform:skewX(26.6deg);transition:height .35s cubic-bezier(.2,.8,.25,1);opacity:{{ c.faceOp }}"></span>
+            <span style="position:absolute;inset:{{ c.inset }};display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:5px 2px 3px;overflow:hidden;box-sizing:border-box;background:{{ c.bg }};box-shadow:{{ c.edge }};border-radius:{{ c.rad }};transform:translate({{ c.tx }},{{ c.ty }});transition:transform .35s cubic-bezier(.2,.8,.25,1),background .2s,box-shadow .2s">
+            <span style="display:flex;align-items:center;padding:0 1px 0 2px;flex:none">
+              <span style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;background:{{ c.dBg }};color:{{ c.dCol }};box-shadow:{{ c.dRing }}">{{ c.d }}</span>
+            </span>
+            <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+              <sc-for list="{{ c.lanes }}" as="l" hint-placeholder-count="0"><span style="display:block;height:15px;flex:none"></span></sc-for>
+              <sc-if value="{{ c.dots3d }}" hint-placeholder-val="{{ false }}">
+                <span style="display:flex;flex-wrap:wrap;gap:3px;padding:3px 3px 0;max-width:100%"><sc-for list="{{ c.dotList }}" as="o" hint-placeholder-count="0"><span style="width:6px;height:6px;border-radius:50%;background:{{ o.bg }};border:1.25px solid {{ o.c }};box-sizing:border-box"></span></sc-for></span>
+                <span style="font-size:9.5px;font-weight:500;color:var(--tx3);padding:2px 3px 0">{{ c.cnt }}</span>
+              </sc-if>
+              <sc-for list="{{ c.items }}" as="t" hint-placeholder-count="0">
+                <span style="display:flex;align-items:center;gap:3px;padding:1px 2px 1px {{ t.pl }};border-left:{{ t.bar }};font-size:10px;font-weight:500;line-height:1.3;color:{{ t.col }};opacity:{{ t.op }};min-width:0">
+                  <sc-if value="{{ t.sq }}" hint-placeholder-val="{{ false }}"><span style="width:7px;height:7px;border-radius:2px;border:1.25px solid {{ t.c }};background:{{ t.sqBg }};flex:none;box-sizing:border-box"></span></sc-if>
+                  <sc-if value="{{ t.ck }}" hint-placeholder-val="{{ false }}"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="{{ t.c }}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+                  <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.t }}</span>
+                </span>
+              </sc-for>
+              <sc-if value="{{ c.more }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px;font-weight:500;color:var(--tx3);padding-left:6px">{{ c.moreText }}</span></sc-if>
+            </sc-if>
+            <sc-if value="{{ collapsed }}" hint-placeholder-val="{{ false }}">
+              <span style="display:flex;justify-content:center;gap:3px;padding-top:1px">
+                <sc-for list="{{ c.dots }}" as="o" hint-placeholder-count="0"><span style="width:4px;height:4px;border-radius:50%;background:{{ o.c }}"></span></sc-for>
+              </span>
+            </sc-if>
+            </span>
+          </button>
+        </sc-for>
+        <sc-if value="{{ true }}" hint-placeholder-val="{{ true }}">
+          <sc-for list="{{ bands }}" as="b" hint-placeholder-count="0">
+            <span style="position:absolute;box-sizing:border-box;left:{{ b.left }};width:{{ b.width }};top:{{ b.top }};height:15px;border-radius:3px;background:{{ b.bg }};color:#FFFFFF;font-size:9.5px;font-weight:600;line-height:15px;padding:0 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;opacity:{{ bandOp }};transform:{{ bandTf }};transform-origin:left center;transition:{{ bandTrans }}">{{ b.name }}</span>
+          </sc-for>
+        </sc-if>
+      </div>
+      <sc-if value="{{ collapsed }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;padding:0 20px">
+        <div onPointerDown="{{ dragStart }}" style="touch-action:none;cursor:grab;padding:8px 0 4px;margin:0 -20px;display:flex;justify-content:center"><span style="width:36px;height:4px;border-radius:2px;background:var(--tx3);opacity:.5"></span></div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:6px">
+          <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:17px;font-weight:600;letter-spacing:-.02em">{{ selTitle }}</span><sc-if value="{{ selIsToday }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-weight:600;color:var(--acc-tx)">오늘</span></sc-if></div>
+          <span style="font-size:12.5px;color:var(--tx2)">{{ selSummary }}</span>
+        </div>
+        <div data-t="scroll" style="flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;margin-top:2px;padding-bottom:72px">
+          <sc-for list="{{ selBands }}" as="b" hint-placeholder-count="0">
+            <button onClick="{{ b.edit }}" style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--ln);text-align:left" style-active="opacity:.6"><span style="height:20px;padding:0 8px;border-radius:4px;background:{{ b.bg }};color:#fff;font-size:11.5px;font-weight:600;display:inline-flex;align-items:center">{{ b.name }}</span><span style="flex:1;font-size:12px;color:var(--tx3)">{{ b.range }}</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></button>
+          </sc-for>
+          <sc-if value="{{ selHasStudy }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:12px;font-weight:500;color:var(--tx3);margin:14px 0 2px">공부 · {{ selStudySum }}</div>
+            <sc-for list="{{ selStudy }}" as="t" hint-placeholder-count="0">
+              <div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--ln);opacity:{{ t.op }}">
+                <button onClick="{{ t.toggle }}" aria-label="완료" style="width:20px;height:20px;border-radius:6px;border:1.5px solid {{ t.bd }};background:{{ t.bg }};display:flex;align-items:center;justify-content:center;flex:none;box-sizing:border-box" style-active="transform:scale(.9)"><sc-if value="{{ t.done }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></button>
+                <span style="width:3px;height:22px;border-radius:2px;background:{{ t.c }};flex:none"></span>
+                <button onClick="{{ t.edit }}" style="flex:1;min-width:0;text-align:left;font-size:14.5px;font-weight:500;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-active="opacity:.6">{{ t.t }}</button>
+                <span style="font-size:12px;font-weight:500;color:var(--tx3);white-space:nowrap">{{ t.v }}</span>
+                <button onClick="{{ capture }}" aria-label="채점 페이지 촬영" style="width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--tx3);flex:none;position:relative" style-active="background:var(--sunk)"><sc-if value="{{ locked }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;right:1px;top:1px;width:12px;height:12px;border-radius:50%;background:var(--pri);color:#fff;display:flex;align-items:center;justify-content:center"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span></sc-if><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg></button>
+              </div>
+            </sc-for>
+            <div style="font-size:11.5px;color:var(--tx3);padding:8px 0 0;display:flex;align-items:center;gap:6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>{{ camHint }}</div>
+          </sc-if>
+          <sc-if value="{{ selHasTask }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:12px;font-weight:500;color:var(--tx3);margin:14px 0 2px">할 일</div>
+            <sc-for list="{{ selTask }}" as="t" hint-placeholder-count="0">
+              <div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--ln);opacity:{{ t.op }}">
+                <button onClick="{{ t.toggle }}" aria-label="완료" style="width:20px;height:20px;border-radius:50%;border:1.5px solid {{ t.bd }};background:{{ t.bg }};display:flex;align-items:center;justify-content:center;flex:none;box-sizing:border-box" style-active="transform:scale(.9)"><sc-if value="{{ t.done }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></button>
+                <button onClick="{{ t.edit }}" style="flex:1;min-width:0;text-align:left;font-size:14.5px;font-weight:500;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-active="opacity:.6">{{ t.t }}</button>
+              </div>
+            </sc-for>
+          </sc-if>
+          <sc-if value="{{ selHasExtra }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:12px;font-weight:500;color:var(--acc-tx);margin:14px 0 2px">추가 자습 · {{ selExtraSum }}</div>
+            <sc-for list="{{ selExtra }}" as="t" hint-placeholder-count="0">
+              <div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--ln)">
+                <span style="width:20px;height:20px;border-radius:6px;background:var(--acc);display:flex;align-items:center;justify-content:center;flex:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></span>
+                <span style="width:3px;height:22px;border-radius:2px;background:{{ t.c }};flex:none"></span>
+                <button onClick="{{ t.edit }}" style="flex:1;min-width:0;text-align:left;font-size:14.5px;font-weight:500;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-active="opacity:.6">{{ t.t }}</button>
+                <span style="font-size:12px;font-weight:600;color:var(--acc-tx);white-space:nowrap">{{ t.v }}</span>
+              </div>
+            </sc-for>
+          </sc-if>
+          <sc-if value="{{ selEmpty }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:10px;padding:14px 0;color:var(--tx3);font-size:14px"><span style="width:3px;height:20px;border-radius:2px;background:var(--ln)"></span>계획이 없습니다.</div></sc-if>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><div onPointerDown="{{ dragStart }}" style="height:88px;flex:none;touch-action:none;cursor:grab;display:flex;justify-content:center;padding-top:8px"><span style="width:36px;height:4px;border-radius:2px;background:var(--tx3);opacity:.5"></span></div></sc-if>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:0;pointer-events:none">
+        <button onClick="{{ openSheet }}" aria-label="추가" style="pointer-events:auto;position:absolute;right:20px;bottom:16px;width:48px;height:48px;border-radius:50%;background:var(--pri);color:#fff;display:flex;align-items:center;justify-content:center" style-active="transform:scale(.94)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></button>
+      </div>
+      
+      <!-- 등록 시트 -->
+      <sc-if value="{{ sheet }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ closeSheet }}" aria-label="닫기" style="position:absolute;inset:0;background:var(--scrim);z-index:40;animation:fadeIn .18s both"></button>
+        <div data-t="sheet" style="position:absolute;left:0;right:0;bottom:0;z-index:41;background:var(--sf);border-radius:26px 26px 0 0;border-top:1px solid var(--ln);padding:10px 20px 26px;animation:sheetIn .28s cubic-bezier(0,.9,.3,1) both">
+          <div style="width:36px;height:4px;border-radius:2px;background:var(--ln);margin:0 auto 14px"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:16px"><div style="font-size:17px;font-weight:600;letter-spacing:-.02em">{{ shTitle }}</div><button onClick="{{ shDateToggle }}" style="display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;border-radius:8px;background:var(--sunk);font-size:12.5px;font-weight:500;color:var(--tx2)" style-active="opacity:.7"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path></svg>{{ shDate }}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate({{ shDateRot }});transition:transform .16s"><path d="m6 9 6 6 6-6"></path></svg></button></div>
+          <sc-if value="{{ shDateOpen }}" hint-placeholder-val="{{ false }}">
+            <div data-screen-label="N12 날짜 선택" style="margin-bottom:14px;padding:12px;border-radius:14px;background:var(--sunk)">
+              <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;font-weight:600">2026년 8월</span><div style="display:flex;gap:6px"><button onClick="{{ shDateToday }}" style="height:26px;padding:0 10px;border-radius:8px;background:var(--sf);font-size:11.5px;font-weight:600;color:var(--tx2)">오늘</button><button onClick="{{ shDateTomorrow }}" style="height:26px;padding:0 10px;border-radius:8px;background:var(--sf);font-size:11.5px;font-weight:600;color:var(--tx2)">내일</button></div></div>
+              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-top:10px;font-size:10.5px;font-weight:500;color:var(--tx3);text-align:center"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-top:4px">
+                <sc-for list="{{ shDateCells }}" as="c" hint-placeholder-count="35"><button onClick="{{ c.pick }}" style="height:32px;border-radius:8px;font-size:12.5px;font-weight:{{ c.fw }};background:{{ c.bg }};color:{{ c.col }};display:flex;align-items:center;justify-content:center;visibility:{{ c.vis }}">{{ c.d }}</button></sc-for>
+              </div>
+            </div>
+          </sc-if>
+          <div style="display:flex;background:var(--sunk);border-radius:8px;padding:3px">
+            <sc-for list="{{ shKinds }}" as="k" hint-placeholder-count="3">
+              <button onClick="{{ k.pick }}" style="flex:1;height:34px;border-radius:6px;font-size:13px;font-weight:500;display:flex;align-items:center;justify-content:center;gap:5px;background:{{ k.bg }};color:{{ k.col }};box-shadow:{{ k.sh }};transition:background .16s,color .16s"><span style="width:8px;height:8px;border-radius:{{ k.r }};background:{{ k.dot }}"></span>{{ k.label }}</button>
+            </sc-for>
+          </div>
+          <div style="font-size:12px;color:var(--tx3);margin-top:10px;line-height:1.5">{{ shHint }}</div>
+          <input value="{{ shText }}" onChange="{{ shType }}" placeholder="{{ shPh }}" style="width:100%;box-sizing:border-box;height:50px;border:none;background:var(--sunk);border-radius:12px;padding:0 16px;font-size:15px;font-weight:500;color:var(--tx);margin-top:16px" style-focus="box-shadow:inset 0 0 0 1.5px var(--pri)">
+          <sc-if value="{{ shHasSubj }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size:12px;font-weight:500;color:var(--tx3);margin-top:18px">과목</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+              <sc-for list="{{ shSubj }}" as="c" hint-placeholder-count="6">
+                <button onClick="{{ c.pick }}" style="height:36px;padding:0 13px;border-radius:10px;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;background:{{ c.bg }};color:{{ c.col }};border:1.5px solid {{ c.bd }}"><span style="width:7px;height:7px;border-radius:50%;background:{{ c.dot }}"></span>{{ c.label }}</button>
+              </sc-for>
+              <button onClick="{{ shNewSubjOpen }}" style="height:36px;padding:0 12px;border-radius:10px;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:4px;color:var(--tx3);border:1.5px dashed var(--ln)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>과목 추가</button>
+            </div>
+            <sc-if value="{{ shNewSubj }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:10px;padding:12px;border-radius:12px;background:var(--sunk);display:flex;flex-direction:column;gap:10px">
+                <input value="{{ shNewName }}" onChange="{{ shNewType }}" placeholder="과목 이름 (예: 한국사)" style="width:100%;box-sizing:border-box;height:40px;border:none;background:var(--sf);border-radius:10px;padding:0 12px;font-size:14px;font-weight:500;color:var(--tx)" style-focus="box-shadow:inset 0 0 0 1.5px var(--pri)">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <sc-for list="{{ shNewColors }}" as="c" hint-placeholder-count="6"><button onClick="{{ c.pick }}" aria-label="색" style="width:26px;height:26px;border-radius:50%;background:{{ c.c }};box-shadow:{{ c.ring }};display:flex;align-items:center;justify-content:center" style-active="transform:scale(.92)"></button></sc-for>
+                  <button onClick="{{ shNewAdd }}" style="margin-left:auto;height:32px;padding:0 12px;border-radius:9px;background:var(--pri);color:#fff;font-size:12.5px;font-weight:600;opacity:{{ shNewOp }};display:flex;align-items:center;justify-content:center" style-active="transform:scale(.96)">추가</button>
+                </div>
+              </div>
+            </sc-if>
+          </sc-if>
+          <sc-if value="{{ shHasColor }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:12px;font-weight:500;color:var(--tx3);margin-top:18px">색</div>
+            <div style="display:flex;justify-content:center;gap:14px;margin-top:10px">
+              <sc-for list="{{ shColors }}" as="c" hint-placeholder-count="6">
+                <button onClick="{{ c.pick }}" aria-label="색" style="width:32px;height:32px;border-radius:50%;background:{{ c.c }};display:flex;align-items:center;justify-content:center;box-shadow:{{ c.ring }}" style-active="transform:scale(.92)"><sc-if value="{{ c.on }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></button>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ shIsEvent }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:12px;font-weight:500;color:var(--tx3);margin-top:18px">종류</div>
+            <div style="display:flex;background:var(--sunk);border-radius:8px;padding:3px;margin-top:10px">
+              <button onClick="{{ evToPeriod }}" style="flex:1;height:32px;border-radius:6px;font-size:13px;font-weight:500;display:flex;align-items:center;justify-content:center;background:{{ evPBg }};color:{{ evPCol }};box-shadow:{{ evPSh }}">기간 (시험·행사)</button>
+              <button onClick="{{ evToRepeat }}" style="flex:1;height:32px;border-radius:6px;font-size:13px;font-weight:500;display:flex;align-items:center;justify-content:center;background:{{ evRBg }};color:{{ evRCol }};box-shadow:{{ evRSh }}">반복 (학원·수업)</button>
+            </div>
+            <sc-if value="{{ evIsPeriod }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;gap:10px;margin-top:14px">
+                <div style="flex:1;background:var(--sunk);border-radius:12px;padding:10px 12px"><div style="font-size:11px;font-weight:500;color:var(--tx3)">시작</div><div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px"><button onClick="{{ evFromDec }}" aria-label="하루 앞" style="width:28px;height:28px;border-radius:8px;background:var(--sf);color:var(--tx2);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"></path></svg></button><span style="font-size:15px;font-weight:600">8/{{ evFrom }}</span><button onClick="{{ evFromInc }}" aria-label="하루 뒤" style="width:28px;height:28px;border-radius:8px;background:var(--sf);color:var(--tx2);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></button></div></div>
+                <div style="flex:1;background:var(--sunk);border-radius:12px;padding:10px 12px"><div style="font-size:11px;font-weight:500;color:var(--tx3)">끝</div><div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px"><button onClick="{{ evToDec }}" aria-label="하루 앞" style="width:28px;height:28px;border-radius:8px;background:var(--sf);color:var(--tx2);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"></path></svg></button><span style="font-size:15px;font-weight:600">8/{{ evTo }}</span><button onClick="{{ evToInc }}" aria-label="하루 뒤" style="width:28px;height:28px;border-radius:8px;background:var(--sf);color:var(--tx2);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></button></div></div>
+              </div>
+              <div style="font-size:12px;color:var(--tx3);margin-top:10px">{{ evPeriodLen }} · 달력 위에 띠로 표시됩니다</div>
+            </sc-if>
+            <sc-if value="{{ evIsRepeat }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:6px;margin-top:14px">
+                <sc-for list="{{ evDays }}" as="d" hint-placeholder-count="7"><button onClick="{{ d.pick }}" style="flex:1;min-width:0;height:38px;border-radius:10px;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;box-sizing:border-box;background:{{ d.bg }};color:{{ d.col }};border:1.5px solid {{ d.bd }}">{{ d.label }}</button></sc-for>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:12px"><div style="flex:1;background:var(--sunk);border-radius:12px;padding:10px 12px"><div style="font-size:11px;font-weight:500;color:var(--tx3)">시작</div><div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px"><button onClick="{{ evStartDec }}" aria-label="30분 앞" style="width:28px;height:28px;border-radius:8px;background:var(--sf);color:var(--tx2);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"></path></svg></button><span style="font-size:15px;font-weight:600">{{ evStartStr }}</span><button onClick="{{ evStartInc }}" aria-label="30분 뒤" style="width:28px;height:28px;border-radius:8px;background:var(--sf);color:var(--tx2);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></button></div></div><div style="flex:1;background:var(--sunk);border-radius:12px;padding:10px 12px"><div style="font-size:11px;font-weight:500;color:var(--tx3)">끝</div><div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px"><button onClick="{{ evEndDec }}" aria-label="30분 앞" style="width:28px;height:28px;border-radius:8px;background:var(--sf);color:var(--tx2);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"></path></svg></button><span style="font-size:15px;font-weight:600">{{ evEndStr }}</span><button onClick="{{ evEndInc }}" aria-label="30분 뒤" style="width:28px;height:28px;border-radius:8px;background:var(--sf);color:var(--tx2);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></button></div></div></div>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--sunk)"><span style="flex:1;font-size:12px;font-weight:500;color:var(--tx3)">종료</span><div style="display:flex;background:var(--sf);border-radius:7px;padding:2px"><sc-for list="{{ evEnds }}" as="e" hint-placeholder-count="3"><button onClick="{{ e.pick }}" style="height:26px;padding:0 10px;border-radius:6px;font-size:11.5px;font-weight:600;background:{{ e.bg }};color:{{ e.col }}">{{ e.label }}</button></sc-for></div></div>
+              <div style="font-size:12px;color:var(--tx3);margin-top:10px">{{ evRepeatDesc }}</div>
+            </sc-if>
+          </sc-if>
+          <sc-if value="{{ shExpectOn }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;margin-top:18px;padding:10px 12px;border-radius:10px;background:var(--sunk)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span style="flex:1;font-size:12px;font-weight:500;color:var(--tx2)">예상 시간 · {{ shExpectText }}</span><span style="font-size:11px;color:var(--tx3)">기록으로 계산</span></div></sc-if>
+          <sc-if value="{{ shExpectLockOn }}" hint-placeholder-val="{{ false }}"><button onClick="{{ shHintPaywall }}" style="width:100%;display:flex;align-items:center;gap:8px;margin-top:18px;padding:10px 12px;border-radius:10px;background:var(--sunk);text-align:left" style-active="opacity:.7"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--pri-tx)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg><span style="flex:1;font-size:12px;font-weight:500;color:var(--tx2)">예상 시간은 기록으로 자동 계산</span><span style="font-size:11px;font-weight:600;color:var(--pri-tx)">프리미엄</span></button></sc-if>
+          <button onClick="{{ doAdd }}" style="margin-top:22px;width:100%;height:52px;border-radius:14px;background:{{ shBtnBg }};color:{{ shBtnCol }};font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;opacity:{{ shBtnOp }}" style-active="transform:scale(.985)">{{ shBtn }}</button>
+          <sc-if value="{{ isEdit }}" hint-placeholder-val="{{ false }}"><button onClick="{{ editDelete }}" style="margin-top:6px;width:100%;height:44px;border-radius:12px;color:var(--acc-tx);font-size:14px;font-weight:500;display:flex;align-items:center;justify-content:center" style-active="opacity:.6">{{ editDeleteLabel }}</button></sc-if>
+          <sc-if value="{{ dlgDiscard }}" hint-placeholder-val="{{ false }}">
+            <div data-screen-label="N-저장 전 이탈 확인" style="position:absolute;inset:0;z-index:5;background:var(--sf);border-radius:26px 26px 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center">
+              <sc-if value="{{ dlgDiscardIsNew }}" hint-placeholder-val="{{ true }}"><div style="font-size:17px;font-weight:700;letter-spacing:-.02em">작성 중인 내용을 버릴까요?</div><div style="font-size:13px;color:var(--tx2);line-height:1.6;margin-top:8px">입력한 제목과 설정이 저장되지 않습니다.</div></sc-if>
+              <sc-if value="{{ dlgDiscardIsEdit }}" hint-placeholder-val="{{ false }}"><div style="font-size:17px;font-weight:700;letter-spacing:-.02em">변경을 취소할까요?</div><div style="font-size:13px;color:var(--tx2);line-height:1.6;margin-top:8px">바꾼 제목·과목·시간·날짜가 저장되지 않고 원래 항목이 그대로 남습니다.</div></sc-if>
+              <sc-if value="{{ dlgDiscardIsDelete }}" hint-placeholder-val="{{ false }}"><div style="font-size:17px;font-weight:700;letter-spacing:-.02em">이 항목을 지울까요?</div><div style="font-size:13px;color:var(--tx2);line-height:1.6;margin-top:8px">연결된 집중 기록은 남고, 할 일만 플래너에서 사라집니다. 되돌릴 수 없습니다.</div></sc-if>
+              <div style="display:flex;gap:8px;margin-top:18px;width:100%;max-width:320px"><button onClick="{{ discardKeep }}" style="flex:1;height:46px;border-radius:12px;border:1px solid var(--ln);color:var(--tx);font-size:14px;font-weight:600" style-active="transform:scale(.97)">{{ discardKeepLabel }}</button><button onClick="{{ discardDo }}" style="flex:1;height:46px;border-radius:12px;background:var(--acc);color:#FFFFFF;font-size:14px;font-weight:600" style-active="transform:scale(.97)">{{ discardDoLabel }}</button></div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+    </div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;a&quot;,&quot;tsType&quot;:&quot;'a'|'b'&quot;,&quot;options&quot;:[&quot;a&quot;,&quot;b&quot;]},&quot;tilt3d&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;살짝&quot;,&quot;tsType&quot;:&quot;'없음'|'살짝'|'중간'&quot;,&quot;options&quot;:[&quot;없음&quot;,&quot;살짝&quot;,&quot;중간&quot;],&quot;section&quot;:&quot;3D 모드&quot;}}">
+class Component extends DCLogic {
+  state = { sel: null, done: {}, dragH: null, mode3d: false, sheet: false, shNewSubj: false, shNewName: '', shNewColor: '#6B4FBB', shKind: 'study', shText: '', shSubj: 'math', shColor: '#6B4FBB', shMin: 30, added: {}, addedBands: [], evMode: 'period', evFrom: 21, evTo: 23, evDays: [1, 3], evStart: 1140, evEnd: 1260 };
+  componentDidUpdate(prev) {
+    const inj = this.props.inject;
+    if (inj && inj !== prev.inject) {
+      const added = Object.assign({}, this.state.added); const l = (added[20] || []).slice();
+      inj.forEach(x => l.push(['s', x.s, x.t.split(' · ')[0], parseInt((x.t.split(' · ')[1] || '30')), '']));
+      added[20] = l; this.setState({ added, sel: 20 });
+    }
+  }
+  componentDidMount() {
+    const v = this.props.preset; if (!v) return;
+    const u = { sel: 20 };
+    if (v === 'fold') {}
+    else if (v === '3d') { u.mode3d = true; }
+    else if (v === 'add') { u.sheet = true; u.shKind = 'study'; }
+    else if (v === 'date') { u.sheet = true; u.shKind = 'study'; u.shDateOpen = true; }
+    else if (v === 'repeat') { u.sheet = true; u.shKind = 'event'; u.evMode = 'repeat'; }
+    else if (v === 'edit') { const it = this.items(20).find(i => i.type === 's'); if (it) { u.sheet = true; u.editKey = '20:' + it.k; u.shKind = 'study'; u.shText = it.t; u.shSubj = it.ref; u.shMin = 45; } }
+    else if (v === 'discard') { u.sheet = true; u.shText = '영어 단어 Day 15'; u.dlgDiscard = 'new'; }
+    else if (v === 'editCancel') { const it = this.items(20).find(i => i.type === 's'); if (it) { u.sheet = true; u.editKey = '20:' + it.k; u.shKind = 'study'; u.shText = it.t + ' (수정)'; u.shSubj = it.ref; u.editOrig = 'x'; u.dlgDiscard = 'edit'; } }
+    else if (v === 'editDelete') { const it = this.items(20).find(i => i.type === 's'); if (it) { u.sheet = true; u.editKey = '20:' + it.k; u.shKind = 'study'; u.shText = it.t; u.shSubj = it.ref; u.dlgDiscard = 'delete'; } }
+    else if (v === 'bandEdit') { u.sel = 26; const b = this.BANDS[0]; u.sheet = true; u.editBand = b; u.shKind = 'event'; u.shText = b.name; u.shColor = b.color; u.evMode = 'period'; u.evFrom = b.from; u.evTo = b.to; }
+    else return;
+    setTimeout(() => this.setState(u), 30);
+  }
+  get FULL() { return this.props.compact === 'p' ? 960 : this.props.compact ? 560 : 594; } get MIN() { return this.props.compact === 'p' ? 360 : this.props.compact ? 220 : 246; }
+  SUBJ = { math:['수학','#4059F0'], eng:['영어','#D6428F'], kor:['국어','#45A52C'], sci:['과학','#9A5505'], soc:['사회','#1E8A9E'], etc:['기타','#79809E'] };
+  SUBJ_PALETTE = ['#6B4FBB','#B03A6E','#8A5A2B','#2F8F5B','#C0392B','#111114'];
+  PALETTE = ['#111114','#2F8F5B','#6B4FBB','#1E8A9E','#B03A6E','#8A5A2B'];
+  ACT = [0,0,186,212,141,255,198,96,0,230,264,174,301,222,120,45,245,288,207,222,null,null,null,null,null,null,null,null,null,null,null];
+  // [type, subj|color, title, done, value]  type: s=공부 t=할 일 x=추가 자습
+  PLAN = {
+    3:[['s','math','미적분 p.80–86',1,'62/60분'],['s','eng','단어 Day 1',1,'40/30분']], 4:[['s','kor','비문학 2지문',1,'58/40분'],['s','math','기출 1회',1,'90/60분']], 5:[['s','sci','물리 개념',1,'70/60분'],['t','#1E8A9E','수행 자료 출력',1,'']], 6:[['s','eng','단어 Day 3',1,'35/30분'],['s','math','미적분 p.87',1,'96/60분'],['s','kor','문학 5문항',1,'50/40분']], 7:[['s','kor','문학 개념어',1,'48/40분'],['s','math','오답 정리',0,'0/40분']], 8:[['s','eng','단어 Day 4',1,'30/30분']],
+    10:[['s','math','미적분 p.90–98',1,'85/60분'],['s','eng','단어 Day 5',1,'42/30분']], 11:[['s','kor','비문학 2지문',1,'55/40분'],['s','sci','화학 정리',1,'80/60분'],['s','math','기출 2회',1,'92/60분']], 12:[['s','eng','모의고사 1회',1,'70/70분'],['t','#111114','학원비 입금',1,'']], 13:[['s','math','기출 3회',1,'95/60분'],['s','kor','문학 5문항',1,'60/40분'],['x','eng','영어 독해 자습',1,'50분']], 14:[['s','kor','문학 5문항',1,'50/40분'],['s','eng','단어 Day 8',1,'35/30분']], 15:[['s','sci','물리 오답',1,'60/60분']], 16:[['s','math','개념서 복습',0,'0/60분']],
+    17:[['s','math','미적분 p.100–106',1,'88/60분'],['s','eng','단어 Day 11',1,'40/30분'],['s','kor','비문학 2지문',1,'57/40분']], 18:[['s','eng','모의고사 2회',1,'75/70분'],['s','math','기출 4회',1,'96/60분'],['s','kor','문학 5문항',1,'52/40분'],['x','sci','화학 자습',1,'45분']], 19:[['s','sci','물리 개념노트',1,'72/60분'],['s','math','오답 정리',1,'84/60분'],['t','#2F8F5B','생기부 초안 제출',0,'']],
+    20:[['s','eng','영어 단어 Day 14 암기',1,'55/40분'],['s','math','수학 미적분 p.112–118',1,'88/60분'],['s','kor','국어 비문학 2지문',1,'79/40분'],['s','sci','과학 개념노트 정리',0,'0/30분'],['t','#6B4FBB','프린트 챙기기',0,''],['t','#111114','학원비 입금',1,''],['x','kor','국어 문학 자습',1,'45분']],
+    21:[['s','math','수학 오답 정리 (7회차)',0,'45분'],['s','eng','영어 모의고사 1회',0,'70분']], 22:[['s','kor','비문학 3지문',0,'60분'],['s','sci','화학 정리',0,'40분'],['s','math','미적분 p.120',0,'60분']], 23:[['s','eng','단어 Day 16',0,'30분']],
+    24:[['s','math','기출 5회',0,'60분'],['t','#111114','시험지 파일 정리',0,'']], 25:[['s','eng','모의고사 3회',0,'70분']], 26:[['s','sci','물리 오답',0,'40분']], 27:[['s','kor','비문학 2지문',0,'40분']], 28:[['s','eng','단어 Day 20',0,'30분'],['s','math','오답 정리',0,'40분']], 29:[['s','math','기출 6회',0,'60분']], 30:[['s','eng','모의고사 4회',0,'70분'],['s','kor','문학 개념어 복습',0,'40분']], 31:[['s','math','개념서 1회독 마감',0,'90분'],['t','#B03A6E','월간 회고',0,'']]
+  };
+  BANDS = [{ name:'중간고사', from:24, to:27, color:'#2F8F5B' }, { name:'수행평가', from:26, to:26, color:'#6B4FBB' }];
+  allBands() { const S = this.state; const rb = S.removedBands || [], be = S.bandEdits || {}; return this.BANDS.concat(S.addedBands || []).filter(b => !rb.includes(b.name)).map(b => be[b.name] ? Object.assign({}, b, be[b.name]) : b); }
+  hhmm(m) { return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+  dragStart(e) {
+    if (e.pointerType === 'mouse' && e.buttons !== 1) return;
+    if (this._drag) this.dragEnd();
+    const S = this.state;
+    const d = { y0: e.clientY, x0: e.clientX, h0: S.dragH != null ? S.dragH : (S.sel != null ? this.MIN : this.FULL), moved: false, swiped: false };
+    d.onMove = (ev) => this.dragMove(ev); d.onUp = () => this.dragEnd();
+    window.addEventListener('pointermove', d.onMove); window.addEventListener('pointerup', d.onUp); window.addEventListener('pointercancel', d.onUp); window.addEventListener('blur', d.onUp);
+    this._drag = d;
+  }
+  dragMove(e) {
+    const d = this._drag; if (!d) return;
+    const dy = e.clientY - d.y0, dx = e.clientX - d.x0;
+    if (d.swiped) return;
+    if (!d.moved && Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) { d.swiped = true; d.moved = true; this.setState({ mode3d: !this.state.mode3d }); return; }
+    if (!d.moved && Math.abs(dy) < 8) return;
+    d.moved = true;
+    const h = Math.max(this.MIN, Math.min(this.FULL, d.h0 + dy));
+    if (h !== this.state.dragH) this.setState({ dragH: h });
+  }
+  dragEnd() {
+    const d = this._drag; if (!d) return; this._drag = null;
+    window.removeEventListener('pointermove', d.onMove); window.removeEventListener('pointerup', d.onUp); window.removeEventListener('pointercancel', d.onUp); window.removeEventListener('blur', d.onUp);
+    if (!d.moved || d.swiped) return;
+    const h = this.state.dragH != null ? this.state.dragH : d.h0;
+    const collapse = h < (this.FULL + this.MIN) / 2;
+    this.setState({ dragH: null, sel: collapse ? (this.state.sel != null ? this.state.sel : 20) : null });
+  }
+  componentWillUnmount() { this.dragEnd(); }
+  items(d) {
+    const S = this.state;
+    const base = (this.PLAN[d] || []).concat(S.added[d] || []);
+    const ed = S.edits || {}, rm = S.removed || {};
+    return base.map(([type, ref, t, done, v], k) => {
+      const key = d + ':' + k; if (rm[key]) return null;
+      const e = ed[key]; if (e) { type = e.type || type; ref = e.ref != null ? e.ref : ref; t = e.t != null ? e.t : t; v = e.v != null ? e.v : v; }
+      const c = type === 't' ? ref : (type === 'x' ? 'var(--acc)' : (this.SUBJ[ref] ? this.SUBJ[ref][1] : ref));
+      const dn = S.done[key] != null ? S.done[key] : !!done;
+      return { type, ref, t, v, k, c, done: dn };
+    }).filter(Boolean);
+  }
+  hm(m) { return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'); }
+  renderVals() {
+    const S = this.state;
+    const dragging = S.dragH != null;
+    const collapsed = dragging ? S.dragH < (this.FULL + this.MIN) / 2 : S.sel != null;
+    const selDay = S.sel != null ? S.sel : 20;
+    const gridH = dragging ? S.dragH : collapsed ? this.MIN : this.FULL;
+    const cells = [];
+    const idx = (d) => 5 + d; // 8/1 = 토 → index 6 (0-based: 6 blanks before)
+    const laneOf = (d) => this.allBands().filter(b => d >= b.from && d <= b.to).length;
+    const push = (d, inMonth) => {
+      const today = inMonth && d === 20, act = inMonth ? this.ACT[d - 1] : null, its = inMonth ? this.items(d) : [];
+      const dow = cells.length % 7, isSel = collapsed && inMonth && selDay === d;
+      const ratio = act ? Math.min(act / 300, 1) : 0;
+      // 글자는 항상 잉크색, 원 채움은 최대 55% (잉크 대비 ≥ 7:1)
+      const alpha = act ? 0.10 + 0.45 * ratio : 0;
+      const planMin = inMonth ? its.filter(i => i.type === 's').reduce((a, i) => a + (parseInt((i.v.split('/')[1] || i.v)) || 0), 0) : 0;
+      const isFuture = inMonth && act === null;
+      const showPlan3d = !this.props.locked;
+      const m3 = S.mode3d && inMonth && (act > 0 || (isFuture && planMin > 0 && showPlan3d));
+      const rowH = (gridH - (S.mode3d ? (collapsed ? 14 : 30) : 0)) / 6, HMAX = collapsed ? 14 : 28;
+      const hRatio = isFuture ? Math.min(planMin / 300, 1) : ratio;
+      const hPx = m3 ? Math.max(4, hRatio * HMAX) : 0, dxPx = hPx * 0.5;
+      const dCol = today ? 'var(--ink)' : act ? 'var(--tx)' : !inMonth ? 'var(--tx3)' : dow === 0 ? 'var(--sun)' : dow === 6 ? 'var(--sat)' : (act === null ? 'var(--tx3)' : 'var(--tx)');
+      const lanes = inMonth ? Array.from({ length: laneOf(d) }, (_, i) => ({ key: i })) : [];
+      const capBase = S.mode3d && inMonth ? Math.max(0, Math.floor((rowH - 6 - 30) / 15) - 1) : 4;
+      const cap = Math.max(0, capBase - lanes.length);
+      const maxItems = its.length > cap ? Math.max(0, cap - 1) : cap;
+      cells.push({ key: (inMonth ? 'a' : 'x') + cells.length, d: String(d),
+        bg: today ? 'var(--acc-weak)' : (m3 ? 'var(--blk-top)' : 'transparent'),
+        h: hPx.toFixed(1) + 'px', dx: dxPx.toFixed(1) + 'px', tx: (-dxPx).toFixed(1) + 'px', ty: (-hPx).toFixed(1) + 'px',
+        inset: m3 || (S.mode3d && today) ? '3px' : '0px', rad: m3 || (S.mode3d && today) ? '3px' : '0',
+        faceOp: m3 ? 1 : 0,
+        front: today ? 'var(--acc)' : isFuture ? 'var(--plan-blk)' : 'var(--blk)', side: today ? 'var(--acc-dk)' : isFuture ? 'var(--plan-dk)' : 'var(--pri-dk)',
+        edge: m3 ? '0 0 0 1px var(--ln)' : 'none',
+        dBg: today ? 'var(--acc)' : 'transparent',
+        dCol, dRing: isSel && !today ? '0 0 0 2px var(--tx)' : 'none',
+        lanes,
+        dots3d: S.mode3d && inMonth && its.length > 0, dotList: its.slice(0, 8).map(it => ({ key: it.k, c: it.c, bg: it.done ? it.c : 'transparent' })),
+        cnt: its.length ? (its.filter(i => i.done).length + '/' + its.length) : '',
+        items: (S.mode3d ? [] : its.slice(0, maxItems)).map(it => ({ key: it.k, t: it.t, c: it.c,
+          bar: it.type === 't' ? '0 solid transparent' : '2px solid ' + it.c, pl: it.type === 't' ? '0' : '4px',
+          sq: it.type === 't' && !it.done, ck: it.done, sqBg: 'transparent',
+          col: it.done ? 'var(--tx2)' : 'var(--tx)', op: it.done ? .55 : (inMonth ? 1 : .4) })),
+        more: !S.mode3d && its.length > maxItems, moreText: '+' + (its.length - maxItems),
+        dots: its.slice(0, 4).map(it => ({ key: it.k, c: it.done ? it.c : 'var(--tx3)' })),
+        pe: inMonth ? 'auto' : 'none',
+        pick: () => this.setState({ sel: S.sel === d ? null : d }) });
+    };
+    for (let d = 26; d <= 31; d++) push(d, false);
+    for (let d = 1; d <= 31; d++) push(d, true);
+    for (let d = 1; d <= 5; d++) push(d, false);
+    // 기간 띠 좌표 (격자 폭 366 = 390-24, 열 52.29px, 행 gridH/6)
+    const colW = 366 / 7, rowH = gridH / 6;
+    const bands = [];
+    this.allBands().forEach((b, bi) => {
+      let from = b.from;
+      while (from <= b.to) {
+        const i0 = idx(from), r = Math.floor(i0 / 7), c0 = i0 % 7;
+        const to = Math.min(b.to, from + (6 - c0));
+        const lane = this.allBands().slice(0, bi).filter(o => !(o.to < from || o.from > to)).length;
+        bands.push({ key: b.name + from, name: b.name, bg: b.color,
+          left: 'calc(12px + (100% - 24px) * ' + (c0 / 7).toFixed(4) + ' + 2px)', width: 'calc((100% - 24px) * ' + ((to - from + 1) / 7).toFixed(4) + ' - 4px)',
+          top: ((S.mode3d ? (collapsed ? 14 : 30) : 0) + r * rowH + 30 + lane * 17) + 'px' });
+        from = to + 1;
+      }
+    });
+    const selItems = collapsed ? this.items(selDay) : [];
+    const selAct = collapsed ? this.ACT[selDay - 1] : null;
+    const W = ['일','월','화','수','목','금','토'];
+    const dow = (idx(selDay)) % 7;
+    const toggle = (it) => () => { const done = Object.assign({}, S.done); done[selDay + ':' + it.k] = !it.done; this.setState({ done }); };
+    const freeV = (it) => { if (!this.props.locked || it.type !== 's') return it.v; const m = /^(\d+)\/\d+분$/.exec(it.v || ''); if (m) return m[1] + '분'; return it.done ? it.v : ''; };
+    const row = (it) => ({ key: it.k, t: it.t, v: freeV(it), done: it.done, c: it.c,
+      bd: it.done ? it.c : 'var(--ln)', bg: it.done ? it.c : 'transparent', op: it.done ? .55 : 1, toggle: toggle(it),
+      edit: () => { const m = /^(?:\d+\/)?(\d+)분$/.exec(it.v || ''); const st = { shKind: it.type === 's' ? 'study' : it.type === 'x' ? 'extra' : 'task', shText: it.t, shSubj: this.SUBJ[it.ref] ? it.ref : S.shSubj, shColor: this.SUBJ[it.ref] ? S.shColor : it.ref, shMin: m ? +m[1] : S.shMin, sel: selDay }; this.setState(Object.assign({ sheet: true, editKey: selDay + ':' + it.k, editOrig: JSON.stringify(st), shDateOpen: false }, st)); } });
+    const study = selItems.filter(i => i.type === 's'), task = selItems.filter(i => i.type === 't'), extra = selItems.filter(i => i.type === 'x');
+    const sumMin = (arr, pick) => arr.reduce((a, i) => a + (parseInt((i.v.split('/')[pick] || i.v)) || 0), 0);
+    let allDone = 0, allTot = 0;
+    Object.keys(this.PLAN).forEach(d => { const its = this.items(+d).filter(i => i.type !== 'x'); allTot += its.length; allDone += its.filter(i => i.done).length; });
+    // 시트
+    const kindDefs = [['study','공부','var(--pri)','2px'],['task','할 일','var(--tx2)','50%'],['extra','추가 자습','var(--acc)','2px'],['event','일정','var(--tx)','3px']];
+    const kind = S.shKind;
+    const shHints = { study: this.props.locked ? '하기로 한 공부. 과목을 정해 두면 집중 기록과 묶입니다.' : '계획한 공부. 과목·목표 시간을 두고 집중 기록과 묶입니다.', task: '체크만 하는 일. 시간을 재지 않습니다.', event: '시험 기간·학원처럼 여러 날에 걸친 일. 달력 위 띠나 요일 반복으로 들어갑니다.', extra: '계획에 없던 공부. 추가해 두고 집중을 시작하면 그 시간이 자습으로 기록됩니다.' };
+    const shPhs = { study: '무엇을 공부할까요?', task: '무엇을 해야 하나요?', extra: '무엇을 더 공부할까요?', event: '예: 중간고사 · 수학 학원' };
+    const canAdd = S.shText.trim().length > 0;
+    return {
+      themeCls: (this.props.theme ?? 'a') === 'b' ? 'dark' : '',
+      capture: () => { if (this.props.onCapture) this.props.onCapture(); },
+      locked: !!this.props.locked,
+      camHint: this.props.locked ? '채점 판독은 프리미엄 기능입니다 · 7일 무료' : '채점한 페이지를 찍으면 오답이 이 할 일에 쌓입니다',
+      noop: () => {},
+      expanded: !collapsed, collapsed,
+      gridH: gridH + 'px', gridTrans: dragging ? 'none' : 'height .28s cubic-bezier(.2,.8,.25,1)',
+      gridTilt: S.mode3d && (this.props.tilt3d ?? '살짝') !== '없음' ? 'perspective(1400px) rotateX(' + ((this.props.tilt3d ?? '살짝') === '중간' ? 14 : 7) + 'deg)' : 'none',
+      gridPad: S.mode3d ? (collapsed ? '14px 12px 0' : '30px 12px 0') : '0 12px',
+      cells, bands,
+      bandOp: (collapsed || S.mode3d) ? 0 : 1, bandTf: (collapsed || S.mode3d) ? 'scaleY(.2)' : 'none',
+      bandTrans: dragging ? 'none' : 'top .28s cubic-bezier(.2,.8,.25,1), opacity .2s ease, transform .28s cubic-bezier(.2,.8,.25,1)',
+      toggle3d: () => this.setState({ mode3d: !S.mode3d }), mode3d: S.mode3d, planLegend: !this.props.locked,
+      b3Bg: S.mode3d ? 'var(--pri-weak)' : 'transparent', b3Col: S.mode3d ? 'var(--pri-tx)' : 'var(--tx3)',
+      doneTotal: allDone + '/' + allTot, doneLabel: this.props.locked ? '완료' : '계획',
+      selTitle: collapsed ? '8. ' + selDay + '. ' + W[dow] : '',
+      selIsToday: selDay === 20,
+      selSummary: collapsed ? (selAct === null ? (this.props.locked ? '할 일 ' : '계획 ') + study.length + '개' : (selAct ? '순공 ' + this.hm(selAct) : '기록 없음')) : '',
+      selBands: collapsed ? this.allBands().filter(b => selDay >= b.from && selDay <= b.to).map(b => ({ key: b.name, name: b.name, bg: b.color, edit: () => { const st = { shKind: 'event', shText: b.name, shColor: b.color, evMode: 'period', evFrom: b.from, evTo: b.to }; this.setState(Object.assign({ sheet: true, editBand: b, editKey: null, editOrig: JSON.stringify(Object.assign({ shSubj: S.shSubj, shMin: S.shMin, sel: S.sel }, { shKind: 'event', shText: b.name, shColor: b.color })) }, st)); }, range: '8/' + b.from + (b.to !== b.from ? ' – 8/' + b.to : '') })) : [],
+      selHasStudy: study.length > 0, selStudy: study.map(row),
+      selStudySum: this.props.locked
+        ? (selAct === null ? study.length + '개' : '실제 ' + sumMin(study, 0) + '분')
+        : (selAct === null ? '계획 ' + sumMin(study, 0) + '분' : '계획 ' + sumMin(study, 1) + '분 → 실제 ' + sumMin(study, 0) + '분'),
+      selHasTask: task.length > 0, selTask: task.map(row),
+      selHasExtra: extra.length > 0, selExtra: extra.map(row), selExtraSum: sumMin(extra, 0) + '분',
+      selEmpty: collapsed && selItems.length === 0,
+      goToday: () => this.setState({ sel: 20 }),
+      dragStart: (e) => this.dragStart(e),
+      // 시트
+      sheet: S.sheet,
+      openSheet: () => this.setState({ sheet: true, shText: '', editKey: null, sel: S.sel != null ? S.sel : 20 }),
+      closeSheet: () => {
+        const cur = JSON.stringify({ shKind: S.shKind, shText: S.shText, shSubj: S.shSubj, shColor: S.shColor, shMin: S.shMin, sel: S.sel });
+        const dirty = S.editKey ? cur !== S.editOrig : !!(S.shText && S.shText.trim());
+        if (dirty) { this.setState({ dlgDiscard: S.editKey ? 'edit' : 'new' }); return; }
+        this.setState({ sheet: false, editKey: null, editBand: null });
+      },
+      dlgDiscard: !!S.dlgDiscard, dlgDiscardIsEdit: S.dlgDiscard === 'edit', dlgDiscardIsDelete: S.dlgDiscard === 'delete', dlgDiscardIsNew: S.dlgDiscard === 'new',
+      discardKeep: () => this.setState({ dlgDiscard: false }), discardKeepLabel: S.dlgDiscard === 'delete' ? '취소' : S.dlgDiscard === 'edit' ? '계속 수정' : '계속 작성', discardDoLabel: S.dlgDiscard === 'delete' ? '삭제' : S.dlgDiscard === 'edit' ? '변경 취소' : '버리기',
+      discardDo: () => { if (S.dlgDiscard === 'delete') { if (S.editBand) { const rb = (S.removedBands || []).concat([S.editBand.name]); this.setState({ removedBands: rb, dlgDiscard: false, sheet: false, editBand: null, shText: '' }); return; } const removed = Object.assign({}, S.removed || {}); removed[S.editKey] = true; this.setState({ removed, dlgDiscard: false, sheet: false, editKey: null, shText: '' }); return; } this.setState({ dlgDiscard: false, sheet: false, shText: '', editKey: null, editBand: null }); },
+      isEdit: !!S.editKey || !!S.editBand, editDelete: () => this.setState({ dlgDiscard: 'delete' }),
+      shTitle: S.editBand ? '기간 일정 수정' : S.editKey ? '수정' : kind === 'extra' ? '자습 추가' : kind === 'event' ? '일정 추가' : '추가', editDeleteLabel: S.editBand ? '이 기간 일정 삭제' : '이 항목 삭제',
+      shDate: '8월 ' + selDay + '일' + (selDay === 20 ? ' (오늘)' : ''),
+      shDateOpen: !!S.shDateOpen, shDateRot: S.shDateOpen ? '180deg' : '0deg', shDateToggle: () => this.setState({ shDateOpen: !S.shDateOpen }),
+      shDateToday: () => this.setState({ sel: 20, shDateOpen: false }), shDateTomorrow: () => this.setState({ sel: 21, shDateOpen: false }),
+      shDateCells: Array.from({ length: 35 }, (_, i) => { const d = i - 5; const ok = d >= 1 && d <= 31; const on = d === selDay; return { key: i, d: ok ? String(d) : '', vis: ok ? 'visible' : 'hidden', fw: d === 20 ? 700 : 500, bg: on ? 'var(--pri)' : 'transparent', col: on ? '#FFFFFF' : d === 20 ? 'var(--pri-tx)' : d < 20 ? 'var(--tx3)' : 'var(--tx)', pick: () => ok && this.setState({ sel: d, shDateOpen: false }) }; }),
+      evEnds: [['none','계속'],['sem','학기 말'],['month','이달까지']].map(([k, label]) => ({ key: k, label, pick: () => this.setState({ evEnd2: k }), bg: (S.evEnd2 || 'none') === k ? 'var(--sunk)' : 'transparent', col: (S.evEnd2 || 'none') === k ? 'var(--tx)' : 'var(--tx3)' })),
+      shKinds: kindDefs.map(([k, label, dot, r]) => ({ key: k, label, dot, r, pick: () => this.setState({ shKind: k }),
+        bg: kind === k ? 'var(--sf)' : 'transparent', col: kind === k ? 'var(--tx)' : 'var(--tx3)', sh: kind === k ? '0 1px 2px rgba(0,0,0,.04)' : 'none' })),
+      shHint: shHints[kind], shPh: shPhs[kind],
+      shText: S.shText, shType: (e) => this.setState({ shText: e.target.value }),
+      shHasSubj: kind === 'study' || kind === 'extra',
+      shSubj: Object.keys(this.SUBJ).map(k => ({ key: k, label: this.SUBJ[k][0], dot: this.SUBJ[k][1], pick: () => this.setState({ shSubj: k }),
+        bg: S.shSubj === k ? 'var(--pri-weak)' : 'var(--sf)', col: S.shSubj === k ? 'var(--pri-tx)' : 'var(--tx2)', bd: S.shSubj === k ? 'var(--pri)' : 'var(--ln)' })),
+      shNewSubj: S.shNewSubj, shNewName: S.shNewName,
+      shNewSubjOpen: () => this.setState({ shNewSubj: !S.shNewSubj }),
+      shNewType: (e) => this.setState({ shNewName: e.target.value }),
+      shNewColors: this.SUBJ_PALETTE.map(c => ({ key: c, c, pick: () => this.setState({ shNewColor: c }), ring: S.shNewColor === c ? '0 0 0 2px var(--sunk), 0 0 0 3.5px ' + c : 'none' })),
+      shNewOp: S.shNewName.trim() ? 1 : .4,
+      shNewAdd: () => { const n = S.shNewName.trim(); if (!n) return; const id = 'u' + Date.now(); this.SUBJ[id] = [n, S.shNewColor]; this.setState({ shSubj: id, shNewSubj: false, shNewName: '' }); },
+      shHasColor: kind === 'task' || kind === 'event',
+      shColors: this.PALETTE.map(c => ({ key: c, c, on: S.shColor === c, pick: () => this.setState({ shColor: c }), ring: S.shColor === c ? '0 0 0 2px var(--sf), 0 0 0 3.5px ' + c : 'none' })),
+      shHasTime: false, shExpectOn: kind === 'study' && !this.props.locked && !!(S.shSubj && ['math','eng','kor','sci'].includes(S.shSubj)), shExpectLockOn: kind === 'study' && !!this.props.locked,
+      shExpectText: S.shSubj && ['math','eng','kor','sci'].includes(S.shSubj) ? '최근 ' + this.SUBJ[S.shSubj][0] + ' 5회 기준 약 ' + ({ math: 58, eng: 42, kor: 47, sci: 51 })[S.shSubj] + '분' : '',
+      hasSuggest: typeof this.props.onSuggest === 'function', onSuggestTap: () => { if (this.props.onSuggest) this.props.onSuggest(); },
+      shIsEvent: kind === 'event',
+      evIsPeriod: S.evMode === 'period', evIsRepeat: S.evMode === 'repeat',
+      evToPeriod: () => this.setState({ evMode: 'period' }), evToRepeat: () => this.setState({ evMode: 'repeat' }),
+      evPBg: S.evMode === 'period' ? 'var(--sf)' : 'transparent', evPCol: S.evMode === 'period' ? 'var(--tx)' : 'var(--tx3)', evPSh: S.evMode === 'period' ? '0 1px 2px rgba(0,0,0,.04)' : 'none',
+      evRBg: S.evMode === 'repeat' ? 'var(--sf)' : 'transparent', evRCol: S.evMode === 'repeat' ? 'var(--tx)' : 'var(--tx3)', evRSh: S.evMode === 'repeat' ? '0 1px 2px rgba(0,0,0,.04)' : 'none',
+      evFrom: S.evFrom, evTo: S.evTo, evPeriodLen: (S.evTo - S.evFrom + 1) + '일간',
+      evFromDec: () => this.setState({ evFrom: Math.max(1, S.evFrom - 1) }), evFromInc: () => this.setState({ evFrom: Math.min(S.evTo, S.evFrom + 1) }),
+      evToDec: () => this.setState({ evTo: Math.max(S.evFrom, S.evTo - 1) }), evToInc: () => this.setState({ evTo: Math.min(31, S.evTo + 1) }),
+      evDays: ['일','월','화','수','목','금','토'].map((l, i) => { const on = S.evDays.includes(i); return { key: i, label: l, pick: () => this.setState({ evDays: on ? S.evDays.filter(x => x !== i) : S.evDays.concat([i]).sort() }), bg: on ? 'var(--pri-weak)' : 'var(--sf)', col: on ? 'var(--pri-tx)' : 'var(--tx2)', bd: on ? 'var(--pri)' : 'var(--ln)' }; }),
+      evStartStr: this.hhmm(S.evStart), evEndStr: this.hhmm(S.evEnd),
+      evStartDec: () => this.setState({ evStart: Math.max(360, S.evStart - 30) }), evStartInc: () => this.setState({ evStart: Math.min(S.evEnd - 30, S.evStart + 30) }),
+      evEndDec: () => this.setState({ evEnd: Math.max(S.evStart + 30, S.evEnd - 30) }), evEndInc: () => this.setState({ evEnd: Math.min(1440, S.evEnd + 30) }),
+      evRepeatDesc: S.evDays.length ? '매주 ' + S.evDays.map(i => ['일','월','화','수','목','금','토'][i]).join('·') + ' ' + this.hhmm(S.evStart) + '–' + this.hhmm(S.evEnd) + ' · 홈 타임테이블에 자동 표시' : '요일을 골라주세요',
+      shFreeStudyNote: kind === 'study' && !!this.props.locked,
+      shTimeLabel: '공부한 시간',
+      shHintLocked: !!this.props.locked && kind !== 'extra',
+      shHintOn: !this.props.locked || kind === 'extra',
+      shHintPaywall: () => { if (this.props.onPaywall) this.props.onPaywall(); },
+      shTimeHint: kind === 'extra' ? '' : (S.shSubj && this.SUBJ[S.shSubj] && ['math','eng','kor','sci'].includes(S.shSubj) ? '최근 ' + this.SUBJ[S.shSubj][0] + ' 5회 평균 ' + ({ math: 58, eng: 41, kor: 52, sci: 63 })[S.shSubj] + '분' : '첫 기록 · 30분으로 시작'),
+      shTimes: [20,30,45,60].map(v => ({ key: v, label: v + '분', pick: () => this.setState({ shMin: v }),
+        bg: S.shMin === v ? 'var(--pri-weak)' : 'var(--sf)', col: S.shMin === v ? 'var(--pri-tx)' : 'var(--tx2)', bd: S.shMin === v ? 'var(--pri)' : 'var(--ln)' })),
+      shBtn: (S.editKey || S.editBand) ? '저장' : kind === 'extra' ? '자습 추가하기' : kind === 'event' ? (S.evMode === 'period' ? '기간 추가하기' : '반복 일정 추가하기') : '추가하기',
+      shBtnBg: kind === 'extra' ? 'var(--acc)' : 'var(--pri)', shBtnCol: kind === 'extra' ? 'var(--ink)' : '#FFFFFF', shBtnOp: canAdd ? 1 : .4,
+      doAdd: () => {
+        const EST = { math: 58, eng: 42, kor: 47, sci: 51 }; const estMin = !this.props.locked && EST[S.shSubj] ? EST[S.shSubj] : 0;
+        if (!canAdd) return;
+        if (S.editBand) {
+          const be = Object.assign({}, S.bandEdits || {}); be[S.editBand.name] = { name: S.shText.trim(), from: S.evFrom, to: S.evTo, color: S.shColor };
+          this.setState({ bandEdits: be, sheet: false, editBand: null, shText: '' }); return;
+        }
+        if (S.editKey) {
+          const edits = Object.assign({}, S.edits || {});
+          const type = kind === 'study' ? 's' : kind === 'extra' ? 'x' : 't';
+          edits[S.editKey] = { type, ref: type === 't' ? S.shColor : S.shSubj, t: S.shText.trim(), v: type === 's' ? (estMin ? (selDay <= 20 ? '0/' : '') + estMin + '분' : '') : '' };
+          const oldDay = +S.editKey.split(':')[0];
+          if (oldDay !== selDay) { const removed = Object.assign({}, S.removed || {}); removed[S.editKey] = true; const added2 = Object.assign({}, S.added); const l = (added2[selDay] || []).slice(); l.push([type, edits[S.editKey].ref, edits[S.editKey].t, 0, edits[S.editKey].v]); added2[selDay] = l; this.setState({ removed, added: added2, sheet: false, editKey: null, shText: '' }); return; }
+          this.setState({ edits, sheet: false, editKey: null, shText: '' }); return;
+        }
+        const added = Object.assign({}, S.added);
+        const list = (added[selDay] || []).slice();
+        if (kind === 'study') list.push(['s', S.shSubj, S.shText.trim(), 0, estMin ? (selDay <= 20 ? '0/' : '') + estMin + '분' : '']);
+        else if (kind === 'task') list.push(['t', S.shColor, S.shText.trim(), 0, '']);
+        else if (kind === 'extra') list.push(['x', S.shSubj, S.shText.trim(), 0, '']);
+        else if (kind === 'event') {
+          if (S.evMode === 'period') { this.setState({ addedBands: (S.addedBands || []).concat([{ name: S.shText.trim(), from: S.evFrom, to: S.evTo, color: S.shColor }]), sheet: false, shText: '', sel: S.evFrom }); return; }
+          const tl = this.hhmm(S.evStart) + '–' + this.hhmm(S.evEnd);
+          for (let d = Math.max(selDay, 20); d <= 31; d++) { if (S.evDays.includes((5 + d) % 7)) { const l = (added[d] || []).slice(); l.push(['t', S.shColor, S.shText.trim() + ' · ' + tl, 0, '']); added[d] = l; } }
+          if (this.props.onAddEvent) this.props.onAddEvent({ name: S.shText.trim(), color: S.shColor, days: S.evDays.slice(), start: S.evStart, end: S.evEnd });
+          this.setState({ added, sheet: false, shText: '', sel: selDay }); return;
+        }
+        added[selDay] = list;
+        this.setState({ added, sheet: false, shText: '', sel: selDay });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+# Lints: flutter_lints (latest) + riverpod_lint (native analyzer plugin).
+# Run: `flutter analyze` (plugin diagnostics are included).
+include: package:flutter_lints/flutter.yaml
+
+# analysis_server_plugin: riverpod_lint is installed here, not via custom_lint.
+plugins:
+  riverpod_lint: ^3.1.9
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - '**/*.g.dart'
+    - '**/*.freezed.dart'
+    - docs/**
+  errors:
+    # CLAUDE.md §7: `print` 금지, logger 사용.
+    avoid_print: error
+
+linter:
+  rules:
+    prefer_single_quotes: true
+    prefer_const_constructors: true
+    prefer_const_declarations: true
+    prefer_final_locals: true
+    unnecessary_lambdas: true
+    avoid_print: true
+    directives_ordering: true
+    sort_pub_dependencies: false
+    require_trailing_commas: true
+    use_key_in_widget_constructors: true
+    avoid_dynamic_calls: true
+    unawaited_futures: true
+    always_declare_return_types: true

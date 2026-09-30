@@ -1,0 +1,50 @@
+name: analyze-test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: analyze-test-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.47.5 # D12 — keep in sync with .fvmrc / docs/versions.md
+
+jobs:
+  analyze-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Codegen (build_runner)
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Generated files are committed and up to date
+        run: |
+          git status --porcelain
+          git diff --exit-code --stat -- '*.g.dart' '*.freezed.dart'
+
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+      - name: Forbidden phrases (lib/core/strings, docs/store)
+        run: dart run tool/check_forbidden_phrases.dart
+
+      - name: Test
+        run: flutter test --reporter expanded

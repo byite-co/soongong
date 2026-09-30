@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<script src="./doc-page.js"></script>
+<style>
+doc-page:not(:defined){visibility:hidden}
+html{lang:ko}
+body{margin:0;font-family:'Pretendard Variable',Pretendard,-apple-system,'Apple SD Gothic Neo',system-ui,sans-serif;-webkit-font-smoothing:antialiased;word-break:keep-all;color:#1F2430}
+a{color:#3B5BDB}a:hover{color:#2947B8}
+.kt{break-inside:avoid;orphans:3;widows:3}
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#FFFFFF"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect x="50" y="30" width="100" height="140" rx="10" fill="#F5F6F9" stroke="#6C8EBF" stroke-width="3"></rect><rect x="66" y="52" width="68" height="8" rx="3" fill="#3B5BDB"></rect><rect x="66" y="74" width="60" height="5" rx="2" fill="#C9CDDA"></rect><rect x="66" y="88" width="68" height="5" rx="2" fill="#C9CDDA"></rect><rect x="66" y="102" width="50" height="5" rx="2" fill="#C9CDDA"></rect><rect x="66" y="124" width="68" height="5" rx="2" fill="#C9CDDA"></rect><rect x="66" y="138" width="40" height="5" rx="2" fill="#C9CDDA"></rect></svg></template>
+</helmet>
+<doc-page margin="0.8in">
+  <div slot="footer" style="display:flex;justify-content:space-between;font-size:10px;color:#8A8F9C;padding:0 0.8in 0.35in"><span>순공 · PRD v1.4</span><span>2026-09-19 · 내부용</span></div>
+
+  <h1 style="margin:0;font-size:30px;font-weight:700;letter-spacing:-.03em;line-height:1.2">순공 — 제품 요구사항 문서 (PRD)</h1>
+  <p style="margin:8px 0 0;font-size:14px;color:#5C6370;line-height:1.6">카메라가 "실제로 앉아 있던 시간"만 세고, 그 시간이 내가 세운 계획에 채워지는 학습 앱 · v1.4 · 2026-09-19</p>
+  <div class="kt" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0 0">
+    <div style="padding:12px 14px;border:1px solid #E6E8EE;border-radius:10px"><div style="font-size:11px;color:#7A8090">대상</div><div style="font-size:14px;font-weight:600;margin-top:3px">중·고등학생 본인</div></div>
+    <div style="padding:12px 14px;border:1px solid #E6E8EE;border-radius:10px"><div style="font-size:11px;color:#7A8090">플랫폼</div><div style="font-size:14px;font-weight:600;margin-top:3px">iOS · Android · 태블릿</div></div>
+    <div style="padding:12px 14px;border:1px solid #E6E8EE;border-radius:10px"><div style="font-size:11px;color:#7A8090">요금</div><div style="font-size:14px;font-weight:600;margin-top:3px">무료 + 프리미엄 4,900원/월</div></div>
+    <div style="padding:12px 14px;border:1px solid #E6E8EE;border-radius:10px"><div style="font-size:11px;color:#7A8090">계정</div><div style="font-size:14px;font-weight:600;margin-top:3px">없음 · 기기 로컬 + 파일 이동</div></div>
+  </div>
+
+  <h2 style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin:36px 0 10px">1. 배경과 문제</h2>
+  <p style="font-size:14.5px;line-height:1.7;margin:0 0 10px">학생들은 이미 순공 타이머·플래너·스터디 캘린더를 따로 쓴다. 기존 앱의 문제는 세 가지다.</p>
+  <ul style="font-size:14.5px;line-height:1.7;margin:0;padding-left:20px">
+    <li><b>측정이 자기 신고다.</b> 버튼을 누른 시간이 곧 공부 시간이 된다. 자리를 비워도 타이머는 돈다.</li>
+    <li><b>계획과 기록이 분리돼 있다.</b> 플래너에 적은 할 일과 타이머의 시간이 서로를 모른다. 학생이 두 번 입력한다.</li>
+    <li><b>평가가 압박이 된다.</b> 점수·등급·랭킹·끊긴 스트릭이 죄책감을 만들고, 그 결과 앱을 지운다.</li>
+  </ul>
+
+  <h2 style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin:36px 0 10px">2. 목표</h2>
+  <div class="kt" style="border:1px solid #E6E8EE;border-radius:12px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+      <thead><tr style="background:#F5F6F9"><th style="text-align:left;padding:10px 14px;font-weight:600;border-bottom:1px solid #E6E8EE;width:34%">목표</th><th style="text-align:left;padding:10px 14px;font-weight:600;border-bottom:1px solid #E6E8EE">성공 지표 (출시 후 8주)</th></tr></thead>
+      <tbody>
+        <tr><td style="padding:10px 14px;border-bottom:1px solid #EEF0F4;vertical-align:top"><b>G1</b> 순공시간이 자동으로, 정확하게 쌓인다</td><td style="padding:10px 14px;border-bottom:1px solid #EEF0F4;line-height:1.6">착석 감지 세션 비율 ≥ 70% · 잘못 감지 정정 ≤ 세션당 0.3회 · 정정 후 감도 자동 조정으로 4주차 정정율 절반</td></tr>
+        <tr><td style="padding:10px 14px;border-bottom:1px solid #EEF0F4;vertical-align:top"><b>G2</b> 계획한 할 일과 측정된 시간이 한 곳에서 만난다</td><td style="padding:10px 14px;border-bottom:1px solid #EEF0F4;line-height:1.6">세션 중 할 일 연결 비율 ≥ 60% · 주간 플래너 등록 ≥ 5건/사용자</td></tr>
+        <tr><td style="padding:10px 14px;border-bottom:1px solid #EEF0F4;vertical-align:top"><b>G3</b> 평가 없이도 계속 돌아온다</td><td style="padding:10px 14px;border-bottom:1px solid #EEF0F4;line-height:1.6">D30 리텐션 ≥ 35% · 주 4일 이상 사용 비율 ≥ 40% · 스트릭 끊김 후 7일 내 복귀 ≥ 50%</td></tr>
+        <tr><td style="padding:10px 14px;vertical-align:top"><b>G4</b> AI는 성취 축에서만 값을 만든다</td><td style="padding:10px 14px;line-height:1.6">프리미엄 전환 ≥ 6% · 판독 후 사용자 확정 없이 저장된 건 0 · 오답 재풀이 완료율 ≥ 40%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin:36px 0 10px">3. 사용자와 원칙</h2>
+  <p style="font-size:14.5px;line-height:1.7;margin:0 0 10px"><b>사용자는 학생 한 명이다.</b> 선생님·학부모 계정은 존재하지 않고, 데이터는 학생의 기기에만 있다. 이 전제에서 나오는 제품 원칙:</p>
+  <ol style="font-size:14.5px;line-height:1.7;margin:0;padding-left:22px">
+    <li><b>순공시간이 유일한 대표 지표.</b> 집중도 점수·등급·레벨·타인 비교·리포트 발송을 만들지 않는다.</li>
+    <li><b>앱은 평가하지 않는다.</b> "부족합니다", "잘했어요" 같은 문장 금지. 사실(시간·개수·날짜)만 말한다.</li>
+    <li><b>결정은 학생이 한다.</b> 목표 시간·계획·복습 여부는 학생 입력. 시스템은 기록 기반 기본값과 근거만 제공한다.</li>
+    <li><b>카메라는 얼굴을 보지 않는다.</b> 착석 여부만 온디바이스로 판정하고 영상은 저장하지 않는다.</li>
+    <li><b>AI는 성취 축에만.</b> 채점 표시 판독 → 오답 누적 → 복습 큐. 시간 축(측정·계획)은 AI가 개입하지 않는다.</li>
+  </ol>
+
+    <h2 style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin:36px 0 10px">4.3b 판독 플로우 상세 (v1.3 확정 · AI 완성 시 그대로 연결)</h2>
+  <div class="kt" style="border:1px solid #E6E8EE;border-radius:10px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;line-height:1.55">
+      <thead><tr style="background:#F5F6F9"><th style="text-align:left;padding:8px 12px;font-weight:600;width:44px">우선</th><th style="text-align:left;padding:8px 12px;font-weight:600;width:130px">항목</th><th style="text-align:left;padding:8px 12px;font-weight:600">요구사항</th><th style="text-align:left;padding:8px 12px;font-weight:600;width:70px">화면</th></tr></thead>
+      <tbody>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">사진 확인 · 요청</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">촬영/앨범 → <b>사진 확인</b>(현재 사진 · 썸네일 이동 · 추가 · 삭제 · 재촬영) → 과목·범위 확인 → 판독 요청. 플래너에서 진입하면 할 일의 과목·범위를 이어받는다. 사진 0장 또는 범위 비어 있음은 요청 불가 안내. 취소는 출발 화면(플래너/오답)으로 복귀하고 선택은 버린다. 요청 전(선택 중)과 요청 후(판독 중)를 화면으로 구분한다.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">A1b</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">진입 조건 순서</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">판독 요청 클릭 시 <b>잔여 횟수 → 인터넷 연결</b> 순서로 검사. 없음 → 소진 시트(요금제 / 닫기), 연결 없음 → 오프라인(다시 시도=연결 재확인 / 사진 두고 나중에). 사진·입력은 어느 경우에도 유지.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">A1b·F7</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">전송 상태</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">전송 중(진행 표시 · 전송 취소) / 실패(사진·입력 유지 · 다시 보내기 · 닫기). 재시도는 같은 요청 ID로 보내 중복 저장이 생기지 않는다. 진행 중에는 요청 버튼을 잠근다.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">A1c</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">판독 중 · 이탈</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">판독 중 화면: 처리 중 / 오래 걸림 안내(닫아도 요청 유지) / 실패(다시 찍기 → 촬영, 취소 → 사진 확인, 횟수 미차감). <b>닫고 나중에 확인</b>은 요청을 유지하고 홈으로, <b>요청 취소</b>는 확인창 후 요청을 없애고 사진 확인으로. 두 동작은 다르다.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">A2</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">미저장 결과 재진입</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">처리가 끝났지만 저장하지 않은 결과는 홈 상단 <b>확인 대기 카드</b>(1건)로 표시하고 탭하면 결과 확인으로 재진입. 진행 중이면 같은 카드가 "판독 진행 중"으로 표시되어 판독 중 화면으로 복귀. 저장 전 결과는 오답·복습에 반영되지 않는다.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">01·A3</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">결과 확인</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">페이지 탭(N페이지 · 확인 필요 점) · 원본 확대(페이지 이동, 확인 필요 테두리) · <b>확인 필요 문항으로 이동</b>(해당 페이지 전환 + 강조) · 문항 탭으로 마크 수정 · 확인 미완료(저장 불가)와 저장 가능 상태 구분 · 저장 중 / 성공 → 오답 상세 / 실패(마크 유지 · 다시 저장).</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">A3</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">오답 0개</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">틀림·애매·확인 필요가 모두 0이면 "틀린 문항이 없습니다" 카드. 저장하면 판독 이력에만 남고 복습 큐에는 추가되지 않으며 오답 누적으로 복귀. 처리 실패·데이터 없음과 다른 상태이며 평가 문구는 넣지 않는다.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">A3</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">저장 전 이탈</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">뒤로/닫기 → <b>계속 확인하기 / 나중에 확인(홈 카드에 두기) / 결과 버리기</b> 3분기. 버리기는 판독 결과만 지우고 사진은 보관 목록에 남는다. 앱 내 임시 보관을 넘어선 "임시 저장" 기능은 두지 않는다.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">A3</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">저장 결과 관리</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">오답 상세 › 판독 결과 카드: <b>결과 열기·마크 수정</b>(변경 저장 / 변경 취소 → 확인 후 원본 유지) · <b>같은 범위 다시 찍기</b>(이미 판독한 범위 안내 → 새 회차 / 기존 결과 수정) · <b>이 판독 결과 삭제</b>(영향 범위 명시: 오답 N · 복습 큐 N · 재풀이 N 삭제 / 사진·세션은 남음 → 오답 누적으로 복귀). 결과 삭제 ≠ 사진 삭제 ≠ 재풀이 기록 삭제.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">A6·A3</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">복습 진행</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">복습 큐 › 복습 시작 → <b>복습 진행</b>: 진행 N/M · 현재 문항(과목·범위·번호·이전 기록) · 선택 전/후 · 기록하고 다음(저장 중 · 실패 시 선택 유지·재시도) · 건너뛰기(기록 없음) · 마지막 후 <b>복습 완료</b>(처리 수 · 맞음/부분/또 틀림 · 큐에서 빠진 수 · 남은 수 · 건너뜀). 큐가 비면 "복습할 것 없음"(다음 예정 · 촬영 안내). 점수·칭찬·압박 문구 없음.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">A5·A5b</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">복습 중간 종료</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">닫기 → 확인창: 지금까지 기록한 N문항은 저장 유지, 현재 문항의 선택은 기록되지 않음, 남은 문항은 큐에 유지 → 끝내고 복습 큐로.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">A5b</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">재풀이 기록 관리</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">오답 상세의 "해결됨" 탭 → <b>재풀이 기록 수정</b> 시트(기존 선택 표시 · 변경 저장 / 변경 없음이면 닫기 · 닫기 = 원본 유지) · <b>이 기록 취소</b>(확인 → 미해결로 복귀 · 큐 재계산). 저장 중 / 실패 · 재시도 상태 포함.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">N13</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">사진 삭제 상태</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">개별 삭제: 삭제 중 → 성공(목록 제거 · 오답 기록 유지) / 실패(행에 "실패 · 다시 시도"). 일괄 삭제: 일부 실패 시 남은 사진과 결과 문구 표시 · 재시도. 원본 삭제 후에도 오답 상세에 "삭제됨"으로 기록이 남는다.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">N6·A6</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">승인 대기 표시</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">안내창을 닫아도 요금제 화면에 <b>승인 대기 행</b>(요청 시각 · 상태 확인 버튼). 승인 → 프리미엄 + 원래 목적지 복귀 / 거절 → "승인되지 않음" + 다시 요청 / 대기 → 그대로. 앱은 자체 시간 경과로 성공·실패를 확정하지 않고 스토어 상태만 따른다.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">N3</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">가져오기 충돌 확인</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">파일 확인 단계에 <b>가져올 내용</b>: 새로 들어오는 기록 / 완전히 같은 기록(한 번만 남김) / 같은 날짜의 다른 기록(<b>양쪽 모두 유지</b>). 실행 중에는 버튼을 잠가 중복 실행을 막고, 완료 시 요약을 보여준다. 같은 날짜의 별개 기록을 지우는 규칙은 두지 않는다.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">A7</td></tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <h2 style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin:36px 0 10px">4.3c 계정 · 로그인 (v1.4 신설 — "기록은 기기에만" 원칙을 대체)</h2>
+  <div class="kt" style="border:1px solid #E6E8EE;border-radius:10px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;line-height:1.55">
+      <thead><tr style="background:#F5F6F9"><th style="text-align:left;padding:8px 12px;font-weight:600;width:44px">우선</th><th style="text-align:left;padding:8px 12px;font-weight:600;width:130px">항목</th><th style="text-align:left;padding:8px 12px;font-weight:600">요구사항</th><th style="text-align:left;padding:8px 12px;font-weight:600;width:70px">화면</th></tr></thead>
+      <tbody>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">로그인 필수</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">앱 첫 실행 시 로그인 화면. Apple · Google · 카카오 · 이메일+비밀번호 4종. iOS는 소셜 로그인을 넣으면 Apple 로그인 필수. 로그인 없이 진입하는 경로는 없다.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">00a</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">이메일 흐름</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">이메일 입력 → 기존/신규 자동 판별 → 기존: 비밀번호 + "잊었어요"(재설정 링크 발송 안내) / 신규: 비밀번호 8자 이상으로 계정 생성. 실패 시 이유를 한 문장으로 안내하고 입력은 유지.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">00a</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">신규 vs 기존</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">신규 계정 → 온보딩 3단계 → 홈(빈 상태). 기존 계정 → 온보딩 생략, 계정의 기록을 불러오고 구독 상태를 자동 복원 → 홈. 첫 불러오기 결과는 토스트 1줄로만 알린다.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">00a·00</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">동기화 범위</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">계정에 저장: 세션·이탈·정정 · 플래너·반복·기간 일정 · 오답·복습 큐·재풀이 · 과목·설정 · 구독 상태. <b>계정에 저장하지 않음: 판독 사진</b>(기기에만 30일, 로그아웃 시 삭제). 카메라 프레임은 여전히 기기 안에서만 처리.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">11</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">구독 복원</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">로그인 시 계정에 묶인 구독을 자동 복원. 페이월의 "구매 복원" 버튼은 제거하고 "계정에 저장되어 로그인만 하면 이어집니다" 안내로 대체. 스토어 규정용 수동 재확인은 요금제 화면 하단 "구독 상태 다시 확인" 텍스트 링크 하나만 둔다.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P·N3</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">계정 관리</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">설정 › 계정: 이메일 · 로그인 방식 · 동기화 시각 · 로그아웃(확인: 기록은 계정에 남음, 기기 사진은 삭제) · 계정 삭제(확인: 동기화 기록 전체 삭제, 구독은 스토어에서 별도 해지). 둘 다 완료 후 로그인 화면으로.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">12</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">기록 가져오기 삭제</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">파일 가져오기 기능은 동기화가 대체하므로 제거. 내보내기(CSV/JSON)는 사용자 데이터 이동권 차원에서 유지.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">11</td></tr>
+
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P1</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">오프라인 동작</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">로그인 상태가 기기에 저장되어 있으면 오프라인에서도 앱 사용 가능. 변경은 기기에 쌓였다가 연결 시 동기화. 최초 로그인만 연결 필수.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">—</td></tr>
+
+      </tbody>
+    </table>
+  </div>
+
+<h2 style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin:36px 0 10px">4. 범위 — 기능 목록</h2>
+  <p style="font-size:13px;color:#5C6370;margin:0 0 12px">P0 = 출시 필수 · P1 = 출시 후 4주 · P2 = 로드맵. 게이트 열은 무료/프리미엄 구분.</p>
+
+  <h3 style="font-size:16px;font-weight:600;margin:20px 0 8px">4.1 측정 (시간 축 · 무료)</h3>
+  <div class="kt" style="border:1px solid #E6E8EE;border-radius:12px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#F5F6F9"><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:8%">우선</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:28%">기능</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE">요구사항</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:10%">화면</th></tr></thead>
+      <tbody style="line-height:1.55">
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">착석 감지 세션</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">전면 카메라로 착석/이탈을 온디바이스 판정. 이탈 60초(정정 이력에 따라 90초까지 자동 완화) 후 '자리 비움' 상태. 돌아오면 자동 재개. 영상·사진 미저장.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">02·03·04</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">수동 타이머 폴백</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">카메라 권한 거부·점유·꺼짐 시 시작/정지 수동 모드. 기록은 '수동'으로 표시.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">02</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">집중 기록 · 구간 정정</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">세션 종료 시 착석/이탈 타임라인. 잘못 감지 구간을 순공으로 되돌리기. 3분 미만은 저장 확인. 정정 3건 누적 시 감도 자동 조정 + 토스트.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">05·N5</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">할 일 연결</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">시작 준비에서 과목 선택 → 그 과목의 밀린 일·오늘·다음 할 일 중 하나 연결. 종료 시 할 일 완료 처리.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">02·05</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">자습(초과) 구분</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">할 일 없이 한 공부는 '자습'으로 기록. 홈 링·통계에서 주황으로 구분. 등록 시 종류 선택(공부/할 일/자습).</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">01·09</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">측정 중단 · 세션 복구</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">측정 중 카메라가 끊기면 지금까지의 순공을 보여주고 다시 연결 / 수동으로 이어서 / 종료 중 선택. 재연결 실패 시 중단 상태 유지. 앱 재실행 시 미완료 세션이 있으면 이어서(카메라 가능 여부 확인) / 기록 마무리 / 버리기(확인창) 제시. 창 바깥 탭은 기록을 유지하고 닫기.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">N</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">기록 저장·버리기 규칙</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">새 세션 = 기록 저장 / 버리기(확인). 기존 세션 정정 = 변경 저장 / 변경 취소(원본 유지, 세션 상세로 복귀). 자리 비움 5분 초과는 자동 종료가 아니라 계속하기 / 종료하기 제안.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">05·F3</td></tr>
+        <tr><td style="padding:8px 12px">P1</td><td style="padding:8px 12px">오류 상태</td><td style="padding:8px 12px">오프라인(측정은 계속, 판독만 대기) · 카메라 점유(수동 제안) 다이얼로그.</td><td style="padding:8px 12px">F7</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="font-size:16px;font-weight:600;margin:20px 0 8px">4.2 계획 (플래너 · 타임테이블 · 무료)</h3>
+  <div class="kt" style="border:1px solid #E6E8EE;border-radius:12px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#F5F6F9"><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:8%">우선</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:28%">기능</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE">요구사항</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:10%">화면</th></tr></thead>
+      <tbody style="line-height:1.55">
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">월간 플래너</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">네이버 캘린더식 월간 격자. 셀 배경 농도 = 순공 시간, 할 일은 과목색 글자로 표시(완료 시 흐리게 + 체크). 날짜 탭/드래그로 접힘 → 날짜 상세(공부/할 일/자습). 기간 띠(시험 등).</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">08</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">3D 시간 보기</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">좌우 스와이프로 셀이 순공 시간 높이의 기둥으로 전환. 무료에서는 예상 시간 미표시.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">08</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">등록 시트</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">종류(공부/할 일/자습/일정) · 과목(추가 가능, 8색) · 목표 시간 칩 · 날짜 미니 달력 · 일정은 기간 또는 반복(요일·시간·종료). 반복 일정은 타임테이블·홈 링에 자동 표시.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">09·N12</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">항목 편집·삭제</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">날짜 상세에서 항목 탭 → 등록 시트를 편집 모드로 재사용(제목·과목·시간·날짜 이동·삭제). 바꾼 내용이 있을 때만 닫기 시 "변경 취소" 확인, 삭제는 확인창. 기간 띠(시험·행사)도 같은 시트로 수정·삭제. 반복 일정은 <b>첫 출시에서 전체 수정 · 전체 삭제(5초 되돌리기)만</b> 지원. "이번 주만/이후" 부분 변경은 예외 일정 데이터 구조가 필요해 로드맵으로 이월.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">N</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">타임테이블</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">주간 00–24시 7열. 순공 블록(과목색) + 반복 일정(점선). 블록 탭 → 세션 상세. 반복 일정 삭제는 되돌리기 토스트.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">14·F3</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">홈</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">24시간 시계 링(0시 위 · 6시 오른쪽 · 12시 아래)에 오늘 순공·자습·고정 일정 표시, 불꽃 안 연속 일수. 남은 할 일 N개(시간 합산 없음 — 예상은 프리미엄). 집중 시작 CTA.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">01</td></tr>
+        <tr><td style="padding:8px 12px">P0</td><td style="padding:8px 12px">통계</td><td style="padding:8px 12px">주간/월간 순공 막대(과목색 분할) · 과목별 · 집중 패턴 · 시간대. 지난주 비교는 사실만. 3일 미만은 빈 상태.</td><td style="padding:8px 12px">10</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="font-size:16px;font-weight:600;margin:20px 0 8px">4.3 성취 (AI · 프리미엄)</h3>
+  <div class="kt" style="border:1px solid #E6E8EE;border-radius:12px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#F5F6F9"><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:8%">우선</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:28%">기능</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE">요구사항</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:10%">화면</th></tr></thead>
+      <tbody style="line-height:1.55">
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">채점 표시 판독 (1단계)</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">채점된 페이지 촬영 → 외부 AI로 O·X·△·안 품·찍음 마크 판독 → 문항 격자에서 사용자가 확인. <b>저신뢰 문항이 남아 있으면 저장 불가.</b> 월 20회. 실패 시 재촬영 안내(횟수 미차감). 사진 30일 보관 후 삭제, 학습 미사용.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">A1–A3</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">오답 누적 · 상세</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">과목·범위별 미해결/해결. 문항별 해결 처리. 연결된 세션·할 일·사진(즉시 삭제 가능, 삭제 후 '삭제됨' 표시).</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">A4·A6</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">복습 큐 · 재풀이</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">미해결 문항을 간격 순으로 정렬. 문항 탭 → 맞음/부분/또 틀림 기록. 맞음 2회 연속이면 큐 이탈, 틀림이면 간격 단축. 풀이는 앱에 적지 않음.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">A5·N13</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">예상 시간 자동 채움</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">등록 시트·목표 시간 시트에 "최근 {과목} 5회 평균 N분" 기본값. 라벨은 '목표 시간' 유지. 무료는 30분 기본 + 잠금 힌트.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">09·N1</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P1</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">시간 × 성취 교차 뷰</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">4주 산점(가로 순공, 세로 오답 비율, 과목별). 서술은 사실만, 권고 없음.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">F1</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P1</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">제안 받기 (4단계)</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">학생이 요청할 때만. 오답 단원·미룬 횟수·요일 순공을 근거로 3건 제안, 골라서 플래너에 넣기. 평가 문장 없음.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">F2</td></tr>
+        <tr><td style="padding:8px 12px">P2</td><td style="padding:8px 12px">정답지 대조 · 풀이 분석 (2·3단계)</td><td style="padding:8px 12px">정답지 함께 촬영 → 대조 채점 · 풀이 페이지 분석. 1단계 출시엔 "곧 제공" 슬롯만.</td><td style="padding:8px 12px">N9</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="font-size:16px;font-weight:600;margin:20px 0 8px">4.4 설정 · 데이터 · 요금</h3>
+  <div class="kt" style="border:1px solid #E6E8EE;border-radius:12px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#F5F6F9"><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:8%">우선</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:28%">기능</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE">요구사항</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:10%">화면</th></tr></thead>
+      <tbody style="line-height:1.55">
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">온보딩 3단계</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">착석 감지 안내 → 외부 전송 동의(만 14세 미만 보호자, 건너뛰면 판독 꺼짐) → 카메라 권한. 완료 시 홈 빈 상태.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">00</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">카메라와 개인정보</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">착석 감지 토글 · 저장 데이터 표 · 정정 이력 · 보관 사진 목록(개별/일괄 삭제) · 내보내기(CSV/JSON) · 가져오기 · 모든 기록 삭제.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">11·N5–N7·A7</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">설정</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">하루 목표 시간(프리미엄 기본값) · 과목 관리(이름·색·삭제 확인) · 주 시작 요일 · 알림(복습 시각·일정 10분 전만) · 테마 · 요금제 · 도움말.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">12·13·N1–N4·D14</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">요금 게이트 · 구매</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">프리미엄 진입점 탭 → 페이월(온보딩에서 동의를 건너뛴 경우 동의 체크 포함) → 7일 무료 → 원래 목적지로 복귀. 구매 요청 결과는 <b>성공 / 사용자 취소 / 실패(청구 없음) / 승인 대기</b>로 분기, 진행 중 중복 클릭 방지. 구매 복원은 <b>성공 / 복원할 구매 없음 / 확인 실패</b>(확인 실패는 "다시 결제하지 말 것" + 다시 복원 버튼). 재구독 · 체험 만료 후 계속 · 결제 실패 재시도는 모두 <b>같은 구매 흐름</b>(진행 중 → App Store 결과)을 거치며, 성공 응답 전에는 프리미엄으로 바뀌지 않는다. 실패 후 재시도는 출발 화면(페이월/재구독 안내/만료 시트)으로 복귀.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P·N3</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">해지 · 만료 · 읽기 전용</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">해지는 즉시 무료가 아니라 <b>종료일까지 유지(해지 예약, 취소 가능)</b>. 체험 만료·결제 실패 시트 후 무료로 전환. 구독이 끝난 사용자는 처음부터 무료인 사용자와 다른 경로: 기존 오답 목록·상세를 <b>읽기 전용</b>으로 열고(해결·재풀이 버튼 없음), 보관 사진 확인·삭제 가능. 멈춘 기능 진입 시 페이월 대신 재구독 안내 → 취소하면 원래 화면으로 복귀. 구독 종료 상태에서는 요금제 화면·홈 카드·통계 카드가 신규용 "7일 무료" 문구 대신 <b>기존 오답 N문항 보기 · 읽기 전용 · 월 4,900원 재구독</b>으로 바뀐다(체험은 1회만).</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">F6·11b</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">P0</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">파일 · 알림 · 문의 예외</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">판독 진입 조건은 순서대로: 잔여 횟수 없음 → 소진 시트, 인터넷 없음 → 오프라인, 둘 다 정상 → 판독 중. 가져오기: 형식 오류(1단계로) · 새 버전(App Store 이동) · 중복(2단계 + 안내 배너, 버튼 재탭) · 저장 실패(같은 파일로 합치기 재실행, 기존 기록 유지) · 선택 취소. 내보내기 실패 토스트의 다시 시도는 같은 형식으로 저장 재실행. 모든 기록 삭제 확인창은 삭제 대상(세션·이탈·정정 / 플래너·반복·기간 일정 / 오답·복습·재풀이 / 보관 사진 / 추가 과목·설정)과 <b>구독 상태 유지</b>를 명시. 기기 알림 권한 꺼짐 안내 → 기기 설정 → 복귀 시 갱신. 문의 전송 실패 시 내용 유지·재전송·대체 메일, 답장 이메일 입력. 빈 상태(정정 이력·타임테이블)에 다음 행동 버튼. 전체 삭제 후 홈 빈 상태(측정 중엔 진입 불가).</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">11</td></tr>
+        <tr><td style="padding:8px 12px">P1</td><td style="padding:8px 12px">태블릿</td><td style="padding:8px 12px">가로 1024: 사이드바 + 홈·타임테이블·통계·판독 결과·오답 상세 2열. 나머지 600px 가운데. 시트는 가운데 카드.</td><td style="padding:8px 12px">T</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin:36px 0 10px">5. 만들지 않는 것</h2>
+  <ul style="font-size:14.5px;line-height:1.7;margin:0;padding-left:20px">
+    <li>집중도 점수·등급·레벨·랭킹 · 친구/타인 비교 · 선생님·학부모 계정 · 리포트 발송</li>
+    <li>AI 추천·평가 문장 · 시간 축(측정·계획)에 대한 AI 개입 · 공부를 재촉하는 알림</li>
+    <li>얼굴 인식 · 영상 저장 · 사진의 모델 학습 사용</li>
+    <li>서버 계정 (기기 로컬 + 파일 내보내기/가져오기로 기기 이동)</li>
+  </ul>
+
+  <h2 style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin:36px 0 10px">6. 핵심 흐름</h2>
+  <ol style="font-size:14.5px;line-height:1.75;margin:0;padding-left:22px">
+    <li><b>세션</b> 홈 CTA → 과목·할 일 선택 → 착석 감지 시작 → (자리 비움 → 자동 재개) → 종료 → 기록·정정 → 저장 → 홈 링 갱신</li>
+    <li><b>계획</b> 플래너 날짜 탭 → + → 종류·과목·시간·날짜 → 추가 → 홈 '남은 할 일'과 시작 준비에 노출</li>
+    <li><b>판독 (프리미엄)</b> 플래너 공부 행 카메라 → 촬영 → 판독 중 → 격자 확인(저신뢰 확정) → 저장 → 오답 누적 → 복습 큐 → 재풀이 기록</li>
+    <li><b>게이트</b> 무료 사용자 프리미엄 진입 → 페이월(동의) → 체험 → 목적지 복귀. 만료 → 무료 유지 + 오답 읽기 전용</li>
+  </ol>
+  <p style="font-size:13px;color:#5C6370;margin:10px 0 0">전체 화면·분기는 <a href="User Flow Diagram.dc.html">유저플로우 다이어그램</a>과 <a href="User Flow Report.dc.html">화면 보고서</a> 참조.</p>
+
+  <h2 style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin:36px 0 10px">7. 데이터 · 개인정보</h2>
+  <div class="kt" style="border:1px solid #E6E8EE;border-radius:12px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#F5F6F9"><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:26%">데이터</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:22%">저장 위치</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE">보관 · 삭제</th></tr></thead>
+      <tbody style="line-height:1.55">
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">세션(시작·끝·착석/이탈 구간·과목·연결 할 일)</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">기기</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">사용자 삭제 시까지. 내보내기 포함</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">카메라 프레임</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">메모리만</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">저장 안 함. 착석 여부 불리언만 기록</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">채점 페이지 사진</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">기기 + 판독 서버(외부 AI 전송)</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">30일 후 자동 삭제. 즉시 삭제 가능. 학습 미사용. 오답 기록은 사진 없이 유지</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">오답·복습 기록</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">기기</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">구독 종료 후 읽기 전용 보존</td></tr>
+        <tr><td style="padding:8px 12px">정정 이력·감도</td><td style="padding:8px 12px">기기</td><td style="padding:8px 12px">최근 2주 기준 자동 조정. 이력 화면에서 열람</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin:36px 0 10px">8. 비기능 요구사항</h2>
+  <ul style="font-size:14.5px;line-height:1.7;margin:0;padding-left:20px">
+    <li><b>착석 판정</b> 온디바이스, 1초 주기, 배터리 소모 ≤ 8%/시간(화면 켜짐 기준). 이탈 판정 지연 60–90초.</li>
+    <li><b>오프라인</b> 측정·플래너·통계·설정은 전부 오프라인 동작. 판독만 연결 필요.</li>
+    <li><b>판독</b> 업로드→결과 ≤ 8초(p90). 실패율 ≤ 5%. 실패 건은 횟수 미차감.</li>
+    <li><b>접근성</b> 텍스트 대비 4.5:1(보조 3:1), 터치 44×44, 색만으로 구분 금지(과목색은 항상 이름 라벨 동반), 과목 5색은 색각 이상 검증본 유지, reduced-motion 대응.</li>
+    <li><b>디자인 규칙</b> 무채색 + 파랑 1(링) + 주황 1(CTA·자습·오늘). 그림자 ≤ 0 1px 2px. 아이콘 Lucide 24 그리드 1.75. 본문 400–500, 제목 600–700.</li>
+  </ul>
+
+  <h2 style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin:36px 0 10px">9. 출시 계획</h2>
+  <div class="kt" style="border:1px solid #E6E8EE;border-radius:12px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#F5F6F9"><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:18%">단계</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE">포함</th><th style="text-align:left;padding:8px 12px;border-bottom:1px solid #E6E8EE;width:26%">검증</th></tr></thead>
+      <tbody style="line-height:1.55">
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4"><b>1단계 출시</b></td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">4.1 · 4.2 전체, 4.3 판독·오답·복습·자동 채움, 4.4 P0. 2·3단계 슬롯은 "곧 제공"</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">G1·G2 지표, 판독 확정율 100%</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4"><b>+4주</b></td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">시간×성취 교차 뷰 · 제안 받기 · 오류 상태 · 태블릿 2열</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">G3 리텐션, 제안 채택률</td></tr>
+        <tr><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4"><b>AI 완성 시 연결</b></td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4;line-height:1.6">화면·상태는 v1.3에서 모두 제작됨(4.3b). 남은 것은 실제 판독 API·결제·파일 연동과 아래 미결 정책의 확정.</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">구현 검증</td></tr>
+        <tr style="display:none"><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4"><b>AI 완성 후(구)</b></td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4;line-height:1.6">촬영: 여러 장 확인·삭제·재촬영, 과목·범위 연결, 전송 실패·재시도 · 처리 중 이탈 후 미저장 결과 재진입 · 결과 확인: 원본 확대·페이지 이동, 저장 전 이탈 확인, 오답 0개 상태 · 저장 이후: 결과 수정·삭제, 동일 범위 재등록 · 복습: 복습 시작 → 문항 기록 → 다음 → 완료·중간 종료 · 관리: 재풀이 기록 수정·취소, 사진 삭제 실패·재시도</td><td style="padding:8px 12px;border-bottom:1px solid #EEF0F4">판독 API 확정 후 화면 설계</td></tr>
+        <tr><td style="padding:8px 12px"><b>로드맵</b></td><td style="padding:8px 12px">정답지 대조(2) · 풀이 분석(3)</td><td style="padding:8px 12px">판독 데이터 정의 후 결정</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin:36px 0 10px">10. 미결 사항</h2>
+  <ul style="font-size:14.5px;line-height:1.7;margin:0;padding-left:20px">
+    <li>판독 외부 AI 벤더와 데이터 처리 계약(30일 삭제·학습 미사용 보증)</li>
+    <li>만 14세 미만 보호자 동의의 법적 형식(체크박스로 충분한지)</li>
+    <li>월 20회 한도의 적정성 — 베타에서 사용량 측정 후 조정</li>
+    <li>연속 일수(스트릭) 정의: 순공 1분 이상? 할 일 1개 완료? — 현재 프로토타입은 세션 1회 기준</li>
+    <li>정정 이력 › 감도 수동 조정 제공 여부</li>
+    <li>승인 대기(보호자 승인): 승인 → 프리미엄 자동 전환 + 활성화 알림 / 거절 → 무료 유지 + 결제 실패 시트 재사용 / 무응답 → App Store 기본 만료(24시간) 후 대기 해제, 페이월로 복귀 — <b>이 규칙으로 확정 제안</b></li>
+    <li>반복 일정 부분 변경(이번 주만 / 이후) — 예외 일정 저장 구조 확정 후 로드맵</li>
+    <li>동기화 충돌 규칙: 두 기기에서 오프라인으로 같은 세션을 각각 수정한 뒤 연결될 때 어느 쪽을 남기는가 — 미정(가져오기 병합 규칙은 기능 삭제로 소멸)</li>
+    <li>계정 삭제 유예: 즉시 삭제 vs 30일 유예 후 삭제 — 미정. 화면은 즉시 삭제로 표현</li>
+    <li>만 14세 미만 보호자 동의를 로그인 단계에서 받을지, 판독 동의(온보딩 2)에서만 받을지 — 미정</li>
+    <li>같은 과목·범위 재등록 시 처리 방식 — 화면은 "새 회차 / 기존 결과 수정" 두 선택을 제시. 덮어쓰기·자동 병합 여부 미정</li>
+    <li>판독 요청의 백그라운드 처리·앱 종료 후 복원 가능 여부 — 프로토타입은 "앱 안에서 화면을 닫아도 유지"까지만 표현. OS 백그라운드/종료 후 복원은 미확정</li>
+    <li>판독 요청 1회당 사진 수 상한, 학습 범위 입력 형식(자유 입력 유지?) — 미정. 화면은 제한 없이 동작</li>
+    <li>미저장 결과의 보관 기간(홈 카드가 언제까지 남는가) — 미정</li>
+    <li>복습 큐 재계산 규칙(맞음 2회 연속 제외 · 또 틀림 시 간격 1일)은 현행 문구를 따름 — 확정 필요</li>
+  </ul>
+</doc-page>
+</x-dc>
+</body>
+</html>
