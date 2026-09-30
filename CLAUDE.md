@@ -88,7 +88,7 @@ docs/
 
 ## 8. 브랜치·PR·세션 절차
 
-- 브랜치: `feat/sNN-<slug>`. PR 1개 = 세션 1개. squash merge.
+- 브랜치: `feat/sNN-<slug>` 또는 클라우드 세션이 지정한 브랜치 이름 허용. PR 제목 `[SNN] 요약`. PR 1개 = 세션 1개. squash merge.
 - 세션 시작: `CLAUDE.md` → `docs/decisions.md`(D 번호로 참조) → 직전 세션 `docs/handoff/*.md` → 자기 지시문 → 필요한 `docs/reference/*` 순으로 읽고 나서 작업 계획을 첫 답변으로 요약한다. 지시문이 `docs/decisions.md`와 다르면 결정 문서가 우선하고 PR 본문에 적는다.
 - 작업 중 지시문에 없는 결정을 내렸으면 `docs/decisions.md` 에 `[SNN]` 태그로 추가.
 - 세션 종료: `flutter analyze` 무경고, 테스트 통과, `docs/handoff/SNN.md` 작성(한 일 / 안 한 일 / 다음 세션이 알아야 할 것 / 변경한 공용 파일).

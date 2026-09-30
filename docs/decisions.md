@@ -89,7 +89,7 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - 클라이언트 설정(`env/app.dev.json`, anon key)과 서버 비밀(`supabase/.env`, service role)은 파일·주입 경로 분리. 서버 비밀은 앱 빌드에 절대 포함하지 않는다.
 
 ## D13. 식별자 — 확정
-순공 / SoonGong · `co.byite.soongong` · `byite-co/soongong-app` · `soongong_premium_monthly`.
+순공 / SoonGong · `co.byite.soongong` · `byite-co/soongong`(S01b 정정: 실제 레포명) · `soongong_premium_monthly`.
 
 ## D14. 데이터 처리표 — 벤더 행 제외 확정
 
@@ -190,7 +190,7 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - 엔진 서버 구현 자체는 이 묶음 밖(별도 트랙).
 
 ## D21. 기존 sungong 레포 — 확정 (2026-10-01: 신규 레포, 미재사용)
-- `byite-co/soongong-app`을 새로 만들고 기존 sungong 레포의 코드·스키마·마이그레이션·CI를 가져오지 않는다. D24 default privileges 변경 범위 확인(다른 서비스 공유 역할 여부)도 불필요 — 새 Supabase 프로젝트 기준.
+- `byite-co/soongong`(S01b 정정)을 새로 만들고 기존 sungong 레포의 코드·스키마·마이그레이션·CI를 가져오지 않는다. D24 default privileges 변경 범위 확인(다른 서비스 공유 역할 여부)도 불필요 — 새 Supabase 프로젝트 기준.
 - 9/5 문서에서 승계한 항목은 D19 표의 결정·기준값뿐(코드 아님).
 - S01~S03 실행 범위는 지시문 그대로.
 
@@ -262,4 +262,5 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **[S01] 클라이언트 env 키**: `APP_FLAVOR` · `SUPABASE_URL` · `SUPABASE_ANON_KEY` · `REVENUECAT_PUBLIC_KEY_ANDROID` · `REVENUECAT_PUBLIC_KEY_IOS` · `DEV_MENU`. service role 키 자리는 없다(D12).
 - **[S01] iOS flavor 구성**: 스킴 `dev`·`prod`, 빌드 구성 `Debug-dev`·`Release-dev`·`Profile-dev`·`Debug-prod`·`Release-prod`·`Profile-prod`, 각 구성이 `ios/Flutter/<Config>-<flavor>.xcconfig`(CocoaPods include + `Flavor-<flavor>.xcconfig` 의 번들 ID·표시 이름)를 base configuration 으로 쓴다. macOS 없이 작성했으므로 S15 에서 Xcode 로 검증.
 - **[S01] Android flavor 구성**: `flavorDimensions "env"`, `dev` 는 `applicationIdSuffix ".dev"`·`versionNameSuffix "-dev"`, 앱 이름은 `resValue app_name`(순공 dev / 순공). 릴리스 서명은 S15(`android/key.properties`, gitignore 됨).
-- **[S01] 브랜치 이름**: 이 세션은 클라우드 세션이 지정한 `claude/new-session-wpnapa` 에서 작업했다(지시문의 `feat/s01-scaffold` 대신). 레포 이름도 D13 의 `byite-co/soongong-app` 이 아니라 실제 `byite-co/soongong`.
+- **[S01] 브랜치 이름**: 이 세션은 클라우드 세션이 지정한 `claude/new-session-wpnapa` 에서 작업했다(지시문의 `feat/s01-scaffold` 대신). → S01b 에서 CLAUDE.md §8 을 "세션 지정명 허용, PR 제목 `[SNN] 요약`" 으로 갱신했고, D13·D21 의 레포명을 `byite-co/soongong` 으로 정정했다.
+- **[S01b] 후속 수정(기능 추가 없음)**: Android desugaring(desugar_jdk_libs 2.1.4) · pbxproj 중복 ID 재부여 · `ios/lib/**` 오생성 삭제 · CI 드리프트 검사를 `tool/ci/check_clean_tree.sh`(비어 있지 않은 `git status --porcelain` → 실패)로 · FakeReadingEngine `submit` 순서(tombstone → 같은 id 멱등 → 활성 → 미저장 done(D17) → 쿼터 → 시나리오)와 `updateMarks` 차이 계산(새 비O 문항은 `wrongItemId` 필수, O 문항 제거, 나머지 mark 갱신·id 유지, 언급 없는 문항 유지) · `showAppModal` 은 `onConfirm` 실행 중 바깥 탭·뒤로가기·취소 무시, 반환값 `bool`(true = 실행 완료) · AppButton small/토스트 액션 탭 영역 44 를 탭 위젯 안쪽으로 · 다크 토스트 액션 `#2F49E0`.
