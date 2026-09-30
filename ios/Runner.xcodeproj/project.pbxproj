@@ -53,14 +53,14 @@
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
-		A1D5A0010000000000000021 /* Debug-dev.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug-dev.xcconfig; path = Flutter/Debug-dev.xcconfig; sourceTree = "<group>"; };
-		A1D5A0010000000000000022 /* Debug-prod.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug-prod.xcconfig; path = Flutter/Debug-prod.xcconfig; sourceTree = "<group>"; };
-		A1D5A0010000000000000023 /* Release-dev.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Release-dev.xcconfig; path = Flutter/Release-dev.xcconfig; sourceTree = "<group>"; };
-		A1D5A0010000000000000024 /* Release-prod.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Release-prod.xcconfig; path = Flutter/Release-prod.xcconfig; sourceTree = "<group>"; };
-		A1D5A0010000000000000025 /* Profile-dev.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Profile-dev.xcconfig; path = Flutter/Profile-dev.xcconfig; sourceTree = "<group>"; };
-		A1D5A0010000000000000026 /* Profile-prod.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Profile-prod.xcconfig; path = Flutter/Profile-prod.xcconfig; sourceTree = "<group>"; };
-		A1D5A0010000000000000027 /* Flavor-dev.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Flavor-dev.xcconfig; path = Flutter/Flavor-dev.xcconfig; sourceTree = "<group>"; };
-		A1D5A0010000000000000028 /* Flavor-prod.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Flavor-prod.xcconfig; path = Flutter/Flavor-prod.xcconfig; sourceTree = "<group>"; };
+		A1D5A0020000000000000001 /* Debug-dev.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug-dev.xcconfig; path = Flutter/Debug-dev.xcconfig; sourceTree = "<group>"; };
+		A1D5A0020000000000000002 /* Debug-prod.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug-prod.xcconfig; path = Flutter/Debug-prod.xcconfig; sourceTree = "<group>"; };
+		A1D5A0020000000000000003 /* Release-dev.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Release-dev.xcconfig; path = Flutter/Release-dev.xcconfig; sourceTree = "<group>"; };
+		A1D5A0020000000000000004 /* Release-prod.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Release-prod.xcconfig; path = Flutter/Release-prod.xcconfig; sourceTree = "<group>"; };
+		A1D5A0020000000000000005 /* Profile-dev.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Profile-dev.xcconfig; path = Flutter/Profile-dev.xcconfig; sourceTree = "<group>"; };
+		A1D5A0020000000000000006 /* Profile-prod.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Profile-prod.xcconfig; path = Flutter/Profile-prod.xcconfig; sourceTree = "<group>"; };
+		A1D5A0020000000000000007 /* Flavor-dev.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Flavor-dev.xcconfig; path = Flutter/Flavor-dev.xcconfig; sourceTree = "<group>"; };
+		A1D5A0020000000000000008 /* Flavor-prod.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Flavor-prod.xcconfig; path = Flutter/Flavor-prod.xcconfig; sourceTree = "<group>"; };
 		9740EEB31CF90195004384FC /* Generated.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Generated.xcconfig; path = Flutter/Generated.xcconfig; sourceTree = "<group>"; };
 		97C146EE1CF9000F007C117D /* Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Runner.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		97C146FB1CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
@@ -96,14 +96,14 @@
 				3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */,
 				9740EEB21CF90195004384FC /* Debug.xcconfig */,
 				7AFA3C8E1D35360C0083082E /* Release.xcconfig */,
-				A1D5A0010000000000000021 /* Debug-dev.xcconfig */,
-				A1D5A0010000000000000022 /* Debug-prod.xcconfig */,
-				A1D5A0010000000000000023 /* Release-dev.xcconfig */,
-				A1D5A0010000000000000024 /* Release-prod.xcconfig */,
-				A1D5A0010000000000000025 /* Profile-dev.xcconfig */,
-				A1D5A0010000000000000026 /* Profile-prod.xcconfig */,
-				A1D5A0010000000000000027 /* Flavor-dev.xcconfig */,
-				A1D5A0010000000000000028 /* Flavor-prod.xcconfig */,
+				A1D5A0020000000000000001 /* Debug-dev.xcconfig */,
+				A1D5A0020000000000000002 /* Debug-prod.xcconfig */,
+				A1D5A0020000000000000003 /* Release-dev.xcconfig */,
+				A1D5A0020000000000000004 /* Release-prod.xcconfig */,
+				A1D5A0020000000000000005 /* Profile-dev.xcconfig */,
+				A1D5A0020000000000000006 /* Profile-prod.xcconfig */,
+				A1D5A0020000000000000007 /* Flavor-dev.xcconfig */,
+				A1D5A0020000000000000008 /* Flavor-prod.xcconfig */,
 				9740EEB31CF90195004384FC /* Generated.xcconfig */,
 			);
 			name = Flutter;
@@ -718,7 +718,7 @@
 		};
 		A1D5A0010000000000000013 /* Profile-dev */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = A1D5A0010000000000000025 /* Profile-dev.xcconfig */;
+			baseConfigurationReference = A1D5A0020000000000000005 /* Profile-dev.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -738,7 +738,7 @@
 		};
 		A1D5A0010000000000000014 /* Profile-prod */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = A1D5A0010000000000000026 /* Profile-prod.xcconfig */;
+			baseConfigurationReference = A1D5A0020000000000000006 /* Profile-prod.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -1078,7 +1078,7 @@
 		};
 		A1D5A001000000000000001F /* Debug-dev */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = A1D5A0010000000000000021 /* Debug-dev.xcconfig */;
+			baseConfigurationReference = A1D5A0020000000000000001 /* Debug-dev.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -1099,7 +1099,7 @@
 		};
 		A1D5A0010000000000000020 /* Debug-prod */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = A1D5A0010000000000000022 /* Debug-prod.xcconfig */;
+			baseConfigurationReference = A1D5A0020000000000000002 /* Debug-prod.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -1120,7 +1120,7 @@
 		};
 		A1D5A0010000000000000021 /* Release-dev */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = A1D5A0010000000000000023 /* Release-dev.xcconfig */;
+			baseConfigurationReference = A1D5A0020000000000000003 /* Release-dev.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -1140,7 +1140,7 @@
 		};
 		A1D5A0010000000000000022 /* Release-prod */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = A1D5A0010000000000000024 /* Release-prod.xcconfig */;
+			baseConfigurationReference = A1D5A0020000000000000004 /* Release-prod.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

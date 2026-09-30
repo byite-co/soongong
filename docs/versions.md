@@ -11,6 +11,7 @@
 | JDK (CI) | 17 (Temurin) | `.github/workflows/*.yml` |
 | Java 소스 호환 | 17 | `android/app/build.gradle.kts` |
 | Pretendard | 1.3.9 Variable (OFL-1.1) | `assets/fonts/` |
+| desugar_jdk_libs | 2.1.4 (flutter_local_notifications 22.3.1 README 요구 버전, `isCoreLibraryDesugaringEnabled = true`) | `android/app/build.gradle.kts` |
 
 패키지 버전은 `pubspec.lock` 이 원본이다(커밋). `flutter pub upgrade` 는 별도 작업(PR)으로만 한다.
 
