@@ -1,5 +1,6 @@
-// bootstrap (S01): ProviderScope, logger, deviceId (secure storage), error
-// handlers. Called from main.dart.
+// bootstrap (S01 · S02): ProviderContainer, logger, deviceId (secure
+// storage), error handlers, startup tasks (D22 settlement · dev seed · D15
+// activity day). Called from main.dart.
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'core/config/app_config.dart';
 import 'core/contracts/providers.dart';
 import 'core/logging/app_logger.dart';
 import 'core/utils/device_id.dart';
+import 'data/startup/startup_tasks.dart';
 
 Future<void> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,9 +38,14 @@ Future<void> bootstrap() async {
     'mode=${kReleaseMode ? 'release' : kProfileMode ? 'profile' : 'debug'}',
   );
 
+  final container = ProviderContainer(
+    overrides: [deviceIdProvider.overrideWithValue(deviceId)],
+  );
+  await runStartupTasks(container);
+
   runApp(
-    ProviderScope(
-      overrides: [deviceIdProvider.overrideWithValue(deviceId)],
+    UncontrolledProviderScope(
+      container: container,
       child: const SoongongApp(),
     ),
   );

@@ -16,9 +16,9 @@ flutter run --flavor dev --dart-define-from-file=env/app.dev.json
 
 ## 구조
 
-- `lib/core/` — theme(토큰) · widgets(공통 위젯) · contracts(인터페이스 + Fake) · router · strings · dev(dev 메뉴·위젯 카탈로그 `/_gallery`)
-- `lib/features/<feature>/` — `<feature>_routes.dart` · presentation / application / domain
-- `lib/data/` — drift DB · repositories · sync
+- `lib/core/` — theme(토큰) · widgets(공통 위젯) · contracts(인터페이스 + Fake) · domain(엔티티·enum·LocalDate·Clock) · router · strings · dev(dev 메뉴·위젯 카탈로그 `/_gallery`)
+- `lib/features/<feature>/` — `<feature>_routes.dart` · presentation / application / domain(순수 Dart 정책)
+- `lib/data/` — db(drift 스키마 v1, `docs/data-model.md`) · repositories(outbox · applyServer · D22 소프트 삭제) · export(JSON·CSV) · seed(dev 샘플) · startup · sync(S13)
 - `docs/` — decisions · design-tokens · versions · reference · handoff
 
 ## Flavor

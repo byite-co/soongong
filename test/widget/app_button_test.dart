@@ -90,6 +90,77 @@ void main() {
     expect(taps, 2);
   });
 
+  testWidgets('a taller parent does not enlarge the tap area (fixed height)',
+      (tester) async {
+    var taps = 0;
+    const parentKey = Key('parent');
+    await pumpThemed(
+      tester,
+      SizedBox(
+        key: parentKey,
+        height: 120,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Expanded(
+              child: AppButton(
+                label: '저장',
+                size: AppButtonSize.small,
+                onPressed: () => taps++,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    final parentRect = tester.getRect(find.byKey(parentKey));
+    expect(parentRect.height, 120);
+
+    final tapArea = find.descendant(
+      of: find.byType(AppButton),
+      matching: find.byType(GestureDetector),
+    );
+    final areaRect = tester.getRect(tapArea);
+    expect(areaRect.height, 44, reason: 'small → max(44, 42)');
+    expect(areaRect.width, parentRect.width, reason: 'expand keeps the width');
+    // Centred inside the 120-tall parent.
+    expect(areaRect.center.dy, closeTo(parentRect.center.dy, 0.01));
+
+    // Inside the parent but outside the 44 band → no tap.
+    await tester.tapAt(Offset(areaRect.center.dx, parentRect.top + 5));
+    await tester.pump();
+    await tester.tapAt(Offset(areaRect.center.dx, parentRect.bottom - 5));
+    await tester.pump();
+    expect(taps, 0);
+
+    // Inside the 44 band (edges included) → tap.
+    await tester.tapAt(Offset(areaRect.center.dx, areaRect.top + 0.5));
+    await tester.pump();
+    await tester.tapAt(Offset(areaRect.center.dx, areaRect.bottom - 0.5));
+    await tester.pump();
+    expect(taps, 2);
+  });
+
+  testWidgets('medium in a tight 200-tall box: tap area is the 46 visual',
+      (tester) async {
+    await pumpThemed(
+      tester,
+      SizedBox(
+        height: 200,
+        width: 300,
+        child: AppButton(label: '중간', onPressed: () {}),
+      ),
+    );
+    final areaRect = tester.getRect(
+      find.descendant(
+        of: find.byType(AppButton),
+        matching: find.byType(GestureDetector),
+      ),
+    );
+    expect(areaRect.height, 46);
+    expect(areaRect.width, 300);
+  });
+
   testWidgets('every size exposes a ≥ 44 tap area', (tester) async {
     await pumpThemed(
       tester,

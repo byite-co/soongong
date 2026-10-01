@@ -37,6 +37,18 @@ abstract final class DevStrings {
   static const String billingExpired = 'expired';
   static const String billingPendingApproval = 'pendingApproval';
 
+  // S02 · data section
+  static const String sectionData = '데이터 (S02)';
+  static const String sampleInsert = '샘플 데이터 넣기';
+  static const String sampleClear = '샘플 데이터 지우기';
+  static const String exportJson = 'JSON 내보내기';
+  static const String exportCsv = 'CSV 내보내기';
+  static const String outboxLabel = '동기화 대기 행';
+  static const String sampleInserted = '샘플 데이터를 넣었습니다';
+  static const String sampleCleared = '샘플 데이터를 지웠습니다';
+  static const String exportFailed = '내보내지 못했습니다';
+  static const String exportDone = '공유 시트를 열었습니다';
+
   static const String syncIdle = 'Idle';
   static const String syncSyncing = 'Syncing';
   static const String syncOffline = 'Offline';

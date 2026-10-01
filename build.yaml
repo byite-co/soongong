@@ -1,0 +1,14 @@
+# Codegen options (S02).
+# - drift: JSON keys of row classes use the SQL column name (snake_case) so
+#   `toJson()`/`fromJson()` match docs/data-model.md, the server rows and the
+#   export format.
+# - json_serializable: nested freezed classes are serialised explicitly.
+targets:
+  $default:
+    builders:
+      drift_dev:
+        options:
+          use_sql_column_name_as_json_key: true
+      json_serializable:
+        options:
+          explicit_to_json: true

@@ -2,6 +2,7 @@
 // in-progress lock (CLAUDE.md §7: async UI actions must not run twice).
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -163,26 +164,36 @@ class _AppButtonState extends State<AppButton> {
       ),
     );
 
-    // The tap area itself is ≥ 44 tall (S01b): the visual box (42 for
-    // `small`) is centred inside the GestureDetector, not padded outside it.
+    // The tap area is exactly max(44, visual height) tall (S01b · S02): the
+    // visual box (42 for `small`) is centred inside the GestureDetector and
+    // the GestureDetector has a fixed height, so a taller parent (stretched
+    // Row, Expanded, SizedBox) never enlarges the hit area. The outer Center
+    // (heightFactor 1) absorbs whatever height the parent imposes.
+    final tapHeight = math.max(AppSpacing.touchTarget, widget.size.height);
     return Semantics(
       button: true,
       enabled: _enabled,
       label: label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: _enabled ? (_) => setState(() => _pressed = true) : null,
-        onTapCancel: () => setState(() => _pressed = false),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTap: _enabled ? _handleTap : null,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minHeight: AppSpacing.touchTarget,
-            minWidth: AppSpacing.touchTarget,
-          ),
-          child: Center(
-            widthFactor: widget.expand ? null : 1,
-            child: visual,
+      child: Center(
+        heightFactor: 1,
+        widthFactor: widget.expand ? null : 1,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: _enabled ? (_) => setState(() => _pressed = true) : null,
+          onTapCancel: () => setState(() => _pressed = false),
+          onTapUp: (_) => setState(() => _pressed = false),
+          onTap: _enabled ? _handleTap : null,
+          child: SizedBox(
+            height: tapHeight,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minWidth: AppSpacing.touchTarget,
+              ),
+              child: Center(
+                widthFactor: widget.expand ? null : 1,
+                child: visual,
+              ),
+            ),
           ),
         ),
       ),
