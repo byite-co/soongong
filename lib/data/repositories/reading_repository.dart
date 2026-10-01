@@ -165,8 +165,13 @@ class ReadingRepository {
         'payload_hash': payloadHash,
       });
 
-  /// Local-only: the submission never reached the server (`reading-status`
-  /// → 404) → back to `selecting`, after which [deleteDraft] is allowed.
+  /// Local-only: `reading-status` answered 404 for a `sending` draft → back
+  /// to `selecting` so [deleteDraft] is allowed. A 404 is NOT proof that the
+  /// server never received the submit: the delete becomes final only once
+  /// the tombstone mutation pushed by [deleteDraft] is accepted. A rejection
+  /// (`version_conflict` with a server row in `processing` etc.) is applied
+  /// through `applyServer` and handled from the server state (cancel /
+  /// complete) — never re-pushed on the `deleted_at`-wins rule.
   Future<void> revertToSelecting(String requestId) async {
     final current = await get(requestId);
     if (current == null || current.status != ReadingRequestStatus.sending) return;
@@ -187,8 +192,10 @@ class ReadingRepository {
   /// whatever its send history (S02c, data-model.md §7 ①): the server either
   /// tombstones its copy or inserts the tombstone (D2). A draft that is
   /// being submitted (`sending`) is never deleted here: the caller (S10)
-  /// checks `reading-status` first — `processing` → `cancel()`, 404 →
-  /// [revertToSelecting] then delete again.
+  /// checks `reading-status` first — `processing`/`taking_long` →
+  /// `cancel()`; 404 → [revertToSelecting] then [deleteDraft] again, and
+  /// the deletion is confirmed only by the server accepting the tombstone
+  /// push (a 404 is not proof of non-receipt — see [revertToSelecting]).
   Future<DraftDeleteOutcome> deleteDraft(String requestId) {
     return writer.runInTransaction(() async {
       final current = await get(requestId);
