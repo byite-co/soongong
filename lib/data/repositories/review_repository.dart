@@ -97,7 +97,7 @@ class ReviewRepository {
     required RetryResult result,
     DateTime? at,
   }) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final now = (at ?? ctx.nowUtc()).toUtc();
       final epoch = await writer.purgeEpoch();
       final recordId = ctx.newId();
@@ -118,15 +118,29 @@ class ReviewRepository {
       await writer.enqueue(_r.actualTableName, recordId);
 
       final entry = await entryFor(wrongItemId);
-      final current = entry == null
-          ? _scheduler.initial(await _wrongItemCreatedAt(wrongItemId) ?? now)
-          : ReviewSchedule(
-              intervalDays: entry.intervalDays,
-              consecutiveCorrect: entry.consecutiveCorrect,
-              dueAt: entry.dueAt,
-              lastResult: entry.lastResult,
-            );
-      final outcome = _scheduler.record(current, result, now);
+      // With a live entry the incremental step is exact. Without one (never
+      // scheduled, or graduated) the state is rebuilt from the non-voided
+      // records — the same transition function, so both paths agree (S02b).
+      final ReviewOutcome state;
+      if (entry != null) {
+        state = ReviewScheduled(
+          ReviewSchedule(
+            intervalDays: entry.intervalDays,
+            consecutiveCorrect: entry.consecutiveCorrect,
+            dueAt: entry.dueAt,
+            lastResult: entry.lastResult,
+          ),
+        );
+      } else {
+        final previous = (await getRetries(wrongItemId))
+            .where((r) => !r.voided && r.id != recordId)
+            .map((r) => RetryEvent(result: r.result, at: r.at));
+        state = _scheduler.rebuild(
+          await _wrongItemCreatedAt(wrongItemId) ?? now,
+          previous,
+        );
+      }
+      final outcome = _scheduler.applyResult(state, result, now);
       await _applyOutcome(wrongItemId, entry, outcome, now, epoch);
       return outcome;
     });
@@ -134,7 +148,7 @@ class ReviewRepository {
 
   /// `rtVoid`: cancels a record and rebuilds the entry from the rest.
   Future<ReviewOutcome> voidRetry(String retryId, {DateTime? at}) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final now = (at ?? ctx.nowUtc()).toUtc();
       final row = await (db.select(_r)..where((t) => t.id.equals(retryId))).getSingle();
       await (db.update(_r)..where((t) => t.id.equals(retryId))).write(

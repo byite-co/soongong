@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/core/domain/enums.dart';
 import 'package:soongong/core/domain/local_date.dart';
+import 'package:soongong/features/measure/domain/segment.dart';
 
 import 'db_test_helpers.dart';
 
@@ -21,18 +22,39 @@ void main() {
       endTime: LocalTime.parse('20:00'),
     );
 
+    final subject = await h.subjects.create(name: '수학', colorIndex: 1);
+    await h.sessions.saveFinished(
+      id: 'sess-1',
+      kind: SessionKind.study,
+      mode: SessionMode.manual,
+      startedAt: kT0,
+      endedAt: kT0.add(const Duration(minutes: 10)),
+      status: SessionStatus.finished,
+      segments: <Segment>[
+        Segment(id: 'seg-1', kind: SegmentKind.manual, startAt: kT0, endAt: kT0.add(const Duration(minutes: 10))),
+      ],
+      sensitivityLevel: 0,
+      subjectId: subject.id,
+    );
+
     await h.planner.softDeleteItem(old.id);
     await h.planner.softDeleteRecurrence(rec.id);
-    h.clock.advance(const Duration(seconds: 30)); // both windows expire
+    await h.subjects.softDelete(subject.id);
+    h.clock.advance(const Duration(seconds: 30)); // windows expire
     await h.planner.softDeleteItem(fresh.id); // window until +5 s
+    await h.sessions.softDelete('sess-1');
     h.clock.advance(const Duration(seconds: 2));
 
     final pending = await h.settler.pending();
-    expect(pending.map((p) => p.id), containsAll(<String>[old.id, fresh.id, rec.id]));
+    expect(pending.map((p) => p.id), containsAll(<String>[old.id, fresh.id, rec.id, subject.id, 'sess-1']));
+    expect(pending.map((p) => p.table).toSet(), <String>{'subjects', 'sessions', 'planner_items', 'recurrences'});
 
     final s = await h.settler.settle();
-    expect(s.toCommit.map((p) => p.id), containsAll(<String>[old.id, rec.id]));
-    expect(s.toRestore.map((p) => p.id), <String>[fresh.id]);
+    expect(s.toCommit.map((p) => p.id), containsAll(<String>[old.id, rec.id, subject.id]));
+    expect(s.toRestore.map((p) => p.id), containsAll(<String>[fresh.id, 'sess-1']));
+    expect((await h.raw('subjects', subject.id))!['deleted_at'], isNotNull);
+    expect((await h.sessions.get('sess-1'))!.subjectId, (await h.subjects.ensureDefault()).id, reason: 'reassigned to 기타');
+    expect((await h.sessions.watchAll().first).map((x) => x.id), <String>['sess-1']);
 
     expect((await h.raw('planner_items', old.id))!['deleted_at'], isNotNull);
     expect((await h.raw('planner_items', old.id))!['title'], isNull);

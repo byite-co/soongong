@@ -86,7 +86,7 @@ class WrongsRepository {
 
   /// 해결 처리 toggle — the one client-editable column.
   Future<void> setStatus(String id, WrongItemStatus status) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final now = ctx.nowUtc();
       await (db.update(_t)..where((t) => t.id.equals(id))).write(
         WrongItemsCompanion(
@@ -109,7 +109,7 @@ class WrongsRepository {
     required List<ReviewEntryDraft> entries,
     DateTime? at,
   }) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final now = (at ?? ctx.nowUtc()).toUtc();
       final epoch = await writer.purgeEpoch();
       for (final it in items) {

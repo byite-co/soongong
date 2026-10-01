@@ -29,8 +29,15 @@ void main() {
     expect(policy.view(exhausted, month: '2026-09').hasRemaining, isFalse);
   });
 
-  test('monthKey is the local yyyy-MM', () {
-    expect(ReadingQuotaPolicy.monthKey(DateTime(2026, 9, 30, 23, 59)), '2026-09');
-    expect(ReadingQuotaPolicy.monthKey(DateTime(2026, 1, 1)), '2026-01');
+  test('monthKey is the KST yyyy-MM regardless of the device zone (S02b)', () {
+    // UTC 2026-09-30 15:30 = KST 2026-10-01 00:30 → next month's key.
+    expect(ReadingQuotaPolicy.monthKey(DateTime.utc(2026, 9, 30, 15, 30)), '2026-10');
+    expect(ReadingQuotaPolicy.monthKey(DateTime.utc(2026, 9, 30, 14, 59)), '2026-09');
+    // Year boundary: UTC 2026-12-31 15:00 = KST 2027-01-01 00:00.
+    expect(ReadingQuotaPolicy.monthKey(DateTime.utc(2026, 12, 31, 15)), '2027-01');
+    expect(ReadingQuotaPolicy.monthKey(DateTime.utc(2026, 12, 31, 14, 59, 59)), '2026-12');
+    // A non-UTC instant is converted first.
+    final local = DateTime.utc(2026, 9, 30, 15, 30).toLocal();
+    expect(ReadingQuotaPolicy.monthKey(local), '2026-10');
   });
 }

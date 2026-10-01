@@ -160,7 +160,7 @@ class SessionRepository {
       status == SessionStatus.finished || status == SessionStatus.interrupted,
       'only finished/interrupted sessions are stored',
     );
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final now = ctx.nowUtc();
       final epoch = await writer.purgeEpoch();
       await db.into(_t).insert(
@@ -209,7 +209,7 @@ class SessionRepository {
   }
 
   Future<void> updateNote(String id, String? note) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       await (db.update(_t)..where((t) => t.id.equals(id)))
           .write(SessionsCompanion(note: Value(note)));
       await writer.markUserWrite(_t, id);
@@ -217,7 +217,7 @@ class SessionRepository {
   }
 
   Future<void> updateSubject(String id, String? subjectId) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       await (db.update(_t)..where((t) => t.id.equals(id)))
           .write(SessionsCompanion(subjectId: Value(subjectId)));
       await writer.markUserWrite(_t, id);
@@ -233,7 +233,7 @@ class SessionRepository {
     required int sensitivityBefore,
     required int sensitivityAfter,
   }) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final current = (await getSegments(sessionId))
           .map(
             (s) => Segment(
@@ -293,7 +293,7 @@ class SessionRepository {
   Future<void> undoDelete(String id) => writer.undoDelete(_t, id);
 
   Future<void> commitDelete(String id) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final segs = await (db.select(db.sessionSegments)
             ..where((s) => s.sessionId.equals(id) & s.deletedAt.isNull()))
           .get();
@@ -330,7 +330,7 @@ class SessionRepository {
   // Snapshot (D23, single row, local only)
 
   Future<void> writeSnapshot(SessionSnapshot s) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       await db.delete(db.sessionSnapshots).go();
       await db.into(db.sessionSnapshots).insert(
             SessionSnapshotsCompanion.insert(

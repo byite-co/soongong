@@ -2,9 +2,12 @@
 // fixed clock, sequential ids and raw-row inspection.
 
 import 'package:drift/drift.dart';
+import 'package:soongong/core/contracts/reading_engine.dart';
 import 'package:soongong/core/domain/clock.dart';
+import 'package:soongong/core/domain/enums.dart';
 import 'package:soongong/data/db/app_database.dart';
 import 'package:soongong/data/repositories/repositories.dart';
+import 'package:soongong/features/measure/domain/segment.dart';
 
 final DateTime kT0 = DateTime.utc(2026, 9, 30, 3); // 12:00 KST
 
@@ -99,3 +102,36 @@ Map<String, Object?> serverRow(
       'purge_epoch': 0,
       ...content,
     };
+
+/// Seated segment [fromMin]..[toMin] after [kT0].
+class SegmentFixture {
+  const SegmentFixture(this.id, this.fromMin, this.toMin);
+
+  final String id;
+  final int fromMin;
+  final int toMin;
+
+  Segment toSegment() => Segment(
+        id: id,
+        kind: SegmentKind.seated,
+        startAt: kT0.add(Duration(minutes: fromMin)),
+        endAt: kT0.add(Duration(minutes: toMin)),
+      );
+}
+
+class WrongItemDraftFixture {
+  const WrongItemDraftFixture(this.id, {this.number = 3, this.page = 0});
+
+  final String id;
+  final int number;
+  final int page;
+
+  WrongItemDraft toDraft() => WrongItemDraft(
+        id: id,
+        pageIndex: page,
+        number: number,
+        mark: Mark.wrong,
+        confidence: 0.5,
+        userConfirmed: true,
+      );
+}

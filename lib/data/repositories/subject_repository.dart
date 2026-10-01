@@ -54,7 +54,7 @@ class SubjectRepository {
     required int colorIndex,
     bool isDefault = false,
   }) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final now = ctx.nowUtc();
       final id = ctx.newId();
       final maxOrder = await _maxSortOrder();
@@ -78,7 +78,7 @@ class SubjectRepository {
   }
 
   Future<void> update(String id, {String? name, int? colorIndex}) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       await (db.update(_t)..where((t) => t.id.equals(id))).write(
         SubjectsCompanion(
           name: Value.absentIfNull(name),
@@ -91,7 +91,7 @@ class SubjectRepository {
 
   /// Persists [orderedIds] as sort_order 0..n-1 (rows not listed keep theirs).
   Future<void> reorder(List<String> orderedIds) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       for (var i = 0; i < orderedIds.length; i++) {
         final id = orderedIds[i];
         await (db.update(_t)..where((t) => t.id.equals(id)))
@@ -131,7 +131,7 @@ class SubjectRepository {
   /// Moves sessions · planner items · wrong items · reading drafts of the
   /// subject to the default subject, then tombstones it.
   Future<void> commitDelete(String id) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       await _guardNotDefault(id);
       final fallback = await ensureDefault();
       if (fallback.id == id) throw StateError('default subject cannot be deleted');

@@ -1,9 +1,25 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soongong/core/contracts/reading_engine.dart';
 import 'package:soongong/core/domain/enums.dart';
+import 'package:soongong/core/domain/local_date.dart';
 import 'package:soongong/data/db/sync_tables.dart';
+import 'package:soongong/data/repositories/repositories.dart';
 
 import 'db_test_helpers.dart';
+
+/// A writer whose outbox step fails: every user write must roll back as a
+/// whole (S02b atomicity).
+class FailingEnqueueWriter extends SyncWriter {
+  FailingEnqueueWriter(super.db, super.ctx);
+
+  @override
+  Future<void> enqueue(String tableName, String rowId) =>
+      throw StateError('outbox unavailable');
+}
+
+/// Push columns allowed for wrong_items after creation (data-model.md §2.9).
+const Set<String> kWrongItemPushColumns = <String>{'subject_id', 'status', 'resolved_at'};
 
 void main() {
   late TestHarness h;
@@ -42,6 +58,21 @@ void main() {
       expect(dead['server_version'], 3);
       expect(await h.subjects.get('s-dead'), isNull, reason: 'never decoded');
       expect(await h.outbox(), isEmpty, reason: 'applyServer never enqueues');
+    });
+
+    test('a server tombstone replacing a LIVE local row nulls its content '
+        '(upsert must not keep stale columns)', () async {
+      final live = await h.subjects.create(name: '수학', colorIndex: 1);
+      await h.subjects.applyServer(<Map<String, Object?>>[
+        serverRow(live.id, userId: 'u1', serverVersion: 2, deleted: true),
+      ]);
+      final row = (await h.raw('subjects', live.id))!;
+      expect(row['deleted_at'], isNotNull);
+      expect(row['name'], isNull);
+      expect(row['color_index'], isNull);
+      expect(row['client_rev'], 1);
+      expect(row['base_server_version'], 2);
+      expect(await h.subjects.getAll(), isEmpty);
     });
 
     test('tombstones of child tables keep their keep-keys (wrong_items.request_id)',
@@ -170,6 +201,101 @@ void main() {
       expect(sess['pending_delete_until'], isNull);
       expect((await h.outbox()).map((o) => o.rowId), containsAll(<String>['sess-1', 'seg-1']));
       expect(h.db.contentColumnsOf(h.db.sessionSegments), isNot(contains('session_id')));
+    });
+
+    test('atomicity (S02b): a failing outbox step rolls back the row change '
+        'of commitDelete, markUserWrite and a cascade delete', () async {
+      final subject = await h.subjects.create(name: '수학', colorIndex: 1);
+      final before = (await h.raw('subjects', subject.id))!;
+      final failing = FailingEnqueueWriter(h.db, h.ctx);
+
+      await expectLater(failing.commitDelete(h.db.subjects, subject.id), throwsStateError);
+      expect(await h.raw('subjects', subject.id), before, reason: 'tombstone rolled back');
+
+      final repo = SubjectRepository(h.db, failing);
+      await expectLater(repo.update(subject.id, name: '변경'), throwsStateError);
+      expect(await h.raw('subjects', subject.id), before, reason: 'content update rolled back');
+
+      // Cascade: session + 2 segments; the failure on the second segment must
+      // undo the first one too.
+      await h.sessions.saveFinished(
+        id: 'sess-1',
+        kind: SessionKind.study,
+        mode: SessionMode.camera,
+        startedAt: kT0,
+        endedAt: kT0.add(const Duration(minutes: 10)),
+        status: SessionStatus.finished,
+        segments: const <SegmentFixture>[
+          SegmentFixture('seg-1', 0, 5),
+          SegmentFixture('seg-2', 5, 10),
+        ].map((f) => f.toSegment()).toList(),
+        sensitivityLevel: 0,
+      );
+      final segBefore = (await h.raw('session_segments', 'seg-1'))!;
+      final sessions = SessionRepository(h.db, failing);
+      await expectLater(sessions.commitDelete('sess-1'), throwsStateError);
+      expect(await h.raw('session_segments', 'seg-1'), segBefore);
+      expect((await h.raw('sessions', 'sess-1'))!['deleted_at'], isNull);
+      expect((await h.sessions.getSegments('sess-1')).length, 2);
+    });
+
+    test('deleteIfLocalOnly (S02b): physical delete only when never sent; a '
+        'sent-but-unacknowledged row stays and becomes a tombstone mutation',
+        () async {
+      // Never sent → removed with its outbox entry.
+      final a = await h.reading.createDraft(subjectId: 's', rangeText: 'p', origin: ReadingOrigin.home);
+      expect(await h.writer.deleteIfLocalOnly(h.db.readingRequests, a.id), isTrue);
+      expect(await h.raw('reading_requests', a.id), isNull);
+      expect(await h.outboxRow('reading_requests', a.id), isNull);
+
+      // Sent, response lost (server_version still null) → refused.
+      final b = await h.reading.createDraft(subjectId: 's', rangeText: 'p', origin: ReadingOrigin.home);
+      await h.markSent('reading_requests', b.id, 1);
+      expect(await h.writer.deleteIfLocalOnly(h.db.readingRequests, b.id), isFalse);
+      expect(await h.raw('reading_requests', b.id), isNotNull);
+
+      // The repository then pushes a tombstone instead.
+      await h.reading.deleteDraft(b.requestId);
+      final dead = (await h.raw('reading_requests', b.id))!;
+      expect(dead['deleted_at'], isNotNull);
+      expect(dead['request_id'], b.requestId, reason: 'keep key');
+      expect(dead['range_text'], isNull);
+      expect(dead['client_rev'], 2);
+      final ob = (await h.outboxRow('reading_requests', b.id))!;
+      expect(ob.sentClientRev, isNull, reason: 'new unsent mutation');
+      expect(await h.reading.get(b.requestId), isNull);
+
+      // Known to the server → refused as well.
+      final c = await h.reading.createDraft(subjectId: 's', rangeText: 'p', origin: ReadingOrigin.home);
+      await h.reading.applyStatus(c.requestId, status: ReadingRequestStatus.selecting, serverVersion: 1);
+      expect(await h.writer.deleteIfLocalOnly(h.db.readingRequests, c.id), isFalse);
+    });
+
+    test('subject delete (S02b): the wrong_items mutation only touches '
+        'allowed push columns, atomically with the subject tombstone', () async {
+      final math = await h.subjects.create(name: '수학', colorIndex: 1);
+      await h.wrongs.applySaved(
+        requestId: 'req-1',
+        subjectId: math.id,
+        rangeText: 'p.1',
+        items: <WrongItemDraft>[const WrongItemDraftFixture('w1').toDraft()],
+        entries: const <ReviewEntryDraft>[],
+      );
+      final before = (await h.raw('wrong_items', 'w1'))!;
+      h.clock.advance(const Duration(minutes: 1));
+      await h.subjects.commitDelete(math.id);
+      final after = (await h.raw('wrong_items', 'w1'))!;
+      final changed = <String>{
+        for (final k in after.keys)
+          if (after[k] != before[k]) k,
+      };
+      expect(changed, <String>{'subject_id', 'client_updated_at', 'client_rev'});
+      final contentChanged = changed.difference(syncCommonColumns);
+      expect(kWrongItemPushColumns.containsAll(contentChanged), isTrue, reason: '$contentChanged');
+      expect(after['subject_id'], (await h.subjects.ensureDefault()).id);
+      expect(await h.outboxRow('wrong_items', 'w1'), isNotNull);
+      expect((await h.raw('subjects', math.id))!['deleted_at'], isNotNull);
+      expect(LocalDate.of(DateTime.parse(after['client_updated_at']! as String)), LocalDate.of(kT0));
     });
 
     test('applyServerColumns updates only the given server columns and '

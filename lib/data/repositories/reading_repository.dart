@@ -92,7 +92,7 @@ class ReadingRepository {
     String? sessionId,
     String? plannerItemId,
   }) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final now = ctx.nowUtc();
       final id = ctx.newId(); // request_id == id
       await db.into(_t).insert(
@@ -126,7 +126,7 @@ class ReadingRepository {
     Value<String?> sessionId = const Value.absent(),
     Value<String?> plannerItemId = const Value.absent(),
   }) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final current = await get(requestId);
       if (current == null) throw StateError('request not found');
       if (!current.isDraft) throw StateError('request already submitted');
@@ -167,29 +167,55 @@ class ReadingRepository {
         <String, Object?>{'confirmed_marks_json': json},
       );
 
-  /// Draft never submitted → removed locally (with its outbox entry) when
-  /// the server never saw it, else hidden locally. Submitted requests are
-  /// never deleted through here (see [deleteSavedResult]).
+  /// Draft never submitted → removed physically (with its outbox entry) only
+  /// when it was never sent; otherwise (sent with the response possibly
+  /// lost, or already on the server) it becomes a tombstone mutation —
+  /// `selecting` drafts accept `deleted_at` through sync_push (S02b
+  /// contract, data-model.md §2.7). Submitted requests are never deleted
+  /// through here (see [deleteSavedResult]).
   Future<void> deleteDraft(String requestId) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final current = await get(requestId);
       if (current == null) return;
       if (!current.isDraft && current.status != ReadingRequestStatus.sending) {
         throw StateError('not a draft');
       }
       final removed = await writer.deleteIfLocalOnly(_t, current.id);
-      if (!removed) await writer.hideLocally(_t, current.id);
+      if (!removed) await writer.commitDelete(_t, current.id);
     });
   }
 
   // ---------------------------------------------------------------------
   // Server → local (D2 applyServer path)
 
-  Future<ApplyServerReport> applyServer(Iterable<Map<String, Object?>> rows) =>
-      writer.applyServer(_t, rows);
+  /// Pull rows. Tombstones drop every payload column (generic rule); rows
+  /// that arrive as `expired` / `discarded` also lose `result_json` and the
+  /// local `confirmed_marks_json` (D8, S02b).
+  Future<ApplyServerReport> applyServer(Iterable<Map<String, Object?>> rows) {
+    return writer.runInTransaction(() async {
+      final list = rows.toList();
+      final report = await writer.applyServer(_t, list);
+      for (final raw in list) {
+        final id = raw['id'];
+        if (id is! String) continue;
+        if (_isPurgedStatus(raw['status'])) {
+          await writer.applyServerColumns(_t, id, const <String, Object?>{
+            'result_json': null,
+            'confirmed_marks_json': null,
+          });
+        }
+      }
+      return report;
+    });
+  }
+
+  static bool _isPurgedStatus(Object? status) =>
+      status == ReadingRequestStatus.expired.wire ||
+      status == ReadingRequestStatus.discarded.wire;
 
   /// `reading-status` / `reading-submit` / `reading-save` … responses.
-  /// Only the supplied fields change.
+  /// Only the supplied fields change. `expired` / `discarded` always clear
+  /// `result_json` and `confirmed_marks_json` (D8).
   Future<void> applyStatus(
     String requestId, {
     required ReadingRequestStatus status,
@@ -204,6 +230,7 @@ class ReadingRepository {
     Value<String?> failReason = const Value.absent(),
     bool clearConfirmedMarks = false,
   }) async {
+    final purged = _isPurgedStatus(status.wire);
     final cols = <String, Object?>{
       'status': status.wire,
       'server_version': ?serverVersion,
@@ -216,12 +243,16 @@ class ReadingRepository {
       if (marksJson.present) 'marks_json': marksJson.value,
       if (failReason.present) 'fail_reason': failReason.value,
       if (clearConfirmedMarks) 'confirmed_marks_json': null,
+      if (purged) 'result_json': null,
+      if (purged) 'confirmed_marks_json': null,
     };
     await writer.applyServerColumns(_t, requestId, cols);
   }
 
-  /// Server 410 `request_deleted` → local tombstone, polling stops (D16).
-  Future<void> applyDeleted(String requestId) => writer.hideLocally(_t, requestId);
+  /// Server 410 `request_deleted` → local tombstone (content, result, marks
+  /// and confirmed marks NULL, `request_id` kept), polling stops (D16).
+  Future<void> applyDeleted(String requestId) =>
+      writer.tombstoneLocally(_t, requestId);
 
   // ---------------------------------------------------------------------
   // Saved result delete (S11 `wdDelRes`, offline allowed, D16)
@@ -229,7 +260,7 @@ class ReadingRepository {
   /// Delete-only mutation on a `saved` request; children are hidden locally
   /// and replaced by the server tombstones on pull. Photos stay.
   Future<void> deleteSavedResult(String requestId) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final current = await get(requestId);
       if (current == null) throw StateError('request not found');
       if (current.status != ReadingRequestStatus.saved) {

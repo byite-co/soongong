@@ -47,8 +47,11 @@ class LocalDate implements Comparable<LocalDate> {
 
   LocalDate addDays(int days) => LocalDate.of(DateTime(year, month, day + days));
 
+  /// Calendar-day difference (independent of DST: computed on UTC dates).
   int daysUntil(LocalDate other) =>
-      other.toDateTime().difference(toDateTime()).inDays;
+      DateTime.utc(other.year, other.month, other.day)
+          .difference(DateTime.utc(year, month, day))
+          .inDays;
 
   bool isBefore(LocalDate o) => compareTo(o) < 0;
   bool isAfter(LocalDate o) => compareTo(o) > 0;

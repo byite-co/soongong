@@ -1,6 +1,8 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/core/contracts/reading_engine.dart';
 import 'package:soongong/core/domain/enums.dart';
+import 'package:soongong/data/db/app_database.dart';
 import 'package:soongong/features/review/domain/review_scheduler.dart';
 
 import 'db_test_helpers.dart';
@@ -71,6 +73,77 @@ void main() {
     expect(e1.intervalDays, 1);
     expect(e1.dueAt, kT0.add(const Duration(days: 4)));
     expect((await h.outbox('retry_records')).length, 3);
+  });
+
+  test('graduated → 또 틀림 re-enters at 1 day; void afterwards matches the '
+      'full rebuild (S02b single transition)', () async {
+    await seedSaved(h);
+    h.clock.jumpTo(kT0.add(const Duration(days: 1)));
+    await h.review.recordRetry(wrongItemId: 'w1', result: RetryResult.correct);
+    h.clock.jumpTo(kT0.add(const Duration(days: 3)));
+    expect(await h.review.recordRetry(wrongItemId: 'w1', result: RetryResult.correct), isA<ReviewGraduated>());
+    expect(await h.review.entryFor('w1'), isNull);
+
+    h.clock.jumpTo(kT0.add(const Duration(days: 10)));
+    final back = await h.review.recordRetry(wrongItemId: 'w1', result: RetryResult.wrong);
+    expect(back, isA<ReviewScheduled>());
+    final entry = (await h.review.entryFor('w1'))!;
+    expect(entry.intervalDays, 1);
+    expect(entry.consecutiveCorrect, 0);
+    expect(entry.dueAt, kT0.add(const Duration(days: 11)));
+    expect(entry.lastResult, RetryResult.wrong);
+    expect(entry.id, isNot('e1'), reason: 'fresh row; e1 is a tombstone');
+
+    // 부분 after re-entry keeps the 1-day interval.
+    h.clock.jumpTo(kT0.add(const Duration(days: 11)));
+    await h.review.recordRetry(wrongItemId: 'w1', result: RetryResult.partial);
+    expect((await h.review.entryFor('w1'))!.dueAt, kT0.add(const Duration(days: 12)));
+
+    // Void the re-entry record: rebuild of [correct, correct, partial] ==
+    // incremental: graduated at 4 d, then partial re-enters with 4 d.
+    final records = await h.review.getRetries('w1');
+    final wrongRecord = records.firstWhere((r) => r.result == RetryResult.wrong);
+    final outcome = await h.review.voidRetry(wrongRecord.id);
+    final expected = const ReviewScheduler().rebuild(
+      (await h.wrongs.get('w1'))!.stamp.createdAt,
+      records
+          .where((r) => r.id != wrongRecord.id)
+          .map((r) => RetryEvent(result: r.result, at: r.at)),
+    );
+    expect(outcome, expected);
+    final e = (await h.review.entryFor('w1'))!;
+    expect(e.intervalDays, 4);
+    expect(e.consecutiveCorrect, 0);
+    expect(e.lastResult, RetryResult.partial);
+  });
+
+  test('partial unique index: a second live entry for one wrong item is '
+      'rejected; a tombstoned one does not block (S02b)', () async {
+    await seedSaved(h);
+    final now = kT0;
+    Future<void> insertEntry(String id) => h.db.into(h.db.reviewEntries).insert(
+          ReviewEntriesCompanion.insert(
+            id: id,
+            userId: 'u1',
+            createdAt: now,
+            clientUpdatedAt: now,
+            deviceId: 'd',
+            wrongItemId: 'w1',
+            dueAt: Value(now),
+            intervalDays: const Value(1),
+            consecutiveCorrect: const Value(0),
+          ),
+        );
+    await expectLater(insertEntry('dup'), throwsA(isA<Exception>()));
+    expect(await h.raw('review_entries', 'dup'), isNull);
+
+    await h.writer.commitDelete(h.db.reviewEntries, 'e1'); // tombstone
+    await insertEntry('after'); // allowed again
+    expect((await h.review.entryFor('w1'))!.id, 'after');
+    expect(
+      AppDatabase.partialUniqueIndexes.single,
+      contains('review_entries_live_wrong_item'),
+    );
   });
 
   test('voidRetry rebuilds the entry from the remaining records (rtVoid)', () async {

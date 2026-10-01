@@ -210,6 +210,7 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
   - 스냅샷 이후 시간은 어떤 경우에도 추가하지 않음(status=interrupted, 손실 상한 15초)
 - 카메라 장애(`cameraLost`)·화면 꺼짐·다른 앱 점유는 이탈이 아니라 `paused`. 이탈 판정은 카메라가 정상 동작 중 미검출일 때만.
 - 저장·버리기 어느 경로든 `session_snapshot` 삭제.
+- **감도(S02b 보완, 사람 확정)**: `sensitivity_level` 0·1·2 = 이탈 임계 **60·75·90초**. 최근 2주 정정 **3건마다 1레벨 상향**(상한 2, 건수가 줄면 하향, 변동 시 토스트). S02 지시문의 "+10초씩" 문구는 폐기. S06 은 `AwayPolicy.thresholdFor(level)`·`SensitivityPolicy.levelFor(count)` 의 이 값을 그대로 쓴다.
 
 ## D24. 서버 권한 경계 — 확정
 | 구분 | 테이블 | 사용자 권한 |
@@ -293,3 +294,15 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **[S02] outbox 재편집 시 `sent_client_rev` 초기화**: 전송된 행을 편집하면 새 `mutation_id` 와 함께 `sent_client_rev = null`(미전송 상태로 복귀). "null = 미전송" 의미를 유지한다.
 - **[S02] 새 패키지**: `archive`(CSV 3파일 zip, 유지보수 활발·순수 Dart).
 - **[S02] S01 이월 수정**: AppButton 탭 영역 고정 높이, FakeReadingEngine 재제출 검사 순서·tombstone id 재사용 거부, AppModal 반환값 문서(`false` ≠ 미실행 보장). 세부는 `docs/handoff/S02.md`.
+
+## [S02b] 후속 수정 결정 (2026-10-01)
+
+- **[S02b] 쓰기 원자성**: `SyncWriter` 의 모든 변경 메서드(`markUserWrite·softDelete·undoDelete·commitDelete·hideLocally·tombstoneLocally·deleteIfLocalOnly·applyServer·applyServerColumns`)는 drift `transaction` 안에서 행 변경과 outbox 등록을 함께 커밋한다. 저장소의 다중 행 작업은 `SyncWriter.runInTransaction` 으로 감싼다(drift 는 중첩 호출을 바깥 트랜잭션에 합친다).
+- **[S02b] 미전송 판정**: 물리 삭제는 `server_version IS NULL` **그리고** outbox `sent_client_rev IS NULL`(전송 시도 없음)일 때만. 전송 시도 이력이 있으면 응답 유실 가능성이 있으므로 tombstone mutation 으로 push 한다. 이를 위해 `selecting` 초안의 `deleted_at` 을 `sync_push` 허용 컬럼에 넣는다(data-model §7 ①). S02 의 "pushed 초안은 로컬 숨김" 결정은 폐기.
+- **[S02b] `wrong_items` push 컬럼**: `subject_id·status·resolved_at` 만(data-model §7 ②). 과목 삭제 재지정은 유지하되 과목 tombstone 과 같은 트랜잭션.
+- **[S02b] 복습 전이 단일화**: `ReviewScheduler.applyResult(state, result, at)` 하나로 증분(`record`)과 재계산(`rebuild`)이 같은 결과를 낸다(속성 테스트). **졸업 후**: 맞음 → 졸업 유지, 또 틀림 → 1일로 재진입, 부분 → 졸업 당시 간격으로 재진입(`ReviewGraduated.intervalDays`). `ReviewRepository.recordRetry` 는 살아 있는 엔트리가 없으면 비취소 기록으로 상태를 재구성한 뒤 전이한다.
+- **[S02b] 서버 삭제·만료 수신 정리**: `applyDeleted`(410)는 내용·`result_json·marks_json·confirmed_marks_json` NULL 의 tombstone, pull tombstone 도 로컬 전용 `confirmed_marks_json·pending_delete_until` 을 지운다. `expired·discarded` 수신(응답·pull) 시 `result_json·confirmed_marks_json` NULL.
+- **[S02b] 부분 유일 인덱스**: `review_entries_live_wrong_item` 은 `MigrationStrategy.onCreate` 의 `customStatement`(`AppDatabase.partialUniqueIndexes`). drift `@TableIndex` 는 `WHERE` 를 지원하지 않는다. 서버 DDL 동일 문장(data-model §7 ③).
+- **[S02b] 판독 월 키 = KST 고정**: `ReadingQuotaPolicy.monthKey` 는 `now.toUtc() + 9h` 의 `yyyy-MM`. 기기 시간대와 무관하게 서버 `quota_month` 와 같은 키로 표시·조회. S02 의 "기기 현지 월" 결정은 폐기.
+- **[S02b] 날짜 차이**: `LocalDate.daysUntil` 은 UTC 날짜 차이(달력 일수). DST 전환일(23/25시간)에서도 1일.
+- **[S02b] `applyServer` 는 행을 통째로 치환**: drift 의 `insertOnConflictUpdate` 가 null 컬럼을 absent 로 취급해 서버 tombstone 이 로컬 내용을 못 지우던 문제 → 기존 행이 있으면 같은 트랜잭션에서 `DELETE` 후 `INSERT`. 서버 행이 곧 로컬 행이다(로컬 전용 컬럼만 유지).

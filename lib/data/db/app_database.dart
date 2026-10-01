@@ -59,10 +59,20 @@ class AppDatabase extends _$AppDatabase {
   @override
   int get schemaVersion => 1;
 
+  /// Partial unique indexes (drift `@TableIndex` cannot express `WHERE`).
+  /// Same statements in the S03 DDL (docs/data-model.md §4).
+  static const List<String> partialUniqueIndexes = <String>[
+    'CREATE UNIQUE INDEX IF NOT EXISTS review_entries_live_wrong_item '
+        'ON review_entries (wrong_item_id) WHERE deleted_at IS NULL',
+  ];
+
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async {
           await m.createAll();
+          for (final sql in partialUniqueIndexes) {
+            await customStatement(sql);
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = OFF');

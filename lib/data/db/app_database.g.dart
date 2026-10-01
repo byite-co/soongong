@@ -9935,7 +9935,9 @@ class ReviewEntryRow extends DataClass implements Insertable<ReviewEntryRow> {
   final int? serverSeq;
   final int purgeEpoch;
 
-  /// Keep key. One live entry per wrong item.
+  /// Keep key. One live entry per wrong item — enforced by the partial
+  /// unique index `review_entries_live_wrong_item` created in
+  /// `AppDatabase.migration.onCreate` (drift's @TableIndex has no WHERE).
   final String wrongItemId;
   final DateTime? dueAt;
   final int? intervalDays;
@@ -16725,10 +16727,6 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'review_entries_user_due',
     'CREATE INDEX review_entries_user_due ON review_entries (user_id, due_at)',
   );
-  late final Index reviewEntriesWrongItem = Index(
-    'review_entries_wrong_item',
-    'CREATE INDEX review_entries_wrong_item ON review_entries (wrong_item_id)',
-  );
   late final Index retryRecordsWrongItemAt = Index(
     'retry_records_wrong_item_at',
     'CREATE INDEX retry_records_wrong_item_at ON retry_records (wrong_item_id, at)',
@@ -16788,7 +16786,6 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     wrongItemsRequest,
     wrongItemsUserSubject,
     reviewEntriesUserDue,
-    reviewEntriesWrongItem,
     retryRecordsWrongItemAt,
     settingsUserKey,
     activityDaysUserDate,

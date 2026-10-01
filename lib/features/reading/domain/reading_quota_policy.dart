@@ -42,12 +42,14 @@ class ReadingQuotaPolicy {
 
   static const int defaultLimit = 20;
 
-  /// `yyyy-MM` of the device's local time. The server fixes `quota_month`
-  /// in KST at submit time; the two only differ around midnight for users
-  /// outside KST, which the ledger corrects on the next pull.
+  /// KST offset — the server fixes `quota_month` in KST (D16).
+  static const Duration kstOffset = Duration(hours: 9);
+
+  /// `yyyy-MM` in **KST**, whatever the device time zone, so display and
+  /// lookup use exactly the server's key (S02b).
   static String monthKey(DateTime now) {
-    final l = now.isUtc ? now.toLocal() : now;
-    return '${l.year}-${l.month.toString().padLeft(2, '0')}';
+    final kst = now.toUtc().add(kstOffset);
+    return '${kst.year}-${kst.month.toString().padLeft(2, '0')}';
   }
 
   QuotaView view(ReadingQuota? ledger, {required String month}) {

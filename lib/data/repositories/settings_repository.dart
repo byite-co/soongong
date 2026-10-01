@@ -41,7 +41,7 @@ class SettingsRepository {
   /// Upserts one key. [value] must be JSON-encodable (scalar or null).
   Future<void> set(String key, Object? value) {
     assert(SettingKeys.all.contains(key), 'unknown setting $key');
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final now = ctx.nowUtc();
       final json = jsonEncode(value);
       final existing = await (db.select(_t)

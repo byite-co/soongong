@@ -110,7 +110,7 @@ class PlannerRepository {
     LocalDate? bandEnd,
     String? recurrenceId,
   }) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final now = ctx.nowUtc();
       final id = ctx.newId();
       await db.into(_t).insert(
@@ -156,7 +156,7 @@ class PlannerRepository {
     Value<LocalDate?> bandEnd = const Value.absent(),
     Value<int> sortOrder = const Value.absent(),
   }) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       await (db.update(_t)..where((t) => t.id.equals(id))).write(
         PlannerItemsCompanion(
           kind: kind.present ? Value(kind.value) : const Value.absent(),
@@ -178,7 +178,7 @@ class PlannerRepository {
   }
 
   Future<void> setDone(String id, {required bool done}) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final now = ctx.nowUtc();
       await (db.update(_t)..where((t) => t.id.equals(id))).write(
         PlannerItemsCompanion(
@@ -192,7 +192,7 @@ class PlannerRepository {
 
   /// Persists [orderedIds] as sort_order 0..n-1 within a day.
   Future<void> reorder(List<String> orderedIds) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       for (var i = 0; i < orderedIds.length; i++) {
         await (db.update(_t)..where((t) => t.id.equals(orderedIds[i])))
             .write(PlannerItemsCompanion(sortOrder: Value(i)));
@@ -249,7 +249,7 @@ class PlannerRepository {
   }) {
     assert(weekdayMask > 0 && weekdayMask < 128, 'weekday mask 1..127');
     assert(endTime > startTime, 'end after start');
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final now = ctx.nowUtc();
       final id = ctx.newId();
       await db.into(_r).insert(
@@ -285,7 +285,7 @@ class PlannerRepository {
     Value<LocalDate?> endsOn = const Value.absent(),
     Value<bool> active = const Value.absent(),
   }) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       await (db.update(_r)..where((t) => t.id.equals(id))).write(
         RecurrencesCompanion(
           title: title.present ? Value(title.value) : const Value.absent(),

@@ -23,7 +23,7 @@ class ActivityRepository {
 
   /// Upserts today's row. Returns true when a row was created.
   Future<bool> touch(LocalDate date) {
-    return db.transaction(() async {
+    return writer.runInTransaction(() async {
       final id = activityDayId(ctx.userId, date);
       final existing =
           await (db.select(_t)..where((t) => t.id.equals(id))).getSingleOrNull();

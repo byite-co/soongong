@@ -193,9 +193,10 @@ class WrongItems extends Table with SyncColumns {
 
 @DataClassName('ReviewEntryRow')
 @TableIndex(name: 'review_entries_user_due', columns: {#userId, #dueAt})
-@TableIndex(name: 'review_entries_wrong_item', columns: {#wrongItemId})
 class ReviewEntries extends Table with SyncColumns {
-  /// Keep key. One live entry per wrong item.
+  /// Keep key. One live entry per wrong item — enforced by the partial
+  /// unique index `review_entries_live_wrong_item` created in
+  /// `AppDatabase.migration.onCreate` (drift's @TableIndex has no WHERE).
   TextColumn get wrongItemId => text()();
   TextColumn get dueAt => text().map(const NullableUtcDateTimeConverter()).nullable()();
   IntColumn get intervalDays => integer().nullable()();

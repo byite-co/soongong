@@ -24,6 +24,25 @@ void main() {
       expect(wed.startOfWeek(4).key, '2026-09-24', reason: 'Thursday');
     });
 
+    test('daysUntil is a calendar difference: DST switch days and year '
+        'boundaries count as exactly one day (S02b)', () {
+      // America/New_York springs forward on 2026-03-08 (23-hour day) and
+      // falls back on 2026-11-01 (25-hour day). Run this file with
+      // TZ=America/New_York to exercise the host zone; the result must not
+      // depend on it.
+      expect(LocalDate.parse('2026-03-07').daysUntil(LocalDate.parse('2026-03-08')), 1);
+      expect(LocalDate.parse('2026-03-08').daysUntil(LocalDate.parse('2026-03-09')), 1);
+      expect(LocalDate.parse('2026-03-07').daysUntil(LocalDate.parse('2026-03-09')), 2);
+      expect(LocalDate.parse('2026-10-31').daysUntil(LocalDate.parse('2026-11-01')), 1);
+      expect(LocalDate.parse('2026-11-01').daysUntil(LocalDate.parse('2026-11-02')), 1);
+      expect(LocalDate.parse('2026-12-31').daysUntil(LocalDate.parse('2027-01-01')), 1);
+      expect(LocalDate.parse('2027-01-01').daysUntil(LocalDate.parse('2026-12-31')), -1);
+      expect(LocalDate.parse('2024-02-28').daysUntil(LocalDate.parse('2024-03-01')), 2);
+      // addDays across the same boundaries.
+      expect(LocalDate.parse('2026-03-08').addDays(1).key, '2026-03-09');
+      expect(LocalDate.parse('2026-11-01').addDays(-1).key, '2026-10-31');
+    });
+
     test('of() uses the local date of a UTC instant', () {
       final utc = DateTime.utc(2026, 9, 30, 23, 30);
       expect(LocalDate.of(utc), LocalDate.of(utc.toLocal()));

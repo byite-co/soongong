@@ -126,8 +126,8 @@ void main() {
     expect(await h.reading.getAllPhotos(includeDeleted: true), isEmpty);
   });
 
-  test('deleteDraft removes a never-pushed draft physically; a pushed one '
-      'is hidden', () async {
+  test('deleteDraft removes a never-sent draft physically; a draft the '
+      'server knows becomes a tombstone mutation (S02b contract)', () async {
     final a = await h.reading.createDraft(subjectId: 's', rangeText: 'p', origin: ReadingOrigin.home);
     await h.reading.deleteDraft(a.requestId);
     expect(await h.raw('reading_requests', a.id), isNull);
@@ -145,7 +145,84 @@ void main() {
       }),
     ]);
     await h.reading.deleteDraft(b.requestId);
-    expect((await h.raw('reading_requests', b.id))!['deleted_at'], isNotNull);
-    expect((await h.raw('reading_requests', b.id))!['range_text'], 'p');
+    final dead = (await h.raw('reading_requests', b.id))!;
+    expect(dead['deleted_at'], isNotNull);
+    expect(dead['range_text'], isNull, reason: 'tombstone shape');
+    expect(dead['request_id'], b.requestId);
+    expect(await h.outboxRow('reading_requests', b.id), isNotNull, reason: 'pushed as {deleted_at}');
+  });
+
+  group('server-side purge cleans local content (S02b · D8 · D16)', () {
+    Future<String> doneWithPayload() async {
+      final d = await h.reading.createDraft(subjectId: 's', rangeText: 'p', origin: ReadingOrigin.home);
+      await h.reading.applyStatus(
+        d.requestId,
+        status: ReadingRequestStatus.doneUnsaved,
+        serverVersion: 2,
+        resultJson: const Value('{"pages":[1]}'),
+      );
+      await h.reading.setConfirmedMarks(d.requestId, '[{"n":3}]');
+      final r = (await h.reading.get(d.requestId))!;
+      expect(r.resultJson, isNotNull);
+      expect(r.confirmedMarksJson, isNotNull);
+      return d.requestId;
+    }
+
+    test('410 request_deleted → applyDeleted: tombstone, payload columns null',
+        () async {
+      final id = await doneWithPayload();
+      final outboxBefore = (await h.outbox()).length;
+      await h.reading.applyDeleted(id);
+      final row = (await h.raw('reading_requests', id))!;
+      expect(row['deleted_at'], isNotNull);
+      expect(row['result_json'], isNull);
+      expect(row['marks_json'], isNull);
+      expect(row['confirmed_marks_json'], isNull);
+      expect(row['subject_id'], isNull);
+      expect(row['request_id'], id, reason: 'keep key');
+      expect(row['client_rev'], 1, reason: 'no user write');
+      expect((await h.outbox()).length, outboxBefore);
+      expect(await h.reading.get(id), isNull);
+    });
+
+    test('pull tombstone → applyServer drops the local confirmed marks', () async {
+      final id = await doneWithPayload();
+      await h.reading.applyServer(<Map<String, Object?>>[
+        serverRow(id, userId: 'u1', serverVersion: 3, deleted: true, content: <String, Object?>{'request_id': id}),
+      ]);
+      final row = (await h.raw('reading_requests', id))!;
+      expect(row['deleted_at'], isNotNull);
+      expect(row['confirmed_marks_json'], isNull);
+      expect(row['result_json'], isNull);
+      expect(row['request_id'], id);
+    });
+
+    test('expired / discarded (applyStatus and pull) clear result and '
+        'confirmed marks, keep the status', () async {
+      final a = await doneWithPayload();
+      await h.reading.applyStatus(a, status: ReadingRequestStatus.expired, serverVersion: 3);
+      var r = (await h.reading.get(a))!;
+      expect(r.status, ReadingRequestStatus.expired);
+      expect(r.resultJson, isNull);
+      expect(r.confirmedMarksJson, isNull);
+
+      final b = await doneWithPayload();
+      await h.reading.applyServer(<Map<String, Object?>>[
+        serverRow(b, userId: 'u1', serverVersion: 3, content: <String, Object?>{
+          'request_id': b,
+          'subject_id': 's',
+          'range_text': 'p',
+          'origin': 'home',
+          'status': 'discarded',
+          'quota_charged': true,
+          'result_json': null,
+        }),
+      ]);
+      r = (await h.reading.get(b))!;
+      expect(r.status, ReadingRequestStatus.discarded);
+      expect(r.resultJson, isNull);
+      expect(r.confirmedMarksJson, isNull, reason: 'local-only column cleared on purge');
+      expect(await h.outbox('reading_requests'), hasLength(2), reason: 'only the two draft creates');
+    });
   });
 }

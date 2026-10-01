@@ -155,8 +155,10 @@
 | `confirmed_marks_json` | JSON | ✓ | **로컬 전용** | 저장 전 임시 보존, 저장 성공 시 null |
 
 필수 내용: `request_id·subject_id·range_text·origin·status`. 유지 키: `request_id`. 인덱스: `UNIQUE (user_id, request_id)`, `(user_id, status)`.
-- `sync_push` 허용: `selecting` 상태의 클라이언트 컬럼 + `saved` 상태의 **삭제 전용 mutation**(`data = {deleted_at}`)만(D16). 서버 컬럼이 `data` 에 있으면 행 거부.
+- `sync_push` 허용: `selecting` 상태의 클라이언트 컬럼 + `saved` 상태의 **삭제 전용 mutation**(`data = {deleted_at}`)(D16) + **`selecting` 초안(`submitted_at IS NULL`)의 `deleted_at`**(S02b 계약 ①: 초안 삭제. 서버는 내용 컬럼을 NULL 로 지우고 `request_id` 를 남긴다. 서버에 없는 id 로 온 tombstone 은 D2 규칙대로 tombstone 으로 insert). 서버 컬럼이 `data` 에 있으면 행 거부.
+- 클라이언트 삭제 규칙(S02b): 한 번도 전송 시도되지 않은 초안(`server_version IS NULL` 이고 outbox `sent_client_rev IS NULL`)만 로컬 물리 삭제. 전송 시도 이력이 있거나 서버가 아는 초안은 tombstone mutation 으로 push.
 - 클라이언트 `sending` 표시는 로컬 상태값(제출 호출 중). 서버 응답 후 `applyServer` 로 서버 상태로 덮인다.
+- 서버가 삭제를 확정한 요청(`410 request_deleted`, pull tombstone)과 `expired`·`discarded` 수신 시 로컬도 `result_json·marks_json·confirmed_marks_json` 을 지운다(D8, S02b).
 
 ### 2.8 `photos` — 로컬 전용(서버 미동기화)
 
@@ -192,12 +194,13 @@
 | `resolved_at` | TEXT | ✓ | UTC |
 
 유지 키: `request_id`. 인덱스: `(user_id, status)`, `(request_id)`, `(user_id, subject_id)`.
+- **push 컬럼(S02b 계약 ②)**: 최초 생성은 `reading-save` 가 하고, 이후 `sync_push` 가 받는 `data` 는 **`subject_id · status · resolved_at`**(+ 공통 `client_updated_at·device_id·purge_epoch`) 뿐. `subject_id` 는 과목 삭제 시 "기타" 재지정(subjDelN)용. 그 외 내용 컬럼(`request_id·range_text·page_index·number·mark·confidence·user_confirmed`)이 `data` 에 있으면 `invalid_columns` 거부(§1.1 의 일반 규칙 "내용 컬럼 전부" 에 대한 예외).
 
 ### 2.10 `review_entries` — 동기화(D9)
 
 | 컬럼 | 타입 | NULL(live) | 비고 |
 |---|---|---|---|
-| `wrong_item_id` | TEXT | ✗ | **유지 키**. wrong_item 당 1행(`UNIQUE (wrong_item_id) WHERE deleted_at IS NULL`) |
+| `wrong_item_id` | TEXT | ✗ | **유지 키**. wrong_item 당 살아 있는 행 1개 — **부분 유일 인덱스** `review_entries_live_wrong_item ON review_entries (wrong_item_id) WHERE deleted_at IS NULL`(S02b 계약 ③, 로컬은 `AppDatabase.partialUniqueIndexes` 의 `customStatement`, 서버 DDL 동일 문장) |
 | `due_at` | TEXT | ✗ | UTC |
 | `interval_days` | INT | ✗ | 1 → ×2 … ≤ 30 |
 | `consecutive_correct` | INT | ✗ | 2 도달 시 큐 이탈(행 soft delete) |
@@ -349,7 +352,7 @@ payload 는 전송 시 현재 행을 읽어 만든다(§1.1 push 컬럼). 승인
 | reading_requests | `UNIQUE (user_id, request_id)` · `(user_id, status)` |
 | photos | `(request_id, page_index)` · `(expires_at)` |
 | wrong_items | `(user_id, status)` · `(request_id)` · `(user_id, subject_id)` |
-| review_entries | `(user_id, due_at)` · `(wrong_item_id)` |
+| review_entries | `(user_id, due_at)` · **`UNIQUE (wrong_item_id) WHERE deleted_at IS NULL`**(`review_entries_live_wrong_item`, 부분 유일) |
 | retry_records | `(wrong_item_id, at)` |
 | settings | `UNIQUE (user_id, key)` |
 | activity_days | `UNIQUE (user_id, date)` |
@@ -364,9 +367,23 @@ payload 는 전송 시 현재 행을 읽어 만든다(§1.1 push 컬럼). 승인
 | `applyLedger / applySdk` | — | 없음 | subscription_state · reading_quota |
 | 로컬 전용 컬럼 쓰기(`confirmed_marks_json`, `pending_delete_until`) | 변경 없음 | 없음 | reading_requests · D22 테이블 |
 | `deleteSavedResult(requestId)` | +1 | enqueue(삭제 전용) | reading_requests(`saved`). 자식은 로컬 낙관적 숨김(`deleted_at` 세팅, outbox 없음) → pull 의 서버 tombstone 이 덮어씀 |
+| `deleteDraft(requestId)` | 미전송: 행 삭제 / 그 외: +1 | 미전송: outbox 행 삭제 / 그 외: enqueue(tombstone) | reading_requests(`selecting`). §2.7 삭제 규칙 |
+| `applyDeleted(requestId)` · pull tombstone | 유지 | 없음 | 내용·`result_json·marks_json·confirmed_marks_json` NULL, `request_id` 유지 |
+
+모든 사용자 쓰기는 **행 변경과 outbox 등록이 한 트랜잭션**(S02b, `SyncWriter`). 여러 행을 바꾸는 작업(세션 삭제 cascade · 과목 삭제 재지정 · 복습 기록)은 `SyncWriter.runInTransaction` 안에서 전부 커밋되거나 전부 롤백된다.
 
 ## 6. 내보내기(§4.4)
 
 - JSON: `{ "schema_version": 1, "exported_at": "<UTC>", "app_version": "<pubspec version>", "tables": { "<table>": [ <row(§2 컬럼명)>, … ] } }` — 동기화 테이블 + `photos`(경로 제외) 의 **살아 있는 행만**(tombstone·pending delete 제외). 로컬 전용 컬럼·원장 캐시·sync_* 제외.
 - CSV zip: `sessions.csv`(세션 + 순공 초·과목명) · `planner.csv` · `wrongs.csv`(오답 + 복습·재풀이 요약). UTF-8 BOM, 헤더 1행.
 - 가져오기는 만들지 않는다(D1).
+
+## 7. S03 addendum — S02b 에서 확정한 서버 계약 3건
+
+S03 은 아래 3건을 DDL·`sync_push` 검증에 그대로 반영한다(출처는 이 문서뿐).
+
+| # | 계약 | 서버 반영 |
+|---|---|---|
+| ① | `reading_requests` 초안 삭제: `status = selecting AND submitted_at IS NULL` 인 행에 `data = {deleted_at}` mutation 허용(§2.7). 서버에 없는 id 의 tombstone 은 D2 규칙대로 insert | `sync_push` 허용 컬럼: `selecting` → 클라이언트 컬럼 + `deleted_at`; `saved` → `deleted_at` 만(D16). tombstone 처리 시 내용 컬럼 NULL, `request_id` 유지 |
+| ② | `wrong_items` push 컬럼 = `subject_id · status · resolved_at`(§2.9). 최초 생성은 `reading-save` | `sync_push` 허용 컬럼 목록을 이 3개(+ 공통)로 제한, 그 외 `invalid_columns` |
+| ③ | `review_entries` 부분 유일 인덱스 `review_entries_live_wrong_item (wrong_item_id) WHERE deleted_at IS NULL`(§2.10·§4) | 같은 문장의 `CREATE UNIQUE INDEX`. `reading-save`·`reading-update-marks`·`sync_push` 는 wrong_item 당 살아 있는 엔트리 1개를 전제 |
