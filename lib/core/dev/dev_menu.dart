@@ -10,10 +10,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
+import '../../data/export/export_service.dart';
+import '../../data/export/share_export.dart';
+import '../../data/repositories/repositories.dart';
+import '../../data/seed/dev_seeder.dart';
 import '../config/app_config.dart';
 import '../contracts/billing_gateway.dart';
 import '../contracts/fakes/fakes.dart';
 import '../contracts/providers.dart';
+import '../logging/app_logger.dart';
 import '../strings/dev_strings.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
@@ -254,7 +259,98 @@ class DevMenuSheet extends ConsumerWidget {
             (true, DevStrings.syncOffline),
           ],
         ),
+        section(DevStrings.sectionData),
+        const _DataSection(),
       ],
     );
   }
 }
+
+/// S02: sample data in/out and JSON · CSV export. Every action is async and
+/// the buttons lock while running (AppButton).
+class _DataSection extends ConsumerWidget {
+  const _DataSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final outbox = ref.watch(_outboxCountProvider);
+
+    Future<void> run(Future<void> Function() action, String doneMessage) async {
+      try {
+        await action();
+        if (context.mounted) showAppToast(context, message: doneMessage);
+      } catch (e, st) {
+        appLog.w('dev data action failed', error: e, stackTrace: st);
+        if (context.mounted) {
+          showAppToast(context, message: DevStrings.exportFailed);
+        }
+      }
+    }
+
+    Future<void> export(ExportFormat format) => run(
+          () async {
+            final file = await ref.read(exportServiceProvider).build(format);
+            await shareExportFile(file);
+          },
+          '${_label(format)} · ${DevStrings.exportDone}',
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.s2),
+          child: Text(
+            '${DevStrings.outboxLabel} ${outbox.value ?? '—'}',
+            style: AppTypography.caption.copyWith(color: c.tx2),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.s8),
+        Wrap(
+          spacing: AppSpacing.s8,
+          runSpacing: AppSpacing.s8,
+          children: <Widget>[
+            AppButton.secondary(
+              label: DevStrings.sampleInsert,
+              size: AppButtonSize.small,
+              expand: false,
+              onPressed: () => run(
+                () => ref.read(devSeederProvider).insertSampleData(),
+                DevStrings.sampleInserted,
+              ),
+            ),
+            AppButton.secondary(
+              label: DevStrings.sampleClear,
+              size: AppButtonSize.small,
+              expand: false,
+              onPressed: () => run(
+                () => ref.read(devSeederProvider).clearSampleData(),
+                DevStrings.sampleCleared,
+              ),
+            ),
+            AppButton.secondary(
+              label: DevStrings.exportJson,
+              size: AppButtonSize.small,
+              expand: false,
+              onPressed: () => export(ExportFormat.json),
+            ),
+            AppButton.secondary(
+              label: DevStrings.exportCsv,
+              size: AppButtonSize.small,
+              expand: false,
+              onPressed: () => export(ExportFormat.csv),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static String _label(ExportFormat f) => f == ExportFormat.json ? 'JSON' : 'CSV';
+}
+
+final _outboxCountProvider = StreamProvider.autoDispose<int>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  return db.select(db.syncOutbox).watch().map((rows) => rows.length);
+});

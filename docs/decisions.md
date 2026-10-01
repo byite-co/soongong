@@ -264,3 +264,32 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **[S01] Android flavor 구성**: `flavorDimensions "env"`, `dev` 는 `applicationIdSuffix ".dev"`·`versionNameSuffix "-dev"`, 앱 이름은 `resValue app_name`(순공 dev / 순공). 릴리스 서명은 S15(`android/key.properties`, gitignore 됨).
 - **[S01] 브랜치 이름**: 이 세션은 클라우드 세션이 지정한 `claude/new-session-wpnapa` 에서 작업했다(지시문의 `feat/s01-scaffold` 대신). → S01b 에서 CLAUDE.md §8 을 "세션 지정명 허용, PR 제목 `[SNN] 요약`" 으로 갱신했고, D13·D21 의 레포명을 `byite-co/soongong` 으로 정정했다.
 - **[S01b] 후속 수정(기능 추가 없음)**: Android desugaring(desugar_jdk_libs 2.1.4) · pbxproj 중복 ID 재부여 · `ios/lib/**` 오생성 삭제 · CI 드리프트 검사를 `tool/ci/check_clean_tree.sh`(비어 있지 않은 `git status --porcelain` → 실패)로 · FakeReadingEngine `submit` 순서(tombstone → 같은 id 멱등 → 활성 → 미저장 done(D17) → 쿼터 → 시나리오)와 `updateMarks` 차이 계산(새 비O 문항은 `wrongItemId` 필수, O 문항 제거, 나머지 mark 갱신·id 유지, 언급 없는 문항 유지) · `showAppModal` 은 `onConfirm` 실행 중 바깥 탭·뒤로가기·취소 무시, 반환값 `bool`(true = 실행 완료) · AppButton small/토스트 액션 탭 영역 44 를 탭 위젯 안쪽으로 · 다크 토스트 액션 `#2F49E0`.
+
+## [S02] 세션 결정 — 지시문에 없던 사항 (2026-10-01)
+
+- **[S02] 시각 저장 방식**: drift `DateTimeColumn` 대신 `TEXT` + `UtcDateTimeConverter`(ISO 8601 UTC, `Z` 접미). 날짜 키는 `LocalDate`(`yyyy-MM-dd`), 하루 중 시각은 `LocalTime`(`HH:mm`) 값 타입(`core/domain/local_date.dart`). enum 은 `WireEnum.wire`(snake_case 와이어 이름) 로 저장. 서버 DDL 도 같은 표현.
+- **[S02] `reading_quota.limit` → `quota_limit`**: `limit` 은 SQL 예약어라 로컬·DDL 컬럼명은 `quota_limit`. 서버 JSON(pull `ledger`)의 키는 `limit` 그대로이며 `QuotaRepository.applyLedger` 가 `limit`↔`quota_limit` 를 매핑한다(`quota_limit` 키도 허용).
+- **[S02] 감도 레벨 ↔ 이탈 임계**: `sensitivity_level` 0·1·2 → 60·75·90초(PRD "60–90초", D23 "최대 90초 소급" 과 일치하도록 최대값이 레벨 2 에서 닿게 배분. 지시문의 "+10초씩" 은 레벨 3단계에 맞춰 15초 간격으로 조정). `SensitivityPolicy`: 최근 2주 정정 건수 `~/ 3` 을 레벨로(상한 2), 변동 시에만 토스트. 자동 조정 off 면 수동 레벨 유지.
+- **[S02] 이탈 후보 구간**: 임계 미만의 짧은 미검출(확인 대기)은 복귀하면 그대로 착석으로 남긴다. 임계를 넘겨 확정될 때만 `last_seated_at` 으로 소급(최대 90초)해 away 세그먼트가 시작된다(D23).
+- **[S02] DAO 계층 없음**: drift `@DriftAccessor` DAO 를 따로 두지 않고 타입 안전 쿼리는 각 저장소 안에, D2 공통 처리(`markUserWrite·enqueue·softDelete·undoDelete·commitDelete·hideLocally·applyServer·applyServerColumns`)는 `SyncWriter` 한 곳에 둔다. 저장소가 "DAO + outbox 규칙" 역할을 겸한다.
+- **[S02] 엔티티 2층 구조**: drift 행 클래스는 `*Row`(내용 컬럼 nullable, tombstone 수용), 화면·도메인은 freezed 엔티티(`core/domain/entities/`, 내용 non-null, 공통 필드는 중첩 `SyncStamp`). `deleted_at` 이 있는 행은 매퍼가 `null` 을 돌려주고 엔티티를 만들지 않는다(`Tombstone`).
+- **[S02] `applyServer` 는 무조건 덮어쓴다**: pull 행이 로컬 dirty 행(outbox 대기)과 겹치면 `ApplyServerReport.dirtyOverwritten` 에 id 를 돌려줄 뿐 LWW 를 결정하지 않는다. LWW·`sync_conflicts` 기록은 S13 이 `applyServer` 호출 전에 한다. `client_rev` 유지, `base_server_version = server_version`, outbox 미등록.
+- **[S02] 로컬 전용 쓰기 경로**: `reading_requests.status = sending`(제출 호출 중 표시)·`payload_hash` 캐시·`confirmed_marks_json` 은 `SyncWriter.applyServerColumns`(rev 유지·outbox 없음) 로 쓴다. 서버 컬럼은 어떤 경우에도 push 컬럼이 아니므로(S13 이 데이터모델 §1.1 push 컬럼만 보냄) 서버로 흘러가지 않는다.
+- **[S02] 초안(`selecting`) 삭제**: 서버에 `selecting` 삭제 경로가 없으므로(D24: 삭제 전용 mutation 은 `saved` 만) 한 번도 push 되지 않은 초안은 물리 삭제 + outbox 제거, 이미 push 된 초안은 로컬 숨김(`deleted_at`, outbox 없음). 서버의 고아 초안 정리는 S03 cron 후보.
+- **[S02] 과목 삭제 시 재지정 범위**: sessions · planner_items · recurrences · wrong_items · `selecting` 초안의 `subject_id` 를 "기타"로 바꾸고(각각 사용자 쓰기) 과목을 tombstone. 제출 이후의 reading_requests 는 서버 소유라 `subject_id` 를 두고 UI 가 "기타" 이름으로 대체 표시.
+- **[S02] 로컬 tombstone 표현**: `commitDelete` 는 서버와 같은 모양으로 내용 컬럼을 즉시 NULL 로 지운다(유지 키·공통 필드 유지). S13 의 삭제 payload 는 `{deleted_at}`(+ 공통 필드)만 보내면 된다. 세션 삭제는 세그먼트·정정까지 함께 commit, 저장된 판독 결과 삭제는 요청 행만 commit 하고 자식은 `hideLocally`.
+- **[S02] outbox 행 규칙**: PK `(table_name, row_id)` 로 행당 1건. 미전송 상태의 재편집은 `mutation_id` 유지(payload 는 전송 시점 행), 전송된 뒤(`sent_client_rev != null`) 편집되면 새 `mutation_id`·`attempts=0`. 승인 응답 처리(행 삭제 또는 유지)는 S13.
+- **[S02] 저장소 패치 인자**: 부분 수정 메서드(`updateItem·updateRecurrence·updateDraft`)는 drift `Value<T>` 를 받아 "미지정"과 "null 로 설정"을 구분한다(기능 세션은 `package:drift/drift.dart show Value` 만 import).
+- **[S02] 현재 사용자 id**: `currentUserIdProvider` 는 S05 전까지 `'local'` 상수. S05 는 로그인 후 `auth.uid` 로 override 하고 계정 전환 시 `AppDatabase.wipeAll()`(D27).
+- **[S02] 반복 일정 노출 시작일**: `RecurrenceExpander` 는 생성일(`created_at` 의 로컬 날짜)부터 `ends_on`(포함)까지, `active` 인 것만 전개. 과거 주에는 나타나지 않는다.
+- **[S02] 스트릭 계산**: 오늘 세션이 없으면 어제까지의 연속 일수를 그대로 보여준다(자정 전까지 유지). 오늘 세션이 생기면 오늘부터 센다. `longest` 는 사실 표시용.
+- **[S02] 세션 시계**: `SessionClock(wall, monotonic)` 이 시작 시점의 벽시계+단조 시계 기준점을 메모리에만 보관하고 `now()` 를 만든다. `SessionTimeline` 은 시각을 인자로만 받는다(시계를 읽지 않음). 스냅샷에는 기준점을 저장하지 않는다(D23).
+- **[S02] 복습 엔트리 id**: 큐 이탈(2연속 맞음)로 tombstone 된 엔트리는 재풀이 기록 취소로 되살아날 때 **새 id** 로 다시 만든다(tombstone id 재사용 금지, D16 와 같은 규칙).
+- **[S02] 샘플 데이터·시드**: dev flavor 는 시작 시 `DevSeeder.seedSubjects()`(국어·수학·영어·과학·사회 + 기타, 과목이 없을 때만). "샘플 데이터 넣기"는 저장소를 통해 쓰고 마지막에 `sync_outbox` 를 비운다(샘플은 push 금지). "지우기"는 `wipeAll()` 후 과목만 재시드. RNG seed 42 로 결정적.
+- **[S02] DB 파일명·초기화**: `soongong_<flavor>`(dev 와 prod 가 같은 기기에서 분리). `AppDatabase.wipeAll()` 이 계정 전환·로그아웃·purge-all·epoch 불일치의 공통 초기화 지점(사진 파일 삭제는 호출자).
+- **[S02] 내보내기 JSON**: `user_id` 포함, 사진은 `local_path` 제외, 원장 캐시·sync_* 제외, 살아 있는 행만. CSV 는 UTF-8 BOM + CRLF.
+- **[S02] `activity_days` 네임스페이스 uuid**: `6f0b3a2e-3c5b-4b7e-9a1d-2f4a8c1e5d70`, name = `"<user_id>|<yyyy-MM-dd>"`. 서버(S03)도 같은 값을 쓴다.
+- **[S02] `settings` 행 id 도 결정적**: `uuid_v5(7a1c6d2b-0e4f-4c3a-8b5d-9e2f1a3c4d5e, "<user_id>|<key>")`. 두 기기가 같은 설정 키를 먼저 만들면 id 가 달라 pull 에서 `UNIQUE (user_id, key)` 가 깨지므로(테스트로 확인) activity_days 와 같은 방식으로 병합한다.
+- **[S02] outbox 재편집 시 `sent_client_rev` 초기화**: 전송된 행을 편집하면 새 `mutation_id` 와 함께 `sent_client_rev = null`(미전송 상태로 복귀). "null = 미전송" 의미를 유지한다.
+- **[S02] 새 패키지**: `archive`(CSV 3파일 zip, 유지보수 활발·순수 Dart).
+- **[S02] S01 이월 수정**: AppButton 탭 영역 고정 높이, FakeReadingEngine 재제출 검사 순서·tombstone id 재사용 거부, AppModal 반환값 문서(`false` ≠ 미실행 보장). 세부는 `docs/handoff/S02.md`.
