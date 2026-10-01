@@ -79,11 +79,16 @@ class AppDatabase extends _$AppDatabase {
         },
         onUpgrade: (m, from, to) async {
           if (from < 2) {
-            // The unique index cannot be created while duplicates exist.
-            await _dedupeLiveReviewEntries();
-            for (final sql in partialUniqueIndexes) {
-              await customStatement(sql);
-            }
+            // drift runs onUpgrade outside a transaction; dedupe and index
+            // creation must commit or roll back together (S02c), so an
+            // explicit transaction wraps both. The unique index cannot be
+            // created while duplicates exist.
+            await transaction(() async {
+              await _dedupeLiveReviewEntries();
+              for (final sql in partialUniqueIndexes) {
+                await customStatement(sql);
+              }
+            });
           }
         },
         beforeOpen: (details) async {

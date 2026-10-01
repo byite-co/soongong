@@ -107,6 +107,55 @@ void main() {
     );
   });
 
+  test('v1 → v2 is atomic: when the index creation fails after the dedupe, '
+      'neither the index nor the tombstones remain (user_version stays 1)',
+      () async {
+    final legacy = _LegacyV1Database(NativeDatabase(file));
+    await insertEntry(legacy, 'old', 'w1', DateTime.utc(2026, 9, 10));
+    await insertEntry(legacy, 'newest', 'w1', DateTime.utc(2026, 9, 12));
+    // A view with the index's name makes CREATE INDEX fail (same namespace),
+    // i.e. the step AFTER the dedupe throws.
+    await legacy.customStatement(
+      'CREATE VIEW review_entries_live_wrong_item AS SELECT 1 AS x',
+    );
+    await legacy.close();
+
+    final failing = AppDatabase(NativeDatabase(file));
+    await expectLater(failing.select(failing.reviewEntries).get(), throwsA(isA<Object>()));
+    try {
+      await failing.close();
+    } on Object {
+      // closing a database whose open failed may throw; the file is intact
+    }
+
+    // Inspect the file with the v1 class (no migration runs at version 1).
+    final inspect = _LegacyV1Database(NativeDatabase(file));
+    addTearDown(inspect.close);
+    expect(await userVersion(inspect), 1, reason: 'version not bumped');
+    final rows = await inspect.select(inspect.reviewEntries).get();
+    expect(rows.every((r) => r.deletedAt == null), isTrue, reason: 'dedupe rolled back');
+    expect(rows.map((r) => r.clientRev).toSet(), <int>{1});
+    expect(await inspect.select(inspect.syncOutbox).get(), isEmpty, reason: 'no outbox rows');
+    final objects = (await inspect
+            .customSelect(
+              "SELECT type FROM sqlite_master WHERE name = 'review_entries_live_wrong_item'",
+            )
+            .get())
+        .map((r) => r.read<String>('type'))
+        .toList();
+    expect(objects, <String>['view'], reason: 'only the blocking view, no index');
+
+    // Remove the blocker → the same file migrates cleanly on the next open.
+    await inspect.customStatement('DROP VIEW review_entries_live_wrong_item');
+    await inspect.close();
+    final db = AppDatabase(NativeDatabase(file));
+    addTearDown(db.close);
+    expect(await userVersion(db), 2);
+    expect(await indexNames(db), contains('review_entries_live_wrong_item'));
+    final live = (await db.select(db.reviewEntries).get()).where((r) => r.deletedAt == null);
+    expect(live.map((r) => r.id), <String>['newest']);
+  });
+
   test('v1 file with duplicate live entries: the latest per wrong item is kept, '
       'the rest become tombstones with an outbox entry', () async {
     final legacy = _LegacyV1Database(NativeDatabase(file));
