@@ -8,7 +8,6 @@
 //                       the server tombstone arrives through pull)
 //   tombstoneLocally  → deleted_at + content NULL, no rev, no outbox (the
 //                       server already confirmed the delete, e.g. 410)
-//   deleteIfLocalOnly → physical delete, only for a row that was NEVER sent
 //   applyServer       → upsert server rows; client_rev kept, base = server
 //                       version, NO outbox (D2 "서버 응답·pull 적용은 outbox를
 //                       거치지 않는다")
@@ -200,37 +199,6 @@ class SyncWriter {
         variables: [Variable<String>(utcIso(ctx.nowUtc())), Variable<String>(rowId)],
         updates: {table},
       );
-    });
-  }
-
-  /// Physically removes a row (with its outbox entry) ONLY when the server
-  /// can never have seen it: no `server_version` AND no send attempt
-  /// (`sent_client_rev` null or no outbox row). A row whose push may have
-  /// reached the server with the response lost is left alone — the caller
-  /// must tombstone it through [commitDelete] instead. Returns true when the
-  /// row was removed (or never existed).
-  Future<bool> deleteIfLocalOnly(
-    TableInfo<Table, Object?> table,
-    String rowId,
-  ) {
-    return db.transaction(() async {
-      final raw = await _rawRow(table, rowId);
-      if (raw == null) return true;
-      if (raw['server_version'] != null) return false;
-      final outbox = await _outboxRow(table.actualTableName, rowId);
-      if (outbox != null && outbox.sentClientRev != null) return false;
-      await db.customUpdate(
-        'DELETE FROM ${_q(table)} WHERE id = ?',
-        variables: [Variable<String>(rowId)],
-        updates: {table},
-        updateKind: UpdateKind.delete,
-      );
-      await (db.delete(db.syncOutbox)
-            ..where(
-              (o) => o.table.equals(table.actualTableName) & o.rowId.equals(rowId),
-            ))
-          .go();
-      return true;
     });
   }
 

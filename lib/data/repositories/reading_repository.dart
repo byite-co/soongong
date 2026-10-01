@@ -17,6 +17,21 @@ import 'mappers.dart';
 import 'sync_writer.dart';
 import 'write_context.dart';
 
+/// Result of [ReadingRepository.deleteDraft].
+enum DraftDeleteOutcome {
+  /// Tombstoned and enqueued.
+  deleted,
+
+  /// The draft is in `sending`: a submit call is in flight. Nothing changed.
+  submitting,
+
+  /// Already submitted (any server-owned status). Nothing changed.
+  notDraft,
+
+  /// No such request (or already a tombstone). Nothing changed.
+  notFound,
+}
+
 class ReadingRepository {
   ReadingRepository(this.db, this.writer);
 
@@ -150,8 +165,9 @@ class ReadingRepository {
         'payload_hash': payloadHash,
       });
 
-  /// Local-only: submission did not reach the server → back to `selecting`.
-  Future<void> revertLocalSending(String requestId) async {
+  /// Local-only: the submission never reached the server (`reading-status`
+  /// → 404) → back to `selecting`, after which [deleteDraft] is allowed.
+  Future<void> revertToSelecting(String requestId) async {
     final current = await get(requestId);
     if (current == null || current.status != ReadingRequestStatus.sending) return;
     await writer.applyServerColumns(_t, requestId, <String, Object?>{
@@ -167,21 +183,22 @@ class ReadingRepository {
         <String, Object?>{'confirmed_marks_json': json},
       );
 
-  /// Draft never submitted → removed physically (with its outbox entry) only
-  /// when it was never sent; otherwise (sent with the response possibly
-  /// lost, or already on the server) it becomes a tombstone mutation —
-  /// `selecting` drafts accept `deleted_at` through sync_push (S02b
-  /// contract, data-model.md §2.7). Submitted requests are never deleted
-  /// through here (see [deleteSavedResult]).
-  Future<void> deleteDraft(String requestId) {
+  /// Deletes a `selecting` draft as a tombstone mutation — ALWAYS pushed,
+  /// whatever its send history (S02c, data-model.md §7 ①): the server either
+  /// tombstones its copy or inserts the tombstone (D2). A draft that is
+  /// being submitted (`sending`) is never deleted here: the caller (S10)
+  /// checks `reading-status` first — `processing` → `cancel()`, 404 →
+  /// [revertToSelecting] then delete again.
+  Future<DraftDeleteOutcome> deleteDraft(String requestId) {
     return writer.runInTransaction(() async {
       final current = await get(requestId);
-      if (current == null) return;
-      if (!current.isDraft && current.status != ReadingRequestStatus.sending) {
-        throw StateError('not a draft');
+      if (current == null) return DraftDeleteOutcome.notFound;
+      if (current.status == ReadingRequestStatus.sending) {
+        return DraftDeleteOutcome.submitting;
       }
-      final removed = await writer.deleteIfLocalOnly(_t, current.id);
-      if (!removed) await writer.commitDelete(_t, current.id);
+      if (!current.isDraft) return DraftDeleteOutcome.notDraft;
+      await writer.commitDelete(_t, current.id);
+      return DraftDeleteOutcome.deleted;
     });
   }
 

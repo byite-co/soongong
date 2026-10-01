@@ -1,6 +1,6 @@
 # 데이터 모델 v1 (`docs/data-model.md`) — S02 확정판
 
-로컬 drift 스키마 v1 = 서버 Postgres DDL(S03)의 출처. 컬럼 이름은 snake_case, 서버와 동일. 컬럼 추가는 새 마이그레이션 파일로만(D27).
+로컬 drift 스키마(v1 = S02 테이블, v2 = S02c 부분 유일 인덱스 마이그레이션) = 서버 Postgres DDL(S03)의 출처. 컬럼 이름은 snake_case, 서버와 동일. 컬럼 추가는 새 마이그레이션 파일로만(D27).
 
 ## 0. 표기 규칙
 
@@ -156,7 +156,7 @@
 
 필수 내용: `request_id·subject_id·range_text·origin·status`. 유지 키: `request_id`. 인덱스: `UNIQUE (user_id, request_id)`, `(user_id, status)`.
 - `sync_push` 허용: `selecting` 상태의 클라이언트 컬럼 + `saved` 상태의 **삭제 전용 mutation**(`data = {deleted_at}`)(D16) + **`selecting` 초안(`submitted_at IS NULL`)의 `deleted_at`**(S02b 계약 ①: 초안 삭제. 서버는 내용 컬럼을 NULL 로 지우고 `request_id` 를 남긴다. 서버에 없는 id 로 온 tombstone 은 D2 규칙대로 tombstone 으로 insert). 서버 컬럼이 `data` 에 있으면 행 거부.
-- 클라이언트 삭제 규칙(S02b): 한 번도 전송 시도되지 않은 초안(`server_version IS NULL` 이고 outbox `sent_client_rev IS NULL`)만 로컬 물리 삭제. 전송 시도 이력이 있거나 서버가 아는 초안은 tombstone mutation 으로 push.
+- 클라이언트 삭제 규칙(S02c): `selecting` 초안 삭제는 **항상** tombstone mutation(로컬 물리 삭제 없음, 전송 이력 무관). `sending`(제출 호출 중) 상태는 삭제하지 않는다 — `reading-status` 로 `processing` 이면 취소 경로, 404 면 `selecting` 으로 되돌린 뒤 삭제.
 - 클라이언트 `sending` 표시는 로컬 상태값(제출 호출 중). 서버 응답 후 `applyServer` 로 서버 상태로 덮인다.
 - 서버가 삭제를 확정한 요청(`410 request_deleted`, pull tombstone)과 `expired`·`discarded` 수신 시 로컬도 `result_json·marks_json·confirmed_marks_json` 을 지운다(D8, S02b).
 
@@ -352,7 +352,7 @@ payload 는 전송 시 현재 행을 읽어 만든다(§1.1 push 컬럼). 승인
 | reading_requests | `UNIQUE (user_id, request_id)` · `(user_id, status)` |
 | photos | `(request_id, page_index)` · `(expires_at)` |
 | wrong_items | `(user_id, status)` · `(request_id)` · `(user_id, subject_id)` |
-| review_entries | `(user_id, due_at)` · **`UNIQUE (wrong_item_id) WHERE deleted_at IS NULL`**(`review_entries_live_wrong_item`, 부분 유일) |
+| review_entries | `(user_id, due_at)` · **`UNIQUE (wrong_item_id) WHERE deleted_at IS NULL`**(`review_entries_live_wrong_item`, 부분 유일 — 로컬 스키마 v2 `onUpgrade` 에서 중복 정리 후 생성, 신규 DB 는 `onCreate`) |
 | retry_records | `(wrong_item_id, at)` |
 | settings | `UNIQUE (user_id, key)` |
 | activity_days | `UNIQUE (user_id, date)` |
@@ -367,7 +367,7 @@ payload 는 전송 시 현재 행을 읽어 만든다(§1.1 push 컬럼). 승인
 | `applyLedger / applySdk` | — | 없음 | subscription_state · reading_quota |
 | 로컬 전용 컬럼 쓰기(`confirmed_marks_json`, `pending_delete_until`) | 변경 없음 | 없음 | reading_requests · D22 테이블 |
 | `deleteSavedResult(requestId)` | +1 | enqueue(삭제 전용) | reading_requests(`saved`). 자식은 로컬 낙관적 숨김(`deleted_at` 세팅, outbox 없음) → pull 의 서버 tombstone 이 덮어씀 |
-| `deleteDraft(requestId)` | 미전송: 행 삭제 / 그 외: +1 | 미전송: outbox 행 삭제 / 그 외: enqueue(tombstone) | reading_requests(`selecting`). §2.7 삭제 규칙 |
+| `deleteDraft(requestId)` | +1 | enqueue(tombstone) | reading_requests(`selecting` 만, `DraftDeleteOutcome`). `sending` 은 불변(§2.7 삭제 규칙) |
 | `applyDeleted(requestId)` · pull tombstone | 유지 | 없음 | 내용·`result_json·marks_json·confirmed_marks_json` NULL, `request_id` 유지 |
 
 모든 사용자 쓰기는 **행 변경과 outbox 등록이 한 트랜잭션**(S02b, `SyncWriter`). 여러 행을 바꾸는 작업(세션 삭제 cascade · 과목 삭제 재지정 · 복습 기록)은 `SyncWriter.runInTransaction` 안에서 전부 커밋되거나 전부 롤백된다.

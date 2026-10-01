@@ -239,36 +239,33 @@ void main() {
       expect((await h.sessions.getSegments('sess-1')).length, 2);
     });
 
-    test('deleteIfLocalOnly (S02b): physical delete only when never sent; a '
-        'sent-but-unacknowledged row stays and becomes a tombstone mutation',
-        () async {
-      // Never sent → removed with its outbox entry.
-      final a = await h.reading.createDraft(subjectId: 's', rangeText: 'p', origin: ReadingOrigin.home);
-      expect(await h.writer.deleteIfLocalOnly(h.db.readingRequests, a.id), isTrue);
-      expect(await h.raw('reading_requests', a.id), isNull);
-      expect(await h.outboxRow('reading_requests', a.id), isNull);
+    test('draft delete is always a tombstone mutation (S02c): sent → response '
+        'lost → re-edited → deleted', () async {
+      final d = await h.reading.createDraft(subjectId: 's', rangeText: 'p', origin: ReadingOrigin.home);
+      await h.markSent('reading_requests', d.id, 1); // push sent, response lost
+      await h.reading.updateDraft(d.requestId, rangeText: const Value('p.2')); // re-edit
+      final edited = (await h.outboxRow('reading_requests', d.id))!;
+      expect(edited.sentClientRev, isNull, reason: 'edit after send → unsent again');
+      expect((await h.raw('reading_requests', d.id))!['client_rev'], 2);
 
-      // Sent, response lost (server_version still null) → refused.
-      final b = await h.reading.createDraft(subjectId: 's', rangeText: 'p', origin: ReadingOrigin.home);
-      await h.markSent('reading_requests', b.id, 1);
-      expect(await h.writer.deleteIfLocalOnly(h.db.readingRequests, b.id), isFalse);
-      expect(await h.raw('reading_requests', b.id), isNotNull);
-
-      // The repository then pushes a tombstone instead.
-      await h.reading.deleteDraft(b.requestId);
-      final dead = (await h.raw('reading_requests', b.id))!;
+      expect(await h.reading.deleteDraft(d.requestId), DraftDeleteOutcome.deleted);
+      final dead = (await h.raw('reading_requests', d.id))!;
+      expect(dead, isNotNull, reason: 'never removed physically');
       expect(dead['deleted_at'], isNotNull);
-      expect(dead['request_id'], b.requestId, reason: 'keep key');
+      expect(dead['request_id'], d.requestId, reason: 'keep key');
       expect(dead['range_text'], isNull);
-      expect(dead['client_rev'], 2);
-      final ob = (await h.outboxRow('reading_requests', b.id))!;
-      expect(ob.sentClientRev, isNull, reason: 'new unsent mutation');
-      expect(await h.reading.get(b.requestId), isNull);
+      expect(dead['server_version'], isNull);
+      expect(dead['client_rev'], 3);
+      final ob = (await h.outboxRow('reading_requests', d.id))!;
+      expect(ob.sentClientRev, isNull, reason: 'tombstone mutation waiting to be pushed');
+      expect(ob.mutationId, edited.mutationId, reason: 'still the same unsent mutation');
+      expect(await h.reading.get(d.requestId), isNull);
 
-      // Known to the server → refused as well.
-      final c = await h.reading.createDraft(subjectId: 's', rangeText: 'p', origin: ReadingOrigin.home);
-      await h.reading.applyStatus(c.requestId, status: ReadingRequestStatus.selecting, serverVersion: 1);
-      expect(await h.writer.deleteIfLocalOnly(h.db.readingRequests, c.id), isFalse);
+      // A never-sent draft is handled identically.
+      final fresh = await h.reading.createDraft(subjectId: 's', rangeText: 'p', origin: ReadingOrigin.home);
+      expect(await h.reading.deleteDraft(fresh.requestId), DraftDeleteOutcome.deleted);
+      expect((await h.raw('reading_requests', fresh.id))!['deleted_at'], isNotNull);
+      expect(await h.outboxRow('reading_requests', fresh.id), isNotNull);
     });
 
     test('subject delete (S02b): the wrong_items mutation only touches '

@@ -297,8 +297,8 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 
 ## [S02b] 후속 수정 결정 (2026-10-01)
 
-- **[S02b] 쓰기 원자성**: `SyncWriter` 의 모든 변경 메서드(`markUserWrite·softDelete·undoDelete·commitDelete·hideLocally·tombstoneLocally·deleteIfLocalOnly·applyServer·applyServerColumns`)는 drift `transaction` 안에서 행 변경과 outbox 등록을 함께 커밋한다. 저장소의 다중 행 작업은 `SyncWriter.runInTransaction` 으로 감싼다(drift 는 중첩 호출을 바깥 트랜잭션에 합친다).
-- **[S02b] 미전송 판정**: 물리 삭제는 `server_version IS NULL` **그리고** outbox `sent_client_rev IS NULL`(전송 시도 없음)일 때만. 전송 시도 이력이 있으면 응답 유실 가능성이 있으므로 tombstone mutation 으로 push 한다. 이를 위해 `selecting` 초안의 `deleted_at` 을 `sync_push` 허용 컬럼에 넣는다(data-model §7 ①). S02 의 "pushed 초안은 로컬 숨김" 결정은 폐기.
+- **[S02b] 쓰기 원자성**: `SyncWriter` 의 모든 변경 메서드(`markUserWrite·softDelete·undoDelete·commitDelete·hideLocally·tombstoneLocally·applyServer·applyServerColumns`)는 drift `transaction` 안에서 행 변경과 outbox 등록을 함께 커밋한다. 저장소의 다중 행 작업은 `SyncWriter.runInTransaction` 으로 감싼다(drift 는 중첩 호출을 바깥 트랜잭션에 합친다).
+- ~~**[S02b] 미전송 판정**: 물리 삭제는 `server_version IS NULL` 그리고 outbox `sent_client_rev IS NULL` 일 때만.~~ **S02c 에서 폐기** — 아래 `[S02c] 초안 삭제는 전송 이력과 무관하게 tombstone`. `selecting` 초안의 `deleted_at` 을 `sync_push` 허용 컬럼에 넣는 계약(data-model §7 ①)은 유지.
 - **[S02b] `wrong_items` push 컬럼**: `subject_id·status·resolved_at` 만(data-model §7 ②). 과목 삭제 재지정은 유지하되 과목 tombstone 과 같은 트랜잭션.
 - **[S02b] 복습 전이 단일화**: `ReviewScheduler.applyResult(state, result, at)` 하나로 증분(`record`)과 재계산(`rebuild`)이 같은 결과를 낸다(속성 테스트). **졸업 후**: 맞음 → 졸업 유지, 또 틀림 → 1일로 재진입, 부분 → 졸업 당시 간격으로 재진입(`ReviewGraduated.intervalDays`). `ReviewRepository.recordRetry` 는 살아 있는 엔트리가 없으면 비취소 기록으로 상태를 재구성한 뒤 전이한다.
 - **[S02b] 서버 삭제·만료 수신 정리**: `applyDeleted`(410)는 내용·`result_json·marks_json·confirmed_marks_json` NULL 의 tombstone, pull tombstone 도 로컬 전용 `confirmed_marks_json·pending_delete_until` 을 지운다. `expired·discarded` 수신(응답·pull) 시 `result_json·confirmed_marks_json` NULL.
@@ -306,3 +306,9 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **[S02b] 판독 월 키 = KST 고정**: `ReadingQuotaPolicy.monthKey` 는 `now.toUtc() + 9h` 의 `yyyy-MM`. 기기 시간대와 무관하게 서버 `quota_month` 와 같은 키로 표시·조회. S02 의 "기기 현지 월" 결정은 폐기.
 - **[S02b] 날짜 차이**: `LocalDate.daysUntil` 은 UTC 날짜 차이(달력 일수). DST 전환일(23/25시간)에서도 1일.
 - **[S02b] `applyServer` 는 행을 통째로 치환**: drift 의 `insertOnConflictUpdate` 가 null 컬럼을 absent 로 취급해 서버 tombstone 이 로컬 내용을 못 지우던 문제 → 기존 행이 있으면 같은 트랜잭션에서 `DELETE` 후 `INSERT`. 서버 행이 곧 로컬 행이다(로컬 전용 컬럼만 유지).
+
+## [S02c] 후속 수정 결정 (2026-10-01)
+
+- **[S02c] 초안 삭제는 전송 이력과 무관하게 tombstone**: `SyncWriter.deleteIfLocalOnly`(물리 삭제 경로) 제거. `selecting` 초안 삭제 = `commitDelete`(내용 NULL · `deleted_at` · rev+1 · outbox) → `sync_push` 가 tombstone mutation 을 보낸다(data-model §7 ①: 서버는 자기 사본을 tombstone 으로 바꾸거나, 없으면 D2 규칙대로 tombstone insert). 로컬 행은 절대 물리 삭제하지 않는다. outbox 의 `sent_client_rev` 초기화 로직(전송 후 편집 → 미전송)은 dirty 판정용으로 그대로.
+- **[S02c] `sending` 상태 삭제 금지**: `ReadingRepository.deleteDraft` 는 `DraftDeleteOutcome` 을 돌려준다 — `deleted`(selecting 만) · `submitting`(sending, 행·outbox 불변) · `notDraft`(제출 이후) · `notFound`. 예외 없음. `sending` 이면 호출자(S10)가 `reading-status` 를 확인해 `processing` 이면 `cancel()` 경로, 404 면 `revertToSelecting` 후 다시 삭제한다(`revertLocalSending` 을 `revertToSelecting` 으로 개명).
+- **[S02c] 스키마 v2(SCHEMA-CHANGE)**: `schemaVersion = 2`. `onUpgrade(from < 2)` 가 `review_entries` 의 살아 있는 중복을 `wrong_item_id` 별로 정리(최신 `client_updated_at` 1개 유지, 동률은 id 오름차순 첫 행, 나머지는 내용 NULL tombstone + rev+1 + outbox 등록 → 서버도 수렴)한 뒤 부분 유일 인덱스 `review_entries_live_wrong_item` 을 만든다. `onCreate` 는 S02b 그대로. 기존 마이그레이션 수정 없음(D27). pull 로 받은 행이 이 인덱스를 어기면 서버 쪽 중복이므로 S03 DDL 의 같은 인덱스가 전제.

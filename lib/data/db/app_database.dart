@@ -8,6 +8,7 @@
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 // The generated part references the wire enums and converters directly.
 import '../../core/domain/enums.dart';
@@ -56,8 +57,10 @@ class AppDatabase extends _$AppDatabase {
   /// In-memory database for unit tests and the widget catalog.
   AppDatabase.inMemory() : super(NativeDatabase.memory());
 
+  /// v1 — S02 tables. v2 — S02c: partial unique index on
+  /// `review_entries(wrong_item_id) WHERE deleted_at IS NULL` (SCHEMA-CHANGE).
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   /// Partial unique indexes (drift `@TableIndex` cannot express `WHERE`).
   /// Same statements in the S03 DDL (docs/data-model.md §4).
@@ -72,6 +75,15 @@ class AppDatabase extends _$AppDatabase {
           await m.createAll();
           for (final sql in partialUniqueIndexes) {
             await customStatement(sql);
+          }
+        },
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            // The unique index cannot be created while duplicates exist.
+            await _dedupeLiveReviewEntries();
+            for (final sql in partialUniqueIndexes) {
+              await customStatement(sql);
+            }
           }
         },
         beforeOpen: (details) async {
@@ -96,6 +108,41 @@ class AppDatabase extends _$AppDatabase {
         settings,
         activityDays,
       ];
+
+  /// v1 → v2: keeps, per `wrong_item_id`, the live entry with the latest
+  /// `client_updated_at` (ties: lowest id) and turns the others into
+  /// tombstones (content NULL, rev + 1) with an outbox entry so the server
+  /// converges too. Returns the ids that were tombstoned.
+  Future<List<String>> _dedupeLiveReviewEntries() async {
+    final rows = await customSelect(
+      'SELECT id, wrong_item_id FROM review_entries WHERE deleted_at IS NULL '
+      'ORDER BY wrong_item_id, client_updated_at DESC, id ASC',
+    ).get();
+    final seen = <String>{};
+    final losers = <String>[];
+    for (final r in rows) {
+      if (!seen.add(r.read<String>('wrong_item_id'))) {
+        losers.add(r.read<String>('id'));
+      }
+    }
+    if (losers.isEmpty) return losers;
+    final now = utcIso(DateTime.now());
+    for (final id in losers) {
+      await customStatement(
+        'UPDATE review_entries SET due_at = NULL, interval_days = NULL, '
+        'consecutive_correct = NULL, last_result = NULL, deleted_at = ?, '
+        'client_updated_at = ?, client_rev = client_rev + 1 WHERE id = ?',
+        [now, now, id],
+      );
+      await customStatement(
+        'INSERT OR REPLACE INTO sync_outbox '
+        '(table_name, row_id, mutation_id, sent_client_rev, queued_at, attempts, last_error) '
+        "VALUES ('review_entries', ?, ?, NULL, ?, 0, NULL)",
+        [id, const Uuid().v4(), now],
+      );
+    }
+    return losers;
+  }
 
   /// Deletes every row of every table (account switch · logout · purge-all ·
   /// epoch mismatch, D27 · D2). Photo files are deleted by the caller.

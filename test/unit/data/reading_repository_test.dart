@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/core/contracts/reading_engine.dart';
 import 'package:soongong/core/domain/enums.dart';
+import 'package:soongong/data/repositories/repositories.dart';
 
 import 'db_test_helpers.dart';
 
@@ -29,7 +30,7 @@ void main() {
     expect(sending.payloadHash, 'h1');
     expect(sending.stamp.clientRev, 2, reason: 'local-only');
 
-    await h.reading.revertLocalSending(d.requestId);
+    await h.reading.revertToSelecting(d.requestId);
     expect((await h.reading.get(d.requestId))!.status, ReadingRequestStatus.selecting);
   });
 
@@ -126,12 +127,16 @@ void main() {
     expect(await h.reading.getAllPhotos(includeDeleted: true), isEmpty);
   });
 
-  test('deleteDraft removes a never-sent draft physically; a draft the '
-      'server knows becomes a tombstone mutation (S02b contract)', () async {
+  test('deleteDraft (S02c): selecting → tombstone mutation whether or not '
+      'the server knows the row; sending → submitting, nothing changes; '
+      'submitted → notDraft; unknown → notFound', () async {
     final a = await h.reading.createDraft(subjectId: 's', rangeText: 'p', origin: ReadingOrigin.home);
-    await h.reading.deleteDraft(a.requestId);
-    expect(await h.raw('reading_requests', a.id), isNull);
-    expect(await h.outboxRow('reading_requests', a.id), isNull);
+    expect(await h.reading.deleteDraft(a.requestId), DraftDeleteOutcome.deleted);
+    final deadA = (await h.raw('reading_requests', a.id))!;
+    expect(deadA['deleted_at'], isNotNull);
+    expect(deadA['range_text'], isNull);
+    expect(await h.outboxRow('reading_requests', a.id), isNotNull);
+    expect(await h.reading.deleteDraft(a.requestId), DraftDeleteOutcome.notFound, reason: 'tombstone reads as gone');
 
     final b = await h.reading.createDraft(subjectId: 's', rangeText: 'p', origin: ReadingOrigin.home);
     await h.reading.applyServer(<Map<String, Object?>>[
@@ -144,12 +149,32 @@ void main() {
         'quota_charged': false,
       }),
     ]);
-    await h.reading.deleteDraft(b.requestId);
-    final dead = (await h.raw('reading_requests', b.id))!;
-    expect(dead['deleted_at'], isNotNull);
-    expect(dead['range_text'], isNull, reason: 'tombstone shape');
-    expect(dead['request_id'], b.requestId);
+    expect(await h.reading.deleteDraft(b.requestId), DraftDeleteOutcome.deleted);
+    final deadB = (await h.raw('reading_requests', b.id))!;
+    expect(deadB['deleted_at'], isNotNull);
+    expect(deadB['request_id'], b.requestId);
+    expect(deadB['base_server_version'], 1);
     expect(await h.outboxRow('reading_requests', b.id), isNotNull, reason: 'pushed as {deleted_at}');
+
+    // sending: a submit is in flight → refused, row and outbox untouched.
+    final c = await h.reading.createDraft(subjectId: 's', rangeText: 'p', origin: ReadingOrigin.home);
+    await h.reading.setLocalSending(c.requestId, payloadHash: 'h');
+    final rowBefore = (await h.raw('reading_requests', c.id))!;
+    final outboxBefore = (await h.outboxRow('reading_requests', c.id))!;
+    expect(await h.reading.deleteDraft(c.requestId), DraftDeleteOutcome.submitting);
+    expect(await h.raw('reading_requests', c.id), rowBefore);
+    expect((await h.outboxRow('reading_requests', c.id))!.mutationId, outboxBefore.mutationId);
+    expect((await h.outboxRow('reading_requests', c.id))!.queuedAt, outboxBefore.queuedAt);
+    // 404 from reading-status → revert, then delete succeeds.
+    await h.reading.revertToSelecting(c.requestId);
+    expect(await h.reading.deleteDraft(c.requestId), DraftDeleteOutcome.deleted);
+
+    // submitted → notDraft.
+    final d = await h.reading.createDraft(subjectId: 's', rangeText: 'p', origin: ReadingOrigin.home);
+    await h.reading.applyStatus(d.requestId, status: ReadingRequestStatus.processing, serverVersion: 1);
+    expect(await h.reading.deleteDraft(d.requestId), DraftDeleteOutcome.notDraft);
+    expect((await h.raw('reading_requests', d.id))!['deleted_at'], isNull);
+    expect(await h.reading.deleteDraft('nope'), DraftDeleteOutcome.notFound);
   });
 
   group('server-side purge cleans local content (S02b · D8 · D16)', () {
