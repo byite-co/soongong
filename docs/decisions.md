@@ -313,3 +313,25 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **[S02c] 초안 삭제는 전송 이력과 무관하게 tombstone**: `SyncWriter.deleteIfLocalOnly`(물리 삭제 경로) 제거. `selecting` 초안 삭제 = `commitDelete`(내용 NULL · `deleted_at` · rev+1 · outbox) → `sync_push` 가 tombstone mutation 을 보낸다(data-model §7 ①: 서버는 자기 사본을 tombstone 으로 바꾸거나, 없으면 D2 규칙대로 tombstone insert). 로컬 행은 절대 물리 삭제하지 않는다. outbox 의 `sent_client_rev` 초기화 로직(전송 후 편집 → 미전송)은 dirty 판정용으로 그대로.
 - **[S02c] `sending` 상태 삭제 금지**: `ReadingRepository.deleteDraft` 는 `DraftDeleteOutcome` 을 돌려준다 — `deleted`(selecting 만) · `submitting`(sending, 행·outbox 불변) · `notDraft`(제출 이후) · `notFound`. 예외 없음. `revertLocalSending` 은 `revertToSelecting` 으로 개명. 호출자(S10) 흐름: `deleteDraft` 가 `submitting` 이면 `reading-status` 확인. `processing`/`taking_long` → `cancel()`. **404는 미접수 확정이 아님** — `revertToSelecting` 후 `deleteDraft` 로 tombstone mutation 을 push 하고 서버 승인(accepted)을 받아야 삭제 확정. 거부(`server_row` 가 `processing` 등)면 서버 상태로 취소·완료 처리.
 - **[S02c] 스키마 v2(SCHEMA-CHANGE)**: `schemaVersion = 2`. `onUpgrade(from < 2)` 가 `review_entries` 의 살아 있는 중복을 `wrong_item_id` 별로 정리(최신 `client_updated_at` 1개 유지, 동률은 id 오름차순 첫 행, 나머지는 내용 NULL tombstone + rev+1 + outbox 등록 → 서버도 수렴)한 뒤 부분 유일 인덱스 `review_entries_live_wrong_item` 을 만든다. `onCreate` 는 S02b 그대로. 기존 마이그레이션 수정 없음(D27). dedupe 와 인덱스 생성은 **하나의 명시적 `transaction()`**(drift 의 `onUpgrade` 는 트랜잭션 밖에서 실행됨) — 중간 실패 시 둘 다 남지 않는다(테스트). pull 로 받은 행이 이 인덱스를 어기면 서버 쪽 중복이므로 S03 DDL 의 같은 인덱스가 전제.
+
+## [S03] 세션 결정 — 지시문에 없던 사항 (2026-10-01)
+
+- **[S03] 서버 시각 컬럼 표현**: 동기화 테이블의 시각은 S02 와 같이 `TEXT` ISO 8601 UTC(`iso_utc` 도메인, `…Z`)로 저장한다. 서버 전용 테이블(`profiles·signup_*·reading_jobs·photo_delete_queue·subscription_*·inquiries`)만 `timestamptz`. 비교·연산은 `public.ts(text)` 로 캐스팅.
+- **[S03] JSON 컬럼 와이어 형식**: `settings.value_json`·`reading_requests.result_json/marks_json` 은 서버에서 jsonb, `sync_push/sync_pull` 와이어에서는 **JSON 텍스트 문자열**(로컬 TEXT 그대로). Edge 응답(`reading-status/save/update-marks`)의 JSON 컬럼은 객체. `docs/sync-rpc.md` §1.
+- **[S03] 영수증은 승인만 기록**: `sync_mutations` 에는 승인 행만 남기고(`result='accepted'` + version·seq) 거부는 재전송 시 재평가한다. D2 1단계 "영수증이 있으면 그대로 반환"은 승인 영수증에 대한 규칙.
+- **[S03] `reading_requests` 제출 이후의 모든 push 는 `version_conflict`**: `submitted_at not null` 인 행에는 tombstone 이든 컬럼 수정이든 base 가 맞아도 `version_conflict` + `server_row` 를 돌려준다(인수 시나리오 ①). 유일한 예외는 `saved` 행의 삭제 전용 mutation(`data` = `deleted_at` + 공통 4개 키만 허용, 내용 키가 섞이면 `invalid_columns`).
+- **[S03] `wrong_items` 는 push 로 생성·삭제 불가**: 허용 컬럼이 `subject_id·status·resolved_at` + `client_updated_at·device_id·purge_epoch` 뿐이므로(data-model §7 ②) `created_at·deleted_at` 도 없다. 서버에 없는 id 의 wrong_items push 는 `insert_not_allowed`. 생성은 `reading-save`/`update-marks`, 삭제는 삭제 전용 mutation cascade·`update-marks` 만.
+- **[S03] base ≠ null 인데 서버에 행이 없으면 insert**: 물리 삭제는 purge-all(epoch 변경)·계정 삭제뿐이라 부활 위험이 없고 수렴이 우선. `version_conflict(server_row null)` 를 돌려주면 클라이언트가 해소할 수 없다.
+- **[S03] `reading-save` 의 복습 엔트리는 서버 생성**: 계약 `save(requestId, marks, items)` 에 엔트리 인자가 없으므로 서버가 D9 초기값(1일·0)으로 `review_entries` 를 만들고(id 서버 발급) 응답 `entries[]` 로 돌려준다. `update-marks` 는 클라이언트 엔트리를 받되 없으면 같은 기본값.
+- **[S03] `processing → taking_long` 은 60초**: `reading-status` 조회 시점과 1분 reaper 가 전이시킨다. D16 에 임계가 없어 PRD "오래 걸림 안내" 용으로 정함.
+- **[S03] 워커·cron 인증은 `x-job-secret`**: pg_net/cron 이 부르는 Edge 함수(`reading-worker·reading-reaper·photo-delete-runner`)는 `verify_jwt=false` + 공유 비밀 헤더. DB 는 `server_config(functions_base_url, job_secret)` 만 알고 service role 키는 모른다. 값은 사람이 콘솔에서 넣는다(S15 prod).
+- **[S03] RevenueCat 웹훅 "서명 검증"의 실체**: RevenueCat 은 payload 서명을 하지 않고 대시보드에 설정한 `Authorization` 헤더 값을 보낸다. `REVENUECAT_WEBHOOK_AUTH` 와 상수 시간 비교(원문·`Bearer ` 접두 둘 다 허용). 저장만 하고 상태를 바꾸지 않는 타입(TEST·SUBSCRIBER_ALIAS·TRANSFER 등)은 `stored`.
+- **[S03] 서버 `pendingApproval` 없음**: 승인 대기는 RevenueCat 웹훅으로 관측되지 않으므로 서버 판정표는 `pendingApproval` 을 내지 않는다(앱 SDK 만). D18 표의 나머지 행은 `entitlement_status()` 그대로.
+- **[S03] 사전 로그인 Edge 함수는 `verify_jwt=false`**: `age-check·issue-pass·check-email` 은 세션 없이 호출되므로 게이트웨이 JWT 검사를 끄고 각자 티켓·앱 키·레이트리밋으로 보호. `check-email` 은 `CHECK_EMAIL_APP_KEY`(앱 env 공개 키, 비밀 아님) + IP 분당 20회.
+- **[S03] 소셜 신규 판별 순서**: 소셜은 가입 전에 신규 여부를 알 수 없으므로 **먼저 로그인 시도 → 훅 거부(`signupPassRequired`) → ageGate → 티켓과 함께 재시도**. `AuthRepository.signInWithProvider(ticket:)` 이 `issue-pass` 를 먼저 수행. 이메일은 `check-email` 로 분기.
+- **[S03] `complete-signup` `not_approved` 처리**: 앱은 세션을 끊고 `AuthRejection.notApproved` 를 돌려준다(profiles 없는 토큰은 RLS 전면 차단이라 로그인 상태가 의미 없음).
+- **[S03] 리포지토리 위치**: Supabase 를 감싸는 `AuthRepository·AgeGateRepository` 는 `lib/data/auth/`(DB 저장소 `lib/data/repositories/` 와 분리). `AuthBackend` 인터페이스로 SDK 를 격리해 Fake 로 테스트.
+- **[S03] dev 전용 마이그레이션 폴더**: `supabase/dev/` 는 dev 프로젝트에만 적용(`app.test_trigger_fail` 분기). prod cutover 체크리스트(S15)에 "적용 금지" 명시.
+- **[S03] 고아 초안 정리**: `client_updated_at + 30일` 지난 미제출 `selecting` 초안을 일 1회 cron 이 tombstone(S02 후보 → 확정, 지시문 [추가]).
+- **[S03] 로컬 검증 방식**: Supabase CLI·Docker 없이 PostgreSQL 16 + pgTAP + pg_cron 으로 전 마이그레이션·pgTAP 228건을 돌린다(`supabase/tests/local/`). `auth` 스키마·`net.http_post` 는 shim. 실제 Auth API 통합 테스트는 dev 프로젝트 콘솔 값 수신 후(handoff).
+- **[S03] 새 패키지**: `http` 직접 선언(이미 supabase 의존으로 lock 에 존재; `ClientException` 을 오프라인으로 매핑하기 위해).

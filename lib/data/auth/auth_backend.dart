@@ -1,0 +1,39 @@
+// AuthBackend (S03): the thin seam between the repositories and
+// supabase_flutter. Everything the repositories need from Supabase is here, in
+// our own types, so tests run against [FakeAuthBackend] without the SDK.
+
+import 'auth_models.dart';
+
+abstract class AuthBackend {
+  /// Calls an Edge Function with a JSON body. [withUser] adds the session JWT.
+  /// Non-2xx → [EdgeFunctionException]; no network → [NetworkUnavailableException].
+  Future<Map<String, dynamic>> invoke(
+    String function, {
+    Map<String, dynamic> body = const <String, dynamic>{},
+    Map<String, String> headers = const <String, String>{},
+    bool withUser = true,
+  });
+
+  /// `supabase.rpc(name, params)` as the signed-in user.
+  Future<dynamic> rpc(String name, Map<String, dynamic> params);
+
+  Future<AuthSession> signInWithIdToken({
+    required SignupProvider provider,
+    required String idToken,
+    String? accessToken,
+    String? nonce,
+  });
+
+  Future<AuthSession> signUpWithEmail({required String email, required String password});
+
+  Future<AuthSession> signInWithPassword({required String email, required String password});
+
+  Future<void> resetPasswordForEmail(String email);
+
+  Future<void> signOut();
+
+  AuthSession? get currentSession;
+
+  /// Emits the current session on every auth change (null when signed out).
+  Stream<AuthSession?> get sessions;
+}

@@ -33,6 +33,9 @@ dependencies:
 
   # Backend
   supabase_flutter: ^2.18.0
+  # [S03] direct declaration of supabase's transport dependency: the auth
+  # backend maps `http.ClientException` to "offline" (already in pubspec.lock).
+  http: ^1.5.0
 
   # Utilities
   intl: ^0.20.3
