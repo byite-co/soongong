@@ -313,3 +313,17 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **[S02c] 초안 삭제는 전송 이력과 무관하게 tombstone**: `SyncWriter.deleteIfLocalOnly`(물리 삭제 경로) 제거. `selecting` 초안 삭제 = `commitDelete`(내용 NULL · `deleted_at` · rev+1 · outbox) → `sync_push` 가 tombstone mutation 을 보낸다(data-model §7 ①: 서버는 자기 사본을 tombstone 으로 바꾸거나, 없으면 D2 규칙대로 tombstone insert). 로컬 행은 절대 물리 삭제하지 않는다. outbox 의 `sent_client_rev` 초기화 로직(전송 후 편집 → 미전송)은 dirty 판정용으로 그대로.
 - **[S02c] `sending` 상태 삭제 금지**: `ReadingRepository.deleteDraft` 는 `DraftDeleteOutcome` 을 돌려준다 — `deleted`(selecting 만) · `submitting`(sending, 행·outbox 불변) · `notDraft`(제출 이후) · `notFound`. 예외 없음. `revertLocalSending` 은 `revertToSelecting` 으로 개명. 호출자(S10) 흐름: `deleteDraft` 가 `submitting` 이면 `reading-status` 확인. `processing`/`taking_long` → `cancel()`. **404는 미접수 확정이 아님** — `revertToSelecting` 후 `deleteDraft` 로 tombstone mutation 을 push 하고 서버 승인(accepted)을 받아야 삭제 확정. 거부(`server_row` 가 `processing` 등)면 서버 상태로 취소·완료 처리.
 - **[S02c] 스키마 v2(SCHEMA-CHANGE)**: `schemaVersion = 2`. `onUpgrade(from < 2)` 가 `review_entries` 의 살아 있는 중복을 `wrong_item_id` 별로 정리(최신 `client_updated_at` 1개 유지, 동률은 id 오름차순 첫 행, 나머지는 내용 NULL tombstone + rev+1 + outbox 등록 → 서버도 수렴)한 뒤 부분 유일 인덱스 `review_entries_live_wrong_item` 을 만든다. `onCreate` 는 S02b 그대로. 기존 마이그레이션 수정 없음(D27). dedupe 와 인덱스 생성은 **하나의 명시적 `transaction()`**(drift 의 `onUpgrade` 는 트랜잭션 밖에서 실행됨) — 중간 실패 시 둘 다 남지 않는다(테스트). pull 로 받은 행이 이 인덱스를 어기면 서버 쪽 중복이므로 S03 DDL 의 같은 인덱스가 전제.
+
+## [S04] 세션 결정 — 지시문에 없던 사항 (2026-10-01)
+
+- **[S04] 검출기 = ML Kit Face Detection fast, presence only**: 랜드마크·분류·윤곽·추적 OFF, 결과에서 `faces.isNotEmpty` 만 읽는다(bbox·각도 미사용). Pose/MediaPipe 와의 비교와 전환 조건(P2 고개 숙임 < 90%)은 `docs/seat-engine.md` §2. 교체 지점은 `PresenceDetector` 하나.
+- **[S04] 유지 창(히스테리시스) 3초는 엔진 내부 고정값**: `SeatHysteresis(hold: 3s)`. 감도 0·1·2(60·75·90초)와 무관하며 `SeatEngineConfig` 에 없다. S06 이 바꾸려면 `CONTRACT-CHANGE`.
+- **[S04] 이벤트 의미**: `SeatCameraLost` = 실행 중 3초 프레임 없음 · 점유/치명/정책 오류 · 백그라운드 진입(엔진이 스스로 stop, 카메라 해제). `SeatCameraRecovered` = Lost 이후 첫 프레임(그 사이 stop/start 여부 무관, 1회). Lost 동안 샘플 없음(D23 paused). `SeatError(code)` 는 `permission_denied · no_camera · camera_busy · camera_init_failed · detector_failed`.
+- **[S04] `checkAvailability` 는 권한 프롬프트를 띄울 수 있다**(미결정 상태일 때만). `start` 는 프롬프트 없이 `SeatError('permission_denied')`. 권한 흐름 헬퍼는 `CameraPermission.request()/status()/openSettings()`.
+- **[S04] iOS 점유는 `cameraBusy` 로 구분되지 않는다**: `camera_avfoundation` 이 세션 인터럽션을 노출하지 않아 프레임 정지 → 3초 뒤 Lost 로 나타난다. Android 는 CameraX `CameraState` 오류 문구로 점유를 분류(`classifyCameraFault`, 플러그인 버전 의존).
+- **[S04] 처리 주기**: `sampleHz` 는 1–2 로 클램프(1000ms/Hz), `lowPower` 는 2초 + 카메라 목표 fps 10(기본 15). 해상도는 `ResolutionPreset.low` 가 하한. 전면 카메라가 없으면 첫 카메라를 쓴다.
+- **[S04] `SeatSample.confidence` 는 null**: ML Kit 는 검출 신뢰도를 주지 않는다. Fake 의 숫자는 데모용.
+- **[S04] `seatEngineProvider` 분기**: prod flavor → `SeatEngineImpl.camera()`. dev → dev 메뉴 "구현: Fake / 실제 카메라" 스위치(`DevFakeSettings.seatReal`, 기본 Fake). 위젯 테스트는 기본 Fake 를 받는다.
+- **[S04] `/_seat_lab` 라우트 위치**: `app_router.dart` 는 S05 소유라 `features/measure/measure_routes.dart` 에 `AppConfig.devToolsEnabled` 조건부로 등록. 화면은 `core/dev/seat_lab/`. S05/S14 가 `/_gallery` 옆으로 옮겨도 된다.
+- **[S04] `minFaceSize` 기본 0.1**(ML Kit 기본). 포스터·사진 음성 케이스 결과에 따라 0.15/0.20 으로 올릴 수 있도록 실험실에서 선택 가능(엔진 생성자 인자).
+- **[S04] 새 패키지**: `permission_handler ^12.0.3`(권한 상태·프롬프트·설정 열기. 13.x 는 `permission_handler_android` 14 = compileSdk 37 요구라 Flutter 3.47.5 기본 36 과 맞을 때까지 보류) · `battery_plus ^7.1.1`(실험실 배터리 % 기록, 런타임은 dev 화면에서만 사용).

@@ -52,6 +52,12 @@ dependencies:
   # Camera + on-device seat detection (S04)
   camera: ^0.12.1
   google_mlkit_face_detection: ^0.15.1
+  # [S04] Camera permission status / request / open-settings (setupDen flow).
+  # 12.x pinned: 13.x pulls permission_handler_android 14 (compileSdk 37) —
+  # see docs/versions.md.
+  permission_handler: ^12.0.3
+  # [S04] Battery % for the /_seat_lab measurement harness (dev only at runtime).
+  battery_plus: ^7.1.1
 
   # [S01] New packages — reasons in docs/handoff/S01.md
   # deviceId is kept in platform secure storage (Keychain / EncryptedSharedPreferences).

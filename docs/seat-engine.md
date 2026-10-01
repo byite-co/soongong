@@ -1,0 +1,194 @@
+# 착석 감지 엔진 (S04) — 기술 선택 · 구현 · 측정 프로토콜
+
+작성 2026-10-01 · 브랜치 `ccr-d3a4cdaa-goy1d8` · 계약 `core/contracts/seat_engine.dart`(S01, 변경 없음) · 결정 D3 · D23
+
+이 문서는 세 가지를 담는다. (1) 검출기 선택 스파이크의 비교표와 선택 이유, (2) `SeatEngineImpl` 의 동작 규약(S06 이 의존하는 이벤트 의미), (3) 실기기 측정 프로토콜과 목표치. 측정 결과 기록 칸은 `docs/handoff/S04.md` 에 있다(사람이 채움).
+
+## 1. 범위
+
+- 출력은 **착석 불리언 1초 주기 + 카메라 상태 이벤트** 뿐이다. 얼굴 식별·표정·시선·점수·bbox 좌표는 만들지도, 읽지도 않는다(D3, CLAUDE.md §1·§9).
+- 이탈 판정(60–90초, 감도 0·1·2)은 S06 `AwayPolicy` 의 몫이다. 엔진 안의 시간 논리는 **3초 유지 창(히스테리시스)** 하나뿐이다.
+- 카메라 프레임은 플러그인 콜백 안에서 검출기로 넘기거나 버린다. 디스크·메모리 보관·전송 없음(§4.4 검증 방법).
+
+## 2. 기술 선택 스파이크
+
+### 2.1 후보 비교
+
+클라우드 세션에서는 실기기 측정이 불가능하므로 아래 "처리 시간·유지율" 열은 **공개 문서·모델 특성에 근거한 기대치**이며, 실측은 §5 프로토콜에서 `/_seat_lab` 으로 한다. 실측이 기대치와 어긋나면 §2.3 의 전환 조건을 따른다.
+
+| 기준 | A. ML Kit Face Detection (fast) **[선택]** | B. ML Kit Pose Detection (base) | C. MediaPipe Tasks (Face/Pose) |
+|---|---|---|---|
+| Flutter 플러그인 | `google_mlkit_face_detection` 0.15.1 (이미 의존성, 활발) | `google_mlkit_pose_detection` (같은 저자, 활발) | 공식 Flutter 플러그인 없음 → 양 플랫폼 채널 직접 구현·유지 |
+| 프레임당 처리(320×240, 중급 기기, 기대치) | **수 ms~20 ms** (fast 모드, 랜드마크·분류 OFF) | 30–60 ms (BlazePose 상반신+전신 33점, 모델 크기 수 MB) | A·B 와 유사하나 네이티브 통합 비용이 큼 |
+| 입력 데이터 최소성 | 얼굴 bbox 존재 여부만 사용(좌표 미사용) | 신체 랜드마크 33점 — 필요 이상으로 많은 신체 정보를 계산 | 동일 |
+| 고개 숙임(필기 자세) | 정면 대비 떨어짐. 짧은 미검출은 3초 유지 창으로 흡수, 긴 숙임은 측정 항목 P2 | 상반신 랜드마크로 **강함** | 동일 |
+| 측면 | 정면에서 벗어날수록 fast 모드 검출이 약해짐(플러그인 문서: Euler Y 각은 accurate 모드에서만 보장) — 측정 항목 P3 | 강함 | — |
+| 저조도 | 전면 카메라 노이즈에 민감. 해상도 최저·자동 노출에 의존 | 비슷 | — |
+| 음성 케이스(포스터·사진 속 얼굴) | 얼굴이면 검출됨 → `minFaceSize` 로 먼 얼굴 배제, 실험실에서 0.10/0.15/0.20 비교 | 포스터 "사람" 도 검출 가능 | — |
+| 배터리 | 가장 가벼움 | 모델이 무거워 불리 | — |
+| 바이너리 증가 | 소(이미 포함) | 중(모델 번들/다운로드) | 중 |
+
+### 2.2 선택: A (ML Kit Face Detection, fast, presence only) + 3초 유지 창
+
+- PRD §8 의 1초 주기·배터리 ≤ 8%/h 에 가장 유리하고, 계산되는 정보가 "얼굴 bbox 존재" 로 가장 적다(개인정보 표면 최소).
+- 고개 숙임 약점은 (1) 유지 창 3초, (2) 이탈 임계 60–90초(S06) 두 겹으로 완충된다. 10분 필기 중 3초 넘는 미검출이 1분 이상 연속되어야 이탈 오판이 난다.
+- 플러그인이 이미 의존성에 있어 새 네이티브 코드가 없다(MediaPipe 는 유지보수 부담으로 제외).
+
+### 2.3 전환 조건(후속 결정 후보)
+
+- `/_seat_lab` 실측에서 **P2(고개 숙임) 검출률 < 90%** 또는 **P3(측면) < 80%** 가 재현되면 검출기를 B(Pose, 상반신 랜드마크 존재 여부만)로 바꾼다. 교체 지점은 `PresenceDetector` 하나(`lib/data/engines/seat/seat_frame_source.dart`) — 엔진·히스테리시스·하니스는 그대로다.
+- 렌즈 가림(N7)과 빈 자리를 구분해야 하면 프레임 평균 휘도 기준 `cameraLost` 판정을 `CameraSeatFrame` 단계에 추가한다(지시문 §4.5 의 후속 결정 항목).
+
+## 3. 구현
+
+### 3.1 파이프라인
+
+```
+camera 플러그인(전면 · ResolutionPreset.low · NV21/BGRA · fps 15, 저전력 10 · 오디오 OFF)
+  └ CameraFrameSource.onFrame(frame)            ← 콜백 안에서만 유효
+      └ SeatEngineImpl._onFrame
+          ├ 프레임 도착 기록(워치독) · Lost 상태면 Recovered 발행
+          ├ FrameCadence.accept  — 주기(1000ms/sampleHz, 저전력 2000ms) 미도달 또는 검출 진행 중이면 **동기 드롭**
+          └ PresenceDetector.detect(frame)       ← ML Kit fast, faces.isNotEmpty 만 읽음
+              └ SeatHysteresis.observe(at, detected) → seated
+                  └ samples.add(SeatSample(at: wall, seated))  (confidence 는 null)
+```
+
+| 파일 | 역할 |
+|---|---|
+| `lib/data/engines/seat_engine_impl.dart` | 계약 구현. 가용성·시작/정지·워치독·라이프사이클·이벤트. 진단 스트림(`diagnostics`)은 실험실 전용 |
+| `seat/seat_frame_source.dart` | 추상화: `SeatFrame`·`SeatFrameSource`·`PresenceDetector`·`CameraPermissionGateway`·`LifecycleSource` |
+| `seat/camera_frame_source.dart` | `camera` 플러그인 어댑터. 전면 카메라 선택, 프로브(점유 판정), 스트림, 플러그인 오류 → `CameraFault` |
+| `seat/mlkit_face_presence_detector.dart` | ML Kit 어댑터 + `inputImageFromCamera`(NV21/BGRA 단일 평면만) |
+| `seat/seat_hysteresis.dart` · `seat/frame_cadence.dart` · `seat/seat_availability.dart` · `seat/camera_geometry.dart` | 순수 Dart(유닛 테스트) |
+| `seat/camera_permission.dart` | `CameraPermission.request()/status()/openSettings()` (permission_handler) |
+| `seat/widgets_binding_lifecycle_source.dart` | 백그라운드 감지 |
+
+### 3.2 S06 이 의존하는 규약
+
+- **`checkAvailability()`**: 권한 상태 확인 → 미결정이면 **프롬프트를 띄운다**(이미 거부/영구 거부/제한이면 띄우지 않음) → 하드웨어·점유 프로브(카메라를 잠깐 열고 닫음, Android 는 열린 뒤 600 ms 안의 "in use" 오류를 봄) → `ok · permissionDenied · cameraBusy · unavailable`. 온보딩에서 `CameraPermission.request()` 를 먼저 호출했다면 프롬프트는 다시 뜨지 않는다.
+- **`start(config)`**: 프롬프트 없음. 권한이 없으면 `SeatError('permission_denied')` 를 내고 실행하지 않는다. 카메라를 못 열면 `SeatError(code)` — 코드는 `permission_denied · no_camera · camera_busy · camera_init_failed`. 성공하면 `isRunning == true`. 재호출은 무시(멱등).
+- **`samples`**: 처리된 프레임마다 1건(기본 1초, `sampleHz` 는 1–2 로 클램프, `lowPower` 는 2초). **카메라가 끊긴 동안은 샘플이 없다**(판정 없음 = D23 의 paused).
+- **`SeatCameraLost`**: (1) 실행 중 3초간 프레임 없음, (2) 플러그인이 점유·치명·정책 오류를 보고, (3) 앱이 포그라운드를 벗어남(`hidden/paused/detached`). (3) 에서는 엔진이 **스스로 stop** 하고 카메라를 해제한다. 복귀 후 `start()` 는 호출자(S06) 책임.
+- **`SeatCameraRecovered`**: Lost 이후 **첫 프레임**이 오면 1회. 그 사이에 stop/start 가 있었는지와 무관하다(자가 복구·재연결·백그라운드 복귀 모두 같은 경로). `SessionTimeline.resume` 은 paused 가 아니면 무시하므로 중복 호출은 무해.
+- **`SeatError('detector_failed')`**: 검출기가 3회 연속 실패하면 1회. 카메라는 계속 돌고, 성공이 끼면 다시 셀 수 있다.
+- **`previewOrNull()`** 은 항상 `null`(측정 화면은 상태 아이콘만).
+- **`SeatSample.confidence`** 는 `null`. ML Kit 는 검출 신뢰도를 주지 않으며 지어내지 않는다.
+- 감도(0·1·2)는 `SeatEngineConfig` 에 없다. 유지 창 N초를 S06 이 바꾸려면 `CONTRACT-CHANGE` 로 조율(현재 `SeatEngineImpl(hold:)` 생성자 인자로만 노출).
+
+### 3.3 저전력 모드(`lowPower`)
+
+- 처리 주기 2초, 카메라 목표 fps 10(플러그인 `fps` → CameraX target frame rate / AVFoundation activeVideoMinFrameDuration, 기기가 지원하는 범위에서 best effort).
+- 해상도는 플러그인 최저 프리셋(Android 320×240 bound, iOS 352×288)이 하한이라 더 내리지 못한다.
+- S06 사용 조건(지시문 §4.3): 배터리 20% 이하 또는 설정에서 선택.
+
+### 3.4 플랫폼 메모
+
+- **Android**: `CAMERA` 권한 + `uses-feature camera/camera.front required=false`. CameraX 가 액티비티 라이프사이클에 묶여 있고 엔진도 `hidden` 에서 즉시 스트림 중단·dispose 하므로 포그라운드 없이 스트림이 유지되지 않는다. 다른 앱 점유는 `CameraState` 오류("already in use")로 와서 Lost 로 매핑된다.
+- **iOS**: `NSCameraUsageDescription` = "자리에 앉아 있는지만 기기 안에서 판단합니다. 영상은 저장·전송되지 않습니다." `camera_avfoundation` 은 세션 인터럽션(전화·다른 앱)을 Dart 로 노출하지 않는다 → 프레임이 멈추고 **3초 뒤 Lost** 로 나타난다. 따라서 iOS 에서 `checkAvailability` 는 점유를 `cameraBusy` 로 구분하지 못하고 `ok` 를 돌려줄 수 있다(프로토콜 (b) 에서 Lost 발생 여부로 판정).
+- **permission_handler 12.x**: iOS 는 Swift Package Manager 경로에서 `Info.plist` 의 `NSCameraUsageDescription` 존재로 카메라 권한 코드를 컴파일에 포함한다(Podfile 매크로 불필요). 13.x 는 `permission_handler_android` 14(compileSdk 37) 를 끌어와 Flutter 3.47.5 기본(36)과 어긋나므로 보류(`docs/versions.md`).
+- 컨테이너에서 Android Gradle 검증 불가(`google()` 차단) — `build-android` 워크플로로 확인.
+
+### 3.5 프레임 비보관 검증
+
+```sh
+grep -rn "writeAsBytes\|toImage\|toByteData\|takePicture\|startVideoRecording\|XFile" lib/data/engines lib/core/dev/seat_lab
+grep -rn "boundingBox\|landmarks\|headEuler\|trackingId\|contours" lib/data/engines
+```
+
+두 명령 모두 주석 외 결과 0 이어야 한다(2026-10-01 기준 0). `appLog` 에는 코드·횟수·플러그인 오류 문구만 남기고 프레임·좌표는 남기지 않는다.
+
+## 4. 측정 하니스 `/_seat_lab`
+
+dev flavor + `DEV_MENU=true` 에서만 컴파일된다. dev 메뉴(흔들기) → "착석 감지 실험실 열기", 또는 라우트 `/_seat_lab`. 하니스는 provider 의 엔진이 아니라 **자기 엔진 인스턴스**를 만든다(진단 스트림·`minFaceSize` 변경 때문).
+
+| 영역 | 내용 |
+|---|---|
+| 상태 | 대기 / 시작 중 / 실행 중(착석 · 미검출 · 샘플 없음) / 카메라 끊김 · 최근 프레임 검출 여부 · 유지 창 적용 여부 |
+| 수치 | 경과 · 처리/전달 프레임 · 드롭 · 처리 주기 · 검출률(60초) · 착석 비율(60초) · 평균 지연(60초) · 배터리 시작→현재 · 이벤트 수 · 정답 대비 집계 |
+| 제어 | 가용성 확인 · 권한 요청 · 설정 열기 · 시작/정지 · CSV 내보내기 · 기록 지우기 |
+| 정답 라벨 | 실제 착석 / 실제 이탈 / 표시 안 함 — 누른 시점부터의 샘플에 라벨이 붙는다 |
+| 실험 설정 | 저전력 · `minFaceSize`(0.10/0.15/0.20, 정지 상태에서만) · 프로토콜 케이스(P1–P4 · N1–N10) |
+| 이벤트 | 최근 10건(`start · stop · cameraLost · cameraRecovered · error: <code>`) |
+
+CSV 열: `t_ms,kind,detected,seated,held,latency_ms,truth,battery,case,note`
+- `kind=sample` 처리 프레임 1행: `detected`(검출기 원답) · `seated`(엔진 출력) · `held`(유지 창 때문에 seated) · `latency_ms`
+- `kind=event` 엔진 이벤트 · `kind=mark` 정답/케이스 변경 · `kind=battery` 배터리 % (시작·정지·60초마다)
+- `truth` 는 그 행 시점의 정답 라벨, `case` 는 선택된 케이스 id
+
+## 5. 측정 프로토콜 (D3 승계)
+
+파트너 QA 가 실기기에서 수행한다. 기기 2종 이상(Android 중급 1 · iPhone 1) 권장. 결과는 `docs/handoff/S04.md` 의 표에 적는다.
+
+### 5.1 준비
+1. `build-android` 워크플로(debug) 의 `soongong-dev-debug-apk` 설치(iOS 는 S15 워크플로 전까지 Xcode 로컬 빌드).
+2. 화면 밝기 50%, 자동 꺼짐 10분 이상, 전면 카메라 책상 위 50–80 cm.
+3. `/_seat_lab` → 권한 요청 → 가용성 확인(`ok` 확인) → 케이스 선택 → 정답 라벨 선택 → 시작.
+4. 케이스가 끝나면 정지 → CSV 내보내기(케이스별 파일 1개).
+
+### 5.2 케이스
+
+| id | 종류 | 상황 | 시간 | 정답 라벨 | 판정 |
+|---|---|---|---|---|---|
+| P1 | 양성 | 정면 착석 | 10분 | 실제 착석 | 검출률(seated/전체 sample) |
+| P2 | 양성 | 고개 숙임 필기 | 10분 | 실제 착석 | 검출률 |
+| P3 | 양성 | 측면(±45°) | 10분 | 실제 착석 | 검출률 |
+| P4 | 양성 | 저조도(스탠드만) | 10분 | 실제 착석 | 검출률 |
+| N1 | 음성 (a) | 빈 자리 | 2분 | 실제 이탈 | 오검출(seated/전체 sample) |
+| N2 | 음성 (a) | 의자에 걸린 옷 | 2분 | 실제 이탈 | 오검출 |
+| N3 | 음성 (a) | 벽 포스터 얼굴 | 2분 | 실제 이탈 | 오검출 (`minFaceSize` 별 비교) |
+| N4 | 음성 (a) | 사진 속 얼굴 | 2분 | 실제 이탈 | 오검출 |
+| N5 | 음성 (a) | 반려동물 | 2분 | 실제 이탈 | 오검출 |
+| N6 | 음성 (a) | 조명 급변(끄기/켜기 반복) | 2분 | 실제 이탈 | 오검출 + `cameraLost` 미발생 확인 |
+| N7 | 관찰 | 렌즈 가림(손·테이프) | 2분 | 실제 이탈 | v1 은 이탈 처리. seated=false 유지 여부와 Lost 발생 여부를 **기록만** |
+| N8 | 음성 (b) | 화면 끄기 | 2분 | — | `cameraLost` 발생 · 그 구간 sample 행 0 · 화면 켠 뒤 `start` → `cameraRecovered` |
+| N9 | 음성 (b) | 전화 수신 | 2분 | — | 동일 |
+| N10 | 음성 (b) | 다른 앱 카메라 점유 | 2분 | — | Android: `cameraLost`(또는 가용성 `cameraBusy`). iOS: 프레임 정지 → 3초 내 `cameraLost` |
+
+(b) 에서 `seated=false` 샘플이 찍혀 이탈로 처리되면 **실패**다(D23). (b) 의 "시작 후 재시작" 은 하니스에서 정지 → 시작으로 재현한다(측정 화면에서는 S06 이 자동 재시작).
+
+### 5.3 배터리
+P1 조건으로 60분 연속(화면 켜짐). CSV `battery` 행의 첫 값 − 마지막 값 ≤ 8. 저전력 모드로 한 번 더 측정해 차이를 기록.
+
+### 5.4 계산
+
+- 검출률 = `truth=seated` 인 sample 중 `seated=1` 비율(하니스 "정답 착석 중 착석 판정" 과 같다).
+- (a) 오검출 = `truth=away` 인 sample 중 `seated=1` 비율.
+- (b) 장애 이벤트 = 케이스마다 `event` 행에 `cameraLost` 가 있고, Lost 와 다음 Recovered/stop 사이에 `sample` 행이 없으면 통과.
+- 처리 시간 = `latency_ms` 의 중앙값·p95(스프레드시트).
+
+## 6. 목표치
+
+| 항목 | 목표 | 근거 |
+|---|---|---|
+| P1 정면 검출률 | ≥ 97% | 지시문 §4.5 |
+| P2 고개 숙임 검출률 | ≥ 90% | 지시문 §4.5 (미달 시 §2.3 전환) |
+| (a) 오검출 | ≤ 3% | 지시문 §4.5 |
+| (b) 장애 이벤트 | 100% | D23 |
+| 배터리 | ≤ 8%/h (화면 켜짐) | PRD §8 |
+| 처리 시간 | 중앙값 ≤ 50 ms (주기 1초의 5%) | 배터리 예산 |
+
+## 7. S06 사용 예
+
+```dart
+final engine = ref.read(seatEngineProvider); // prod: SeatEngineImpl, dev: 메뉴 스위치
+final permission = await CameraPermission.request();
+if (!permission.isGranted) {
+  if (permission.needsSettings) { /* setupDen: 설정 열기 버튼 → CameraPermission.openSettings() */ }
+  return; // 수동 모드 제안
+}
+switch (await engine.checkAvailability()) {
+  case SeatAvailability.ok: break;
+  case SeatAvailability.permissionDenied: /* setupDen */ return;
+  case SeatAvailability.cameraBusy: /* errCam → camBusyN 수동 */ return;
+  case SeatAvailability.unavailable: /* 수동 모드 */ return;
+}
+final errors = engine.events.listen((e) => switch (e) {
+  SeatCameraLost() => tl.pause(clock.now()),          // D23 paused
+  SeatCameraRecovered() => tl.resume(clock.now()),
+  SeatError(:final message) => showLostSheet(message), // start 실패 코드 또는 detector_failed
+});
+engine.samples.listen((s) => tl.onSeatSample(at: clock.now(), seated: s.seated));
+await engine.start(SeatEngineConfig(lowPower: battery <= 20 || settings.lowPower));
+// 포그라운드 복귀(AppLifecycleState.resumed) → if (!running) await engine.start(cfg);
+```

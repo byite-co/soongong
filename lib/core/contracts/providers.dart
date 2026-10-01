@@ -2,9 +2,17 @@
 // implementing sessions (S04 SeatEngine · S06 ReadingEngine · S12
 // BillingGateway · S13 SyncEngine) replace the body or override the provider
 // in bootstrap — the provider names are the stable seam.
+//
+// S04: `seatEngineProvider` returns the real camera engine in the prod
+// flavor, and in dev whenever the dev menu's "구현: 실제 카메라" switch is on
+// (default Fake, so emulators, widget tests and other sessions keep working
+// without a camera).
 
+import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderListenableSelect;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../data/engines/seat_engine_impl.dart';
+import '../config/app_config.dart';
 import '../dev/dev_fake_settings.dart';
 import 'contracts.dart';
 import 'fakes/fakes.dart';
@@ -18,6 +26,13 @@ String deviceId(Ref ref) =>
 
 @Riverpod(keepAlive: true)
 SeatEngine seatEngine(Ref ref) {
+  final useReal = AppConfig.isProd ||
+      ref.watch(devFakeSettingsControllerProvider.select((s) => s.seatReal));
+  if (useReal) {
+    final engine = SeatEngineImpl.camera();
+    ref.onDispose(engine.dispose);
+    return engine;
+  }
   final fake = FakeSeatEngine();
   ref.listen<DevFakeSettings>(
     devFakeSettingsControllerProvider,

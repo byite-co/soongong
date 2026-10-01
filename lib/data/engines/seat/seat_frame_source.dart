@@ -1,0 +1,94 @@
+// Camera abstraction for the seat engine (S04). The engine never touches the
+// camera plugin directly: a [SeatFrameSource] delivers opaque [SeatFrame]s
+// through a synchronous callback and a [PresenceDetector] answers "is a
+// person in this frame?". Tests inject fakes for both.
+//
+// A frame is valid only inside the callback and the detection it starts.
+// Nothing may keep a reference to it afterwards (CLAUDE.md §9: frames are
+// never stored, copied to disk or transmitted).
+
+import 'package:flutter/widgets.dart' show AppLifecycleState;
+
+import 'seat_availability.dart';
+
+/// Opaque frame handle. Concrete sources subclass it; detectors downcast.
+abstract class SeatFrame {
+  const SeatFrame();
+}
+
+class SeatFrameSourceConfig {
+  const SeatFrameSourceConfig({required this.lowPower});
+
+  final bool lowPower;
+
+  /// Target camera frame rate requested from the platform (best effort).
+  /// The engine processes far fewer frames than this (see FrameCadence); a
+  /// lower sensor rate only saves power.
+  int get targetFps => lowPower ? lowPowerFps : normalFps;
+
+  static const int normalFps = 15;
+  static const int lowPowerFps = 10;
+}
+
+/// Thrown by [SeatFrameSource.open]. [code] is stable and surfaces as
+/// `SeatError(code)`: `permission_denied` · `no_camera` · `camera_busy` ·
+/// `camera_init_failed`.
+class SeatFrameSourceException implements Exception {
+  const SeatFrameSourceException(this.code, [this.detail]);
+
+  final String code;
+  final String? detail;
+
+  @override
+  String toString() => 'SeatFrameSourceException($code${detail == null ? '' : ': $detail'})';
+}
+
+typedef SeatFrameCallback = void Function(SeatFrame frame);
+
+/// Platform fault while the source is open (error description from the
+/// camera plugin, already free of frame data).
+typedef SeatFaultCallback = void Function(CameraFault fault, String description);
+
+abstract class SeatFrameSource {
+  /// Opens the camera briefly without streaming to classify hardware / busy
+  /// state, then releases it. Never prompts for permission.
+  Future<CameraProbeResult> probe();
+
+  /// Opens the camera and starts delivering frames to [onFrame]. Throws
+  /// [SeatFrameSourceException] when the camera cannot be opened.
+  Future<void> open(
+    SeatFrameSourceConfig config, {
+    required SeatFrameCallback onFrame,
+    required SeatFaultCallback onFault,
+  });
+
+  /// Stops the stream and releases the camera. Safe to call when closed.
+  Future<void> close();
+
+  bool get isOpen;
+}
+
+abstract class PresenceDetector {
+  /// `true` when a person is present in [frame]. Implementations must not
+  /// retain [frame] after the returned future completes.
+  Future<bool> detect(SeatFrame frame);
+
+  Future<void> close();
+}
+
+/// Permission gateway (production: `permission_handler`).
+abstract class CameraPermissionGateway {
+  /// Current state without prompting.
+  Future<CameraPermissionResult> status();
+
+  /// Prompts when the OS still allows it; otherwise returns the current state.
+  Future<CameraPermissionResult> request();
+
+  /// Opens the OS app-settings screen. `false` when it could not be opened.
+  Future<bool> openSettings();
+}
+
+/// App lifecycle feed. Production wraps `WidgetsBinding`; tests use a stream.
+abstract class LifecycleSource {
+  Stream<AppLifecycleState> get states;
+}
