@@ -2,7 +2,7 @@
 -- dev/0002 (jsonb_key_paths recursion). Runs as postgres for the dev-only helpers
 -- (service_role has no EXECUTE on them), then as service_role for the RPCs.
 begin;
-select plan(47);
+select plan(51);
 
 -- ---------------------------------------------------------------------------
 -- 1. jsonb_key_paths (dev/0002): several keys · nested objects · arrays · depth cap
@@ -60,7 +60,10 @@ insert into storage.objects (bucket_id, name, created_at) values
   ('reading-photos', 'bbbbbbbb-0000-4000-8000-000000000001/80000000-0000-4000-8000-000000000002/p0.jpg', now() - interval '25 hours'),
   ('reading-photos', 'bbbbbbbb-0000-4000-8000-000000000001/80000000-0000-4000-8000-0000000000ff/p0.jpg', now() - interval '25 hours'),
   ('reading-photos', 'bbbbbbbb-0000-4000-8000-000000000001/80000000-0000-4000-8000-000000000003/p1.jpg', now() - interval '1 hour'),
-  ('reading-photos', 'bbbbbbbb-0000-4000-8000-000000000001/80000000-0000-4000-8000-000000000004/p0.jpg', now() - interval '25 hours');
+  ('reading-photos', 'bbbbbbbb-0000-4000-8000-000000000001/80000000-0000-4000-8000-000000000004/p0.jpg', now() - interval '25 hours'),
+  -- SLA boundary (0010: candidates older than 23 h, hourly scan): 23 h 59 m → this run · 22 h → not yet
+  ('reading-photos', 'bbbbbbbb-0000-4000-8000-000000000001/80000000-0000-4000-8000-0000000000fe/p0.jpg', now() - interval '23 hours 59 minutes'),
+  ('reading-photos', 'bbbbbbbb-0000-4000-8000-000000000001/80000000-0000-4000-8000-0000000000fd/p0.jpg', now() - interval '22 hours');
 insert into public.photo_delete_queue (request_id, user_id, bucket_path)
 values ('80000000-0000-4000-8000-000000000004', 'bbbbbbbb-0000-4000-8000-000000000001', 'bbbbbbbb-0000-4000-8000-000000000001/80000000-0000-4000-8000-000000000004/p0.jpg');
 -- 1200 orphan objects (uploaded, never submitted, request rows never synced), > 2 batches of 500
@@ -73,7 +76,7 @@ from generate_series(1, 1200) g;
 select ok(has_function_privilege('service_role', 'public.photo_residue_run(int)', 'execute'), 'photo_residue_run: service_role may execute');
 select ok(not has_function_privilege('authenticated', 'public.photo_residue_run(int)', 'execute')
       and not has_function_privilege('anon', 'public.photo_residue_run(int)', 'execute'), 'photo_residue_run: anon/authenticated may not');
-select is((select count(*) from cron.job where jobname = 'soongong-photo-residue' and schedule = '45 15 * * *' and active), 1::bigint, 'daily cron job soongong-photo-residue registered');
+select is((select count(*) from cron.job where jobname = 'soongong-photo-residue' and schedule = '10 * * * *' and active), 1::bigint, 'hourly cron job soongong-photo-residue (:10) registered (0010)');
 
 set local role service_role;
 
@@ -81,18 +84,37 @@ set local role service_role;
 -- 2. photo_residue_run: everything > 24 h that is not an active request is queued, in one run
 -- ---------------------------------------------------------------------------
 create temporary table run1 as select public.photo_residue_run() as r;
-select is((select r ->> 'scanned' from run1), '1204', 'residue: 1204 objects older than 24 h scanned (fresh one skipped)');
-select is((select r ->> 'queued' from run1), '1202', 'residue: 1200 orphans + draft + unknown request queued (processing and already-pending skipped)');
+select is((select r ->> 'scanned' from run1), '1205', 'residue: 1205 objects older than 23 h scanned (1 h and 22 h ones skipped)');
+select is((select r ->> 'queued' from run1), '1203', 'residue: 1200 orphans + draft + unknown request + 23h59m object queued (processing and already-pending skipped)');
 select is((select r ->> 'skipped_active' from run1), '1', 'residue: the processing request''s photo is left alone');
 select is((select (r ->> 'batches')::int from run1), 3, 'residue: 500-row cursor → 3 batches');
 select results_eq($$select count(*) from public.photo_delete_queue where status = 'pending' and bucket_path like '%/80000000-0000-4000-8000-000000000003/p0.jpg'$$, $$values (1::bigint)$$, 'residue: abandoned draft photo queued');
 select results_eq($$select count(*) from public.photo_delete_queue where bucket_path like '%/80000000-0000-4000-8000-000000000002/%'$$, $$values (0::bigint)$$, 'residue: processing request photo not queued');
 select results_eq($$select count(*), min(request_id)::text from public.photo_delete_queue where bucket_path like '%/80000000-0000-4000-8000-0000000000ff/%'$$, $$values (1::bigint, '80000000-0000-4000-8000-0000000000ff'::text)$$, 'residue: object without a request row queued (request_id kept from the path)');
-select results_eq($$select count(*) from public.photo_delete_queue where bucket_path like '%/p1.jpg'$$, $$values (0::bigint)$$, 'residue: object younger than 24 h not queued');
+select results_eq($$select count(*) from public.photo_delete_queue where bucket_path like '%/p1.jpg'$$, $$values (0::bigint)$$, 'residue: object younger than 23 h (1 h) not queued');
+select results_eq($$select count(*) from public.photo_delete_queue where bucket_path like '%/80000000-0000-4000-8000-0000000000fe/%'$$, $$values (1::bigint)$$, 'residue SLA: uploaded 23 h 59 m ago → queued by this hourly run (≤ 24 h)');
+select results_eq($$select count(*) from public.photo_delete_queue where bucket_path like '%/80000000-0000-4000-8000-0000000000fd/%'$$, $$values (0::bigint)$$, 'residue SLA: uploaded 22 h ago → waits for a later run');
 select results_eq($$select count(*) from public.photo_delete_queue where bucket_path like '%/80000000-0000-4000-8000-000000000004/%'$$, $$values (1::bigint)$$, 'residue: already-pending path not queued twice');
 select results_eq($$select count(*) from public.photo_delete_queue where bucket_path like '%/81000000-%' and status = 'pending' and user_id = 'bbbbbbbb-0000-4000-8000-000000000001'$$, $$values (1200::bigint)$$, 'residue: all 1200 orphans queued with user_id');
 select is(public.photo_residue_run() ->> 'queued', '0', 'residue: second run queues nothing new (idempotent while pending)');
-select is((select count(*) from public.photo_delete_claim(10) x), 1::bigint, 'residue rows are claimable by the runner (jsonb array returned)');
+
+-- runner drain simulation (photo-delete-runner: claim 500 → delete → mark, ≤ 10 rounds per 5-minute run)
+create or replace function pg_temp.drain_run() returns table (rounds int, claimed int) language plpgsql as $$
+declare v jsonb; i int := 0; n int; total int := 0;
+begin
+  loop
+    v := public.photo_delete_claim(500);
+    n := jsonb_array_length(v);
+    exit when n = 0;
+    i := i + 1; total := total + n;
+    perform public.photo_delete_mark(array(select (x ->> 'id')::bigint from jsonb_array_elements(v) x), true);
+    exit when n < 500 or i >= 10;
+  end loop;
+  return query select i, total;
+end $$;
+select results_eq($$select * from pg_temp.drain_run()$$, $$values (3, 1204)$$, 'runner run 1: 1204 pending rows (1200 backlog + 4) drained in 3 rounds of 500');
+select results_eq($$select count(*) filter (where status = 'pending'), count(*) filter (where status = 'done') from public.photo_delete_queue$$, $$values (0::bigint, 1204::bigint)$$, 'runner: everything done within the first run (≤ 2 runs required)');
+select results_eq($$select * from pg_temp.drain_run()$$, $$values (0, 0)$$, 'runner run 2: nothing left');
 
 -- ---------------------------------------------------------------------------
 -- 3. reading_save: marks[] / items[] validation, nothing written before it passes

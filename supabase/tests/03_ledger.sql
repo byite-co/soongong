@@ -72,7 +72,7 @@ select is(public.reading_status('aaaaaaaa-0000-4000-8000-000000000001', '6000000
 select is(public.reading_status('aaaaaaaa-0000-4000-8000-000000000001', '99999999-0000-4000-8000-000000000001') ->> 'outcome', 'not_found', 'status of unknown id → not_found');
 
 -- 2. completion -----------------------------------------------------------------------------------------
-select is(public.reading_finish('60000000-0000-4000-8000-000000000001', 'done', '{"pages":[{"index":0,"items":[{"number":1,"mark":"wrong","confidence":0.3}]}]}'::jsonb) ->> 'outcome',
+select is(public.reading_finish('aaaaaaaa-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000001', 'done', '{"pages":[{"index":0,"items":[{"number":1,"mark":"wrong","confidence":0.3}]}]}'::jsonb) ->> 'outcome',
   'done', '2 finish done');
 select results_eq($$select * from pg_temp.quota()$$, $$values (1, 0)$$, '2 used+1 · reserved−1');
 select results_eq($$select status::text, quota_charged, result_json is not null, completed_at is not null from public.reading_requests where request_id = '60000000-0000-4000-8000-000000000001'$$,
@@ -80,11 +80,11 @@ select results_eq($$select status::text, quota_charged, result_json is not null,
 select is((select count(*) from public.reading_jobs), 0::bigint, '2 job row removed');
 select results_eq($$select count(*), bool_and(status = 'pending') from public.photo_delete_queue where request_id = '60000000-0000-4000-8000-000000000001'$$,
   $$values (2::bigint, true)$$, '2 photo paths queued as pending in the same transaction');
-select is(public.photo_delete_done('60000000-0000-4000-8000-000000000001', array['aaaaaaaa-0000-4000-8000-000000000001/60000000-0000-4000-8000-000000000001/p0.jpg']), 1, 'immediate delete marks one path done');
+select is(public.photo_delete_done('aaaaaaaa-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000001', array['aaaaaaaa-0000-4000-8000-000000000001/60000000-0000-4000-8000-000000000001/p0.jpg']), 1, 'immediate delete marks one path done');
 select is(public.reading_status('aaaaaaaa-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000001') -> 'result_json' -> 'pages' -> 0 -> 'items' -> 0 ->> 'mark', 'wrong', 'status exposes result_json in done_unsaved');
 
 -- 3. cancel vs completion race ---------------------------------------------------------------------------------
-select results_eq($$select outcome, status from jsonb_to_record(public.reading_finish('60000000-0000-4000-8000-000000000001', 'cancelled')) as x(outcome text, status text)$$,
+select results_eq($$select outcome, status from jsonb_to_record(public.reading_finish('aaaaaaaa-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000001', 'cancelled')) as x(outcome text, status text)$$,
   $$values ('noop'::text, 'done_unsaved'::text)$$, '3 late cancel → noop, result kept (already_done)');
 select results_eq($$select * from pg_temp.quota()$$, $$values (1, 0)$$, '3 ledger unchanged by the late cancel');
 select is(public.reading_submit('aaaaaaaa-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000002', pg_temp.payload('60000000-0000-4000-8000-000000000002')) ->> 'outcome',
@@ -168,7 +168,7 @@ update public.reading_quota set used = 1 where user_id = 'aaaaaaaa-0000-4000-800
 
 -- expire ------------------------------------------------------------------------------------------------------------------
 select is(public.reading_submit('aaaaaaaa-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000006', pg_temp.payload('60000000-0000-4000-8000-000000000006')) ->> 'outcome', 'accepted', 'expire: new request');
-select is(public.reading_finish('60000000-0000-4000-8000-000000000006', 'done', '{"pages":[]}'::jsonb) ->> 'outcome', 'done', 'expire: done');
+select is(public.reading_finish('aaaaaaaa-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000006', 'done', '{"pages":[]}'::jsonb) ->> 'outcome', 'done', 'expire: done');
 update public.reading_requests set completed_at = public.iso_utc(now() - interval '8 days') where request_id = '60000000-0000-4000-8000-000000000006';
 select is(public.reading_expire_run(), 1, 'expire run → 1');
 select results_eq($$select status::text, result_json is null from public.reading_requests where request_id = '60000000-0000-4000-8000-000000000006'$$, $$values ('expired'::text, true)$$, 'expired · result_json null');

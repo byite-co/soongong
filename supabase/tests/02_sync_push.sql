@@ -153,7 +153,7 @@ select is(public.sync_push(0, pg_temp.row('reading_requests', '60000000-0000-400
 -- D16 delete-only mutation on a saved request → cascade -----------------------------------------------------------------
 reset role;
 set local role service_role;
-select is(public.reading_finish('60000000-0000-4000-8000-000000000003', 'done', '{"pages":[{"index":0,"items":[{"number":3,"mark":"wrong","confidence":0.4}]}]}'::jsonb) ->> 'outcome', 'done', 'finish → done_unsaved');
+select is(public.reading_finish('aaaaaaaa-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000003', 'done', '{"pages":[{"index":0,"items":[{"number":3,"mark":"wrong","confidence":0.4}]}]}'::jsonb) ->> 'outcome', 'done', 'finish → done_unsaved');
 select is(public.reading_save('aaaaaaaa-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000003',
     '[{"page_index":0,"number":3,"mark":"wrong","wrong_item_id":"70000000-0000-4000-8000-000000000001"}]'::jsonb,
     '[{"id":"70000000-0000-4000-8000-000000000001","page_index":0,"number":3,"mark":"wrong","confidence":0.4,"user_confirmed":true}]'::jsonb) ->> 'outcome',

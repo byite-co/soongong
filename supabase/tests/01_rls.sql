@@ -67,7 +67,7 @@ select is((public.sync_push(0, '[{"table":"sessions","id":"bbbbbbbb-0000-4000-80
   'invalid_columns', '⑨ user_id in data → invalid_columns');
 select is((select note from public.sessions where id = 'bbbbbbbb-0000-4000-8000-000000000001'), null, '⑨ the rejected row did not change');
 -- ⑩ service functions with a user JWT → denied -----------------------------------------------------
-select throws_ok($$select public.reading_finish('cccccccc-0000-4000-8000-000000000001', 'done', '{}'::jsonb)$$, '42501', null, '⑩ reading_finish denied to authenticated');
+select throws_ok($$select public.reading_finish('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001', 'done', '{}'::jsonb)$$, '42501', null, '⑩ reading_finish denied to authenticated');
 select throws_ok($$select public.reading_submit('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001', '{}'::jsonb)$$, '42501', null, '⑩ reading_submit denied to authenticated');
 select throws_ok($$select public.reading_status('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001')$$, '42501', null, '⑩ reading_status denied to authenticated');
 select throws_ok($$select public.reading_save('aaaaaaaa-0000-4000-8000-000000000001', 'x', '[]'::jsonb, '[]'::jsonb)$$, '42501', null, '⑩ reading_save denied to authenticated');
@@ -102,7 +102,7 @@ select throws_ok($$select public.profile_set_onboarding_done()$$, 'P0001', 'no_p
 -- ⑩ service_role succeeds ------------------------------------------------------------------
 reset role;
 set local role service_role;
-select is((public.reading_finish('cccccccc-0000-4000-8000-000000000001', 'done', '{"pages":[]}'::jsonb) ->> 'outcome'), 'done', '⑩ service_role may call reading_finish');
+select is((public.reading_finish('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001', 'done', '{"pages":[]}'::jsonb) ->> 'outcome'), 'done', '⑩ service_role may call reading_finish');
 select is((public.reading_status('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001') ->> 'status'), 'done_unsaved', '⑩ service_role may call reading_status');
 reset role;
 

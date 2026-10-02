@@ -1,6 +1,6 @@
 # 판독 API (`docs/reading-api.md`) — S03 확정 · S10/S11/S16 접점
 
-D16 · D17 의 서버 구현. SQL: `supabase/migrations/0005_reading.sql` + `0009_photo_residue_marks_validation.sql`, Edge: `supabase/functions/reading-*`, 테스트: `supabase/tests/03_ledger.sql`(pgTAP 76건) · `06_s03b.sql`(47건). 모든 Edge Function 은 `POST` + JSON, 사용자 JWT(`Authorization: Bearer`) + `x-device-id` 헤더. 서버 함수는 `service_role` 전용이라 앱이 직접 RPC 로 부를 수 없다(D24).
+D16 · D17 의 서버 구현. SQL: `supabase/migrations/0005_reading.sql` + `0009_photo_residue_marks_validation.sql` + `0010_account_boundary_photo_sla.sql`, Edge: `supabase/functions/reading-*`, 테스트: `supabase/tests/03_ledger.sql`(pgTAP 76건) · `06_s03b.sql`(51건) · `07_s03b_boundary.sql`(39건, 계정 경계). **모든 서버 함수는 요청을 `(user_id, request_id)` 로만 식별한다**(D16) — 다른 계정에 같은 `request_id` 가 있어도 서로 보이지 않는다(0010). 모든 Edge Function 은 `POST` + JSON, 사용자 JWT(`Authorization: Bearer`) + `x-device-id` 헤더. 서버 함수는 `service_role` 전용이라 앱이 직접 RPC 로 부를 수 없다(D24).
 
 ## 0. 공통 응답
 
@@ -45,6 +45,8 @@ selecting ──submit──▶ processing ──60s──▶ taking_long
 `processing` 이 60초를 넘기면 조회 시점에 `taking_long` 으로 전이된다(reaper 도 1분마다). S10 `watch()` 폴링: 2초 → 60초 후 5초, `410` 이면 종료 + 로컬 tombstone(`applyDeleted`). `failed` 의 `fail_reason`: `engine_unavailable`(S16 전) · `engine_<status>` · `engine_error` · `timeout` · `empty_result`.
 
 ## 3. `reading-cancel`
+
+호출자의 `(auth.uid(), request_id)` 로 `reading_status` → 404/410 판정 뒤 `reading_finish(user_id, request_id, 'cancelled', null, 'user_cancel')`. 다른 계정의 같은 `request_id` 는 `404 not_found`(0010).
 
 요청 `{request_id}` → `{outcome:"cancelled"}` / `{outcome:"already_done", result, status}` / `{outcome:"already_failed", status}`. 취소 성공 시 예약 해제 + 사진 즉시 삭제. 앱은 반환값으로만 분기한다("미차감" 단정 금지, D16).
 
@@ -94,16 +96,16 @@ Edge 가 아니라 `sync_push` 다. `docs/sync-rpc.md` §2 특례 표 참고:
 - 워커 선택 SQL(`reading_claim_job`, D16):
   ```sql
   update reading_jobs set lease_until = now() + interval '3 minutes', attempts = attempts + 1
-  where request_id = (select request_id from reading_jobs
-                      where (lease_until is null or lease_until <= now()) and deadline > now() and attempts < 2
-                      order by created_at for update skip locked limit 1)
-  returning *;
+  where (user_id, request_id) = (select user_id, request_id from reading_jobs
+                                 where (lease_until is null or lease_until <= now()) and deadline > now() and attempts < 2
+                                 order by created_at for update skip locked limit 1)
+  returning *;   -- reading_jobs PK = (user_id, request_id) (0010)
   ```
   기동: `reading_submit` 트랜잭션 안의 `net.http_post(reading-worker)`(커밋 후 전송) + pg_cron 1분 sweep. 엔진 호출부 `callEngine()` 은 **501 스텁**(S16) → `reading_finish(failed,'engine_unavailable')` → 사진 즉시 삭제.
-- `reading_finish(request_id, outcome, result?, reason?)`: `processing|taking_long` 에서 최초 1회. `done` → `used+1·reserved−1·result_json·done_unsaved·completed_at·quota_charged`; `failed|cancelled` → `reserved−1`. 요청 epoch ≠ 현재 → `cancelled/purge`. `result` 없는 `done` → `failed/empty_result`. 같은 트랜잭션에서 `reading_jobs` 삭제 + `photo_delete_queue(pending)` 등록. 늦은 전이는 `noop`.
-- reaper(1분 cron, `reading_reaper_run`): 60초 경과 processing → taking_long, `deadline` 경과 또는 attempts ≥ 2(리스 만료) → `failed/timeout`.
-- `photo-delete-runner`(5분 cron, 큐에 기한 도래 행이 있을 때만 기동): `pending` 큐를 `next_at` 백오프(5분 × attempts, 상한 1시간)로 처리. 큐 밖의 Storage 목록 스캔은 하지 않는다.
-- `photo_residue_run`(일 1회 cron `soongong-photo-residue`, 00:45 KST, 0009): 큐와 독립된 24시간 안전망. `storage.objects` 의 `reading-photos` 객체 중 `created_at < now()−24h` 이고 경로의 request 가 `processing/taking_long` 이 아닌(또는 request 행이 없는) 것을 `(created_at, id)` 커서로 500개씩 끝까지 순회해 `photo_delete_queue` 에 `pending` 으로 넣는다(이미 pending 인 경로는 건너뜀). 큐 유무와 무관하게 실행. 제출 전 업로드만 하고 중단한 객체, 500개 초과 백로그 모두 다음 실행에서 큐에 들어간다(`tests/06_s03b.sql`).
+- `reading_finish(user_id, request_id, outcome, result?, reason?)`(0010; 이전 4인자 시그니처는 DROP): `(user_id, request_id)` 의 행만 본다 — 다른 계정의 같은 `request_id` 는 `noop`. `processing|taking_long` 에서 최초 1회. `done` → `used+1·reserved−1·result_json·done_unsaved·completed_at·quota_charged`; `failed|cancelled` → `reserved−1`. 요청 epoch ≠ 현재 → `cancelled/purge`. `result` 없는 `done` → `failed/empty_result`. 같은 트랜잭션에서 그 계정의 `reading_jobs` 행 삭제 + `photo_delete_queue(pending, user_id 포함)` 등록. 늦은 전이는 `noop`. 즉시 삭제 후 `photo_delete_done(user_id, request_id, paths)` 로 그 계정의 큐 행만 done.
+- reaper(1분 cron, `reading_reaper_run`): 60초 경과 processing → taking_long, `deadline` 경과 또는 attempts ≥ 2(리스 만료) → `failed/timeout` — `(user_id, request_id)` 쌍마다 독립(한 계정의 timeout 이 같은 `request_id` 를 가진 다른 계정에 번지지 않는다).
+- `photo-delete-runner`(5분 cron, 큐에 기한 도래 행이 있을 때만 기동): `pending` 큐를 **500개씩 claim → 삭제 → done**, 가득 찬 배치가 계속 나오면 같은 실행에서 **최대 10회 반복**(`photo_delete_claim` 상한 500, 0010) → 백로그 5,000건까지 한 번의 실행, 그 이상도 1시간(12회) 안에 소진. 실패분은 `next_at` 백오프(5분 × attempts, 상한 1시간). 큐 밖의 Storage 목록 스캔은 하지 않는다.
+- `photo_residue_run`(**매시 :10** cron `soongong-photo-residue`, 0009→0010): 큐와 독립된 24시간 안전망. `storage.objects` 의 `reading-photos` 객체 중 **`created_at < now()−23h`** 이고 경로의 `(user_id, request_id)` 가 `processing/taking_long` 이 아닌(또는 request 행이 없는) 것을 `(created_at, id)` 커서로 500개씩 끝까지 순회해 `photo_delete_queue` 에 `pending` 으로 넣는다(이미 pending 인 경로는 건너뜀). 큐 유무와 무관하게 실행. **24시간 산식(D14)**: 후보 23h + 검사 주기 1h ⇒ 어떤 업로드도 24시간 안에 큐 등록, 이어서 5분 runner 가 소진. 제출 전 업로드만 하고 중단한 객체, 500개 초과 백로그 모두 다음 실행에서 큐에 들어간다(`tests/06_s03b.sql`: 23h59m 경계 · 1,200건 백로그 1회 실행 소진).
 - `reading_expire_run`(일 1회): `done_unsaved` + 7일 → `expired`, `result_json=null`.
 
 ## 9. Storage
