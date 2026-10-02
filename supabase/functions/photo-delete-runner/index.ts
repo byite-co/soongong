@@ -4,7 +4,7 @@
 // done, and repeats within the same run (≤ 10 rounds) while the queue keeps
 // returning full batches — a backlog drains within the hour.
 // The 24-hour residue safety net is NOT here: photo_residue_run() (0010, hourly
-// cron, 23 h candidates) scans storage.objects in SQL and feeds this same queue.
+// cron, 22 h candidates) scans storage.objects in SQL and feeds this same queue.
 import { requireJobSecret } from "../_shared/auth.ts";
 import { rpc } from "../_shared/db.ts";
 import { json } from "../_shared/http.ts";

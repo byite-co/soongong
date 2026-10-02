@@ -8,6 +8,10 @@
 // Auth: `x-e2e-token` must equal server_config('e2e_token') (generated in the
 // DB with gen_random_uuid(); invoked via pg_net from SQL so the token never
 // leaves the project).
+//
+// S03b real-file deletion check: `storage-put` uploads synthetic JPEG bytes with the
+// platform's service role from inside the project, `storage-list` lists a prefix —
+// the caller only ever sees counts and object names, never a key.
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -117,6 +121,35 @@ async function run(s: Scenario): Promise<Step[]> {
   return steps;
 }
 
+// 16×16 grey baseline JPEG (161 bytes), generated with ImageMagick — valid image data, no content.
+const JPEG_B64 =
+  "/9j/4AAQSkZJRgABAQAAAAAAAAD/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/wAALCAAQABABAREA/8QAFQABAQAAAAAAAAAAAAAAAAAAAAH/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAA/AIA//9k=";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const PHOTO_BUCKET = "reading-photos";
+
+async function storagePut(userId: string, requestId: string, count: number): Promise<Record<string, unknown>> {
+  if (!UUID_RE.test(userId) || !UUID_RE.test(requestId)) return { error: "invalid_ids" };
+  const bytes = Uint8Array.from(atob(JPEG_B64), (c) => c.charCodeAt(0));
+  const names: string[] = [];
+  const errors: string[] = [];
+  for (let i = 1; i <= Math.min(Math.max(count, 1), 10); i++) {
+    const path = `${userId}/${requestId}/p${i}.jpg`;
+    const { error } = await svc.storage.from(PHOTO_BUCKET).upload(path, bytes, { contentType: "image/jpeg", upsert: true });
+    if (error) errors.push(redactMessage(error.message));
+    else names.push(path);
+  }
+  return { uploaded: names.length, bytes_each: bytes.length, names, errors };
+}
+
+async function storageList(prefix: string): Promise<Record<string, unknown>> {
+  const [userId, requestId] = prefix.split("/");
+  if (!UUID_RE.test(userId ?? "") || (requestId && !UUID_RE.test(requestId))) return { error: "invalid_prefix" };
+  const { data, error } = await svc.storage.from(PHOTO_BUCKET).list(prefix, { limit: 100 });
+  if (error) return { error: redactMessage(error.message) };
+  const files = (data ?? []).filter((o) => o.id !== null && o.id !== undefined).map((o) => o.name);
+  return { count: files.length, names: files };
+}
+
 Deno.serve(async (req) => {
   const { data: token } = await svc.from("server_config").select("value").eq("key", "e2e_token").maybeSingle();
   if (!token?.value || req.headers.get("x-e2e-token") !== token.value) {
@@ -126,6 +159,12 @@ Deno.serve(async (req) => {
   if (body.action === "health") {
     const h = await fetch(`${SUPABASE_URL}/auth/v1/health`, { headers: { apikey: ANON } });
     return new Response(JSON.stringify({ auth_health: await h.json() }), { headers: { "content-type": "application/json" } });
+  }
+  if (body.action === "storage-put") {
+    return new Response(JSON.stringify(await storagePut(String(body.user_id ?? ""), String(body.request_id ?? ""), Number(body.count ?? 3))), { headers: { "content-type": "application/json" } });
+  }
+  if (body.action === "storage-list") {
+    return new Response(JSON.stringify(await storageList(String(body.prefix ?? ""))), { headers: { "content-type": "application/json" } });
   }
   const steps = await run(body as Scenario);
   return new Response(JSON.stringify({ scenario: (body as Scenario).name, steps }), { headers: { "content-type": "application/json" } });

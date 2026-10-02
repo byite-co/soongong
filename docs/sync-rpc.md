@@ -86,7 +86,7 @@ D2 의 서버 구현. 함수는 `supabase/migrations/0003_sync_rpc.sql`, 테스�
 
 - `reading-update-marks` 가 O 로 바뀐 문항의 `wrong_items·review_entries·retry_records` 를 tombstone.
 - `sync_push` 삭제 전용 mutation 의 cascade.
-- 고아 초안: `client_updated_at + 30일` 지난 미제출 `selecting` 초안을 일 1회 cron 이 tombstone(`draft_orphan_tombstone_run`).
+- 고아 초안: `client_updated_at + 30일` 지난 미제출 `selecting` 초안을 일 1회 cron 이 tombstone(`draft_orphan_tombstone_run`, 0011): 후보마다 `user_lock` 을 잡고 같은 트랜잭션에서 조건(`selecting`·미제출·미삭제·30일)을 재확인한 행만 tombstone — 잡이 잠금을 기다리는 동안 커밋된 `reading_submit`/`sync_push` 편집은 건너뛴다(`tests/08_s03b_orphan_lock.sql`).
 - `purge-all`·`delete-account` 는 tombstone 이 아니라 **물리 삭제**(+ epoch 증가 / 계정 삭제).
 
 ## 5. 클라이언트(S13) 체크리스트
