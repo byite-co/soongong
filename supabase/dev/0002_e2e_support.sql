@@ -47,17 +47,50 @@ create table if not exists public.hook_fixtures (
 alter table public.hook_fixtures enable row level security;
 revoke all on table public.hook_fixtures from public, anon, authenticated;
 
--- paths of a jsonb document (keys only, arrays as [])
+-- Key paths of a jsonb document (keys only, never values). Arrays appear as
+-- `[]` (`identities[].provider`), nested objects as dotted paths, every key of
+-- an object is emitted. Written in plpgsql on purpose: a recursive *SQL*
+-- function is inlined by the planner again and again and dies with
+-- "stack depth limit exceeded" (S03b finding). Depth is capped at 32 levels;
+-- anything deeper is dropped silently, never an error (the hook must not fail
+-- because of a weird payload).
+create or replace function public.jsonb_key_paths_walk(p jsonb, p_prefix text, p_depth int)
+returns setof text language plpgsql immutable
+set search_path = public, pg_temp
+as $$
+declare
+  e record;
+  v_base text;
+begin
+  if p is null or p_depth >= 32 then return; end if;
+  if jsonb_typeof(p) = 'object' then
+    for e in select key, value from jsonb_each(p) order by key loop
+      return next p_prefix || e.key;
+      if jsonb_typeof(e.value) = 'object' then
+        return query select * from public.jsonb_key_paths_walk(e.value, p_prefix || e.key || '.', p_depth + 1);
+      elsif jsonb_typeof(e.value) = 'array' then
+        return query select * from public.jsonb_key_paths_walk(e.value, p_prefix || e.key || '[]', p_depth + 1);
+      end if;
+    end loop;
+  elsif jsonb_typeof(p) = 'array' then
+    v_base := case when p_prefix = '' then '[]' else p_prefix end;
+    for e in select value from jsonb_array_elements(p) loop
+      if jsonb_typeof(e.value) = 'object' then
+        return query select * from public.jsonb_key_paths_walk(e.value, v_base || '.', p_depth + 1);
+      elsif jsonb_typeof(e.value) = 'array' then
+        return query select * from public.jsonb_key_paths_walk(e.value, v_base || '[]', p_depth + 1);
+      end if;
+    end loop;
+  end if;
+  return;
+end $$;
+revoke execute on function public.jsonb_key_paths_walk(jsonb, text, int) from public, anon, authenticated, service_role;
+
 create or replace function public.jsonb_key_paths(p jsonb, p_prefix text default '')
 returns setof text language sql immutable
+set search_path = public, pg_temp
 as $$
-  select case when jsonb_typeof(p) = 'object' then
-    (select p_prefix || k from jsonb_object_keys(p) k)
-  end
-  union all
-  select sub from jsonb_each(case when jsonb_typeof(p) = 'object' then p else '{}'::jsonb end) e,
-       lateral public.jsonb_key_paths(e.value, p_prefix || e.key || '.') sub
-  where jsonb_typeof(e.value) = 'object'
+  select distinct w from public.jsonb_key_paths_walk(p, coalesce(p_prefix, ''), 0) w
 $$;
 revoke execute on function public.jsonb_key_paths(jsonb, text) from public, anon, authenticated, service_role;
 

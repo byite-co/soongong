@@ -104,5 +104,27 @@ end $$;
 grant usage on schema net to postgres, service_role, authenticated;
 grant select on net._test_requests to service_role, authenticated;
 
--- storage schema stub (object paths are plain text in our tables; nothing needed)
+-- storage schema stub: buckets + objects with the columns photo_residue_run()
+-- reads (bucket_id · name · created_at · id). path_tokens mirrors Supabase.
 create schema if not exists storage;
+create table if not exists storage.buckets (
+  id text primary key,
+  name text not null,
+  public boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create table if not exists storage.objects (
+  id uuid primary key default gen_random_uuid(),
+  bucket_id text references storage.buckets(id),
+  name text,
+  owner uuid,
+  owner_id text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  last_accessed_at timestamptz default now(),
+  metadata jsonb,
+  path_tokens text[] generated always as (string_to_array(name, '/')) stored,
+  version text
+);
+insert into storage.buckets (id, name, public) values ('reading-photos', 'reading-photos', false) on conflict do nothing;
+grant usage on schema storage to postgres, service_role;
