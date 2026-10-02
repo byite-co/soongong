@@ -3,10 +3,16 @@
 -- pass was consumed, `app.test_trigger_fail = 'on'` raises, so the whole
 -- signup (user + identity + approval) rolls back and the pass stays.
 --
--- Enable for a real Auth API signup:   alter database postgres set app.test_trigger_fail = 'on';
---   (Auth keeps pooled connections — terminate supabase_auth_admin backends or
---   wait for new connections). Disable: alter database postgres reset app.test_trigger_fail;
--- pgTAP uses `set local app.test_trigger_fail = 'on'`.
+-- Two switches, either one injects the failure:
+--   * GUC `app.test_trigger_fail = 'on'` — pgTAP (`set local`). On the hosted
+--     project `alter database/role/function … set app.test_trigger_fail` is refused
+--     for non-superusers (42501, S03b finding), so it cannot reach GoTrue's pooled
+--     connections there.
+--   * `server_config` row `test_trigger_fail = 'on'` — real Auth API signups on dev:
+--       insert into public.server_config (key, value) values ('test_trigger_fail', 'on')
+--         on conflict (key) do update set value = excluded.value;
+--     and remove the row afterwards (delete … where key = 'test_trigger_fail').
+--     Takes effect on the next signup, no connection recycling.
 create or replace function public.signup_identity_trigger()
 returns trigger language plpgsql security definer
 set search_path = public, pg_temp
@@ -34,7 +40,8 @@ begin
     raise exception 'signup_pass_required' using errcode = 'P0001';
   end if;
   -- dev-only failure injection (after consumption, before approval)
-  if current_setting('app.test_trigger_fail', true) = 'on' then
+  if current_setting('app.test_trigger_fail', true) = 'on'
+     or public.server_config_get('test_trigger_fail') = 'on' then
     raise exception 'test_trigger_fail' using errcode = 'P0001';
   end if;
   insert into public.signup_approvals (user_id, provider, age_verified, approved_at)

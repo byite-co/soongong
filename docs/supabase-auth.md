@@ -54,7 +54,7 @@ complete-signup(consent_version) ─▶ signup_approvals.age_verified 확인 →
 
 | 경로 | 캡처 | 키 경로(`hook_fixtures.key_paths`) | 결과 |
 |---|---|---|---|
-| 이메일(`/auth/v1/signup`, 패스 없음) | 1건 | `metadata` `metadata.ip_address` `metadata.name` `metadata.time` `metadata.uuid` `user` `user.app_metadata` `user.app_metadata.provider` `user.app_metadata.providers` `user.aud` `user.created_at` `user.email` `user.id` `user.identities` `user.is_anonymous` `user.phone` `user.role` `user.updated_at` `user.user_metadata` | `provider=email` · subject 출처 `email`(= `lower(user.email)`) · `reject`(패스 없음) → GoTrue 400 "가입 확인이 필요합니다" |
+| 이메일(`/auth/v1/signup`, 패스 없음 → reject / 패스 있음 → allow) | 11건(reject 3 · allow 8, 키 경로 동일) | `metadata` `metadata.ip_address` `metadata.name` `metadata.time` `metadata.uuid` `user` `user.app_metadata` `user.app_metadata.provider` `user.app_metadata.providers` `user.aud` `user.created_at` `user.email` `user.id` `user.identities` `user.is_anonymous` `user.phone` `user.role` `user.updated_at` `user.user_metadata` | `provider=email` · subject 출처 `email`(= `lower(user.email)`) · 패스 없음 → `reject` → GoTrue 400 "가입 확인이 필요합니다" · 패스 있음 → `allow` → 가입 200, 트리거가 패스 소비·승인(5c–5i) |
 | Apple · Google · Kakao | 미캡처 | 제공자 미설정 | `user_metadata.sub` → `provider_id` 가정 유지 |
 
 확인된 점: 이메일 가입에서 `user.identities` 는 빈 배열(하위 키 없음), `user.user_metadata` 는 빈 객체이며 `app_metadata.provider = 'email'` 이 온다 — `signup_subject_from_hook` 의 이메일 분기와 일치. `metadata.ip_address` 가 포함되므로 훅은 payload 를 저장하지 않는다(캡처도 키 경로만).
@@ -65,18 +65,18 @@ complete-signup(consent_version) ─▶ signup_approvals.age_verified 확인 →
 
 - 훅 함수·트리거 함수: `postgres` 소유 `security definer`, EXECUTE 는 `supabase_auth_admin` 만(PUBLIC·anon·authenticated·service_role 회수), `grant usage on schema public to supabase_auth_admin`. 트리거는 `postgres` 가 `auth.identities` 에 생성.
 - 콘솔: Authentication → Hooks → **Before User Created** → Postgres function `public.before_user_created_hook` 활성화(`supabase/config.toml` 에도 선언). 검증은 SQL Editor 가 아니라 실제 Auth API 가입으로.
-- 훅 호출 순서 재확인: 실제 사용하는 Auth 버전에서 **훅 → (별도 트랜잭션) 사용자+identity insert → 트리거** 임을 가입 1건으로 확인하고 handoff 에 버전 기록(미완).
+- 훅 호출 순서: GoTrue v2.197.0(dev, 2026-10-02)에서 **훅 → (별도 트랜잭션) 사용자+identity insert → 트리거** 확인 — 5c(allow 행 → 승인 1·패스 0), 5i(동시 2건: 첫 트리거가 패스를 소비한 뒤 두 번째 훅이 reject). `docs/handoff/S03.md` S03b 실행 검증.
 
 ## 5. 인수 시나리오(실제 Auth API, dev 키 필요)
 
 | # | 시나리오 | 기대 | 상태 |
 |---|---|---|---|
-| 1 | 패스 없이 이메일 가입 | 훅 400 `가입 확인이 필요합니다` | pgTAP ✔ · 실 API 미실행 |
-| 2 | 티켓 → 패스 → 가입 → complete-signup | 사용자·identity·approval 1건, 패스 삭제, profiles 1건 | pgTAP ✔ · 실 API 미실행 |
-| 3 | 훅 통과 후 트리거 실패(`app.test_trigger_fail=on`, dev 마이그레이션) | 사용자·identity·승인 미생성, 패스 잔존 | pgTAP ✔ |
-| 4 | 훅 비활성 + 패스 없음 | 트리거 차단(백스톱) | pgTAP ✔(트리거 단독) |
+| 1 | 패스 없이 이메일 가입 | 훅 400 `가입 확인이 필요합니다` | pgTAP ✔ · 실 API ✔(5b·5d) |
+| 2 | 티켓 → 패스 → 가입 → complete-signup | 사용자·identity·approval 1건, 패스 삭제, profiles 1건 | pgTAP ✔ · 실 API ✔(5c·5f·5g·5h) |
+| 3 | 훅 통과 후 트리거 실패(dev/0001: GUC `app.test_trigger_fail=on` 또는 `server_config.test_trigger_fail=on`) | 사용자·identity·승인 미생성, 패스 잔존 | pgTAP ✔(GUC) · 실 API ✔(5e, server_config 스위치) |
+| 4 | 훅 비활성 + 패스 없음 | 트리거 차단(백스톱) | pgTAP ✔(트리거 단독) · 실 API ✔(5a) |
 | 5 | 기존 승인 사용자에 identity 연결(패스 유/무) | 통과, 승인 1건 | pgTAP ✔ |
-| 6 | 동시 가입 2건 | 1건(패스 PK + DELETE RETURNING) | 실 API 미실행 |
+| 6 | 동시 가입 2건 | 1건(패스 PK + DELETE RETURNING) | 실 API ✔(5i: 200 + 400) |
 | 7 | 가입 10분 후 complete-signup | 성공(패스 TTL 무관) | pgTAP ✔ |
 | 8 | 탈퇴 후 재가입 | 새 패스로 정상 | 실 API 미실행 |
 | 9 | 잘못된 aud·iss·nonce·티켓 없음 | issue-pass 400 | Deno ✔ |
