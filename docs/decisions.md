@@ -335,3 +335,10 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **[S03] 고아 초안 정리**: `client_updated_at + 30일` 지난 미제출 `selecting` 초안을 일 1회 cron 이 tombstone(S02 후보 → 확정, 지시문 [추가]).
 - **[S03] 로컬 검증 방식**: Supabase CLI·Docker 없이 PostgreSQL 16 + pgTAP + pg_cron 으로 전 마이그레이션·pgTAP 228건을 돌린다(`supabase/tests/local/`). `auth` 스키마·`net.http_post` 는 shim. 실제 Auth API 통합 테스트는 dev 프로젝트 콘솔 값 수신 후(handoff).
 - **[S03] 새 패키지**: `http` 직접 선언(이미 supabase 의존으로 lock 에 존재; `ClientException` 을 오프라인으로 매핑하기 위해).
+
+## [S03b] 세션 결정 — 지시문에 없던 사항 (2026-10-02)
+
+- **[S03b] dev 전용 실행기 `e2e-runner`**: 클라우드 세션에서 dev 프로젝트의 Auth/Edge 엔드포인트에 직접 닿을 수 없어, 실 Auth API 통합 테스트(5a–5i)는 dev 에만 배포하는 Edge 함수 `supabase/dev/functions/e2e-runner` 가 프로젝트 안에서 `/auth/v1/signup` 과 S03 Edge 함수를 호출한다. 인증은 DB 안에서 생성한 `server_config.e2e_token`(`x-e2e-token`, SQL 의 `net.http_post` 로만 전달), 응답은 상태코드·결과 코드·행 수뿐(이메일·토큰 없음). "훅·트리거 결과를 SQL 관리자 호출로 대체하지 않는다"는 제약은 유지된다(실제 GoTrue 가 사용자를 만든다). `config.toml` 미등록 · prod 배포 금지.
+- **[S03b] 훅 payload fixture 는 값이 아니라 형태만 캡처**: `supabase/dev/0002_e2e_support.sql` 이 dev 의 `before_user_created_hook` 을 재정의해 `server_config.hook_fixtures_capture = 'on'` 일 때 provider · 키 경로 · subject 출처 · 결정만 `hook_fixtures` 에 남긴다. prod 훅(0004)은 아무것도 쓰지 않는다.
+- **[S03b] `server_config.job_secret` 은 `.env` 와 별개로 생성될 수 있다**: 세션이 `.env` 값을 읽어 올릴 수 없는 환경에서는 DB 안에서 생성하고, Edge 시크릿 `JOB_SECRET` 을 그 값에 맞춘다(둘이 같기만 하면 됨). 어느 쪽이 원본인지는 handoff 에 적는다.
+- **[S03b] MCP 의 파괴 문 확인창은 우회하지 않는다**: `delete`/`drop` 이 포함된 마이그레이션 문장이 확인창에 걸리면 사람이 `supabase db push` 로 적용하거나 확인을 승인한다. 인코딩·분할 등으로 검사를 피해 가는 방법은 쓰지 않는다.

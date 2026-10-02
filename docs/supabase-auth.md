@@ -50,7 +50,7 @@ complete-signup(consent_version) ─▶ signup_approvals.age_verified 확인 →
 | 이메일 | `app_metadata.provider` 없음 또는 `email` | `lower(user.email)` |
 | Apple · Google · Kakao | `app_metadata.provider` | `user_metadata.sub` → 없으면 `user_metadata.provider_id` → 둘 다 없으면 **거부** |
 
-**경로별 실제 payload fixture 는 dev 프로젝트에서 캡처해 이 절에 붙인다(미완, handoff 참고).** 캡처 방법: `server_config.hook_fixtures_capture = 'on'` 일 때 훅이 `hook_fixtures` 테이블에 provider·키 목록만(값 아님) 기록하도록 추가하는 dev 마이그레이션을 쓰거나, Supabase Auth 로그의 hook 요청 본문을 확인한다. 소셜 payload 에서 `sub` 위치가 다르면 `signup_subject_from_hook` 만 고치면 된다(트리거는 `auth.identities` 실제 값만 보므로 영향 없음).
+**경로별 실제 payload fixture 는 dev 프로젝트에서 캡처해 이 절에 붙인다(미완 — S03b 시점 캡처 0건, `docs/handoff/S03.md` `## S03b 실행 검증`).** 캡처 장치는 `supabase/dev/0002_e2e_support.sql`(dev 전용)에 있다: `server_config.hook_fixtures_capture = 'on'` 이면 훅이 `hook_fixtures` 에 provider · 키 경로 목록(`jsonb_key_paths`, 값 없음) · subject 출처(`email` / `user_metadata.sub` / `user_metadata.provider_id` / `none`) · 결정(allow/reject)만 기록한다. 이메일 경로만 캡처 대상(소셜 제공자 미설정). 소셜 payload 에서 `sub` 위치가 다르면 `signup_subject_from_hook` 만 고치면 된다(트리거는 `auth.identities` 실제 값만 보므로 영향 없음). dev Auth 버전: GoTrue v2.197.0(2026-10-02).
 
 ## 4. 권한(D24)
 
