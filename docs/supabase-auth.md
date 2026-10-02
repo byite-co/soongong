@@ -50,7 +50,16 @@ complete-signup(consent_version) ─▶ signup_approvals.age_verified 확인 →
 | 이메일 | `app_metadata.provider` 없음 또는 `email` | `lower(user.email)` |
 | Apple · Google · Kakao | `app_metadata.provider` | `user_metadata.sub` → 없으면 `user_metadata.provider_id` → 둘 다 없으면 **거부** |
 
-**경로별 실제 payload fixture 는 dev 프로젝트에서 캡처해 이 절에 붙인다(미완 — S03b 시점 캡처 0건, `docs/handoff/S03.md` `## S03b 실행 검증`).** 캡처 장치는 `supabase/dev/0002_e2e_support.sql`(dev 전용)에 있다: `server_config.hook_fixtures_capture = 'on'` 이면 훅이 `hook_fixtures` 에 provider · 키 경로 목록(`jsonb_key_paths`, 값 없음) · subject 출처(`email` / `user_metadata.sub` / `user_metadata.provider_id` / `none`) · 결정(allow/reject)만 기록한다. 이메일 경로만 캡처 대상(소셜 제공자 미설정). 소셜 payload 에서 `sub` 위치가 다르면 `signup_subject_from_hook` 만 고치면 된다(트리거는 `auth.identities` 실제 값만 보므로 영향 없음). dev Auth 버전: GoTrue v2.197.0(2026-10-02).
+**실제 payload fixture(dev, GoTrue v2.197.0, 2026-10-02 — 값은 저장하지 않고 키 경로만 캡처):**
+
+| 경로 | 캡처 | 키 경로(`hook_fixtures.key_paths`) | 결과 |
+|---|---|---|---|
+| 이메일(`/auth/v1/signup`, 패스 없음) | 1건 | `metadata` `metadata.ip_address` `metadata.name` `metadata.time` `metadata.uuid` `user` `user.app_metadata` `user.app_metadata.provider` `user.app_metadata.providers` `user.aud` `user.created_at` `user.email` `user.id` `user.identities` `user.is_anonymous` `user.phone` `user.role` `user.updated_at` `user.user_metadata` | `provider=email` · subject 출처 `email`(= `lower(user.email)`) · `reject`(패스 없음) → GoTrue 400 "가입 확인이 필요합니다" |
+| Apple · Google · Kakao | 미캡처 | 제공자 미설정 | `user_metadata.sub` → `provider_id` 가정 유지 |
+
+확인된 점: 이메일 가입에서 `user.identities` 는 빈 배열(하위 키 없음), `user.user_metadata` 는 빈 객체이며 `app_metadata.provider = 'email'` 이 온다 — `signup_subject_from_hook` 의 이메일 분기와 일치. `metadata.ip_address` 가 포함되므로 훅은 payload 를 저장하지 않는다(캡처도 키 경로만).
+
+**소셜 경로 fixture 는 제공자 설정 후 같은 방법으로 캡처해 위 표에 추가한다**(`docs/handoff/S03.md` `## S03b 실행 검증`). 캡처 장치는 `supabase/dev/0002_e2e_support.sql`(dev 전용)에 있다: `server_config.hook_fixtures_capture = 'on'` 이면 훅이 `hook_fixtures` 에 provider · 키 경로 목록(`jsonb_key_paths`, 값 없음) · subject 출처(`email` / `user_metadata.sub` / `user_metadata.provider_id` / `none`) · 결정(allow/reject)만 기록한다. 이메일 경로만 캡처 대상(소셜 제공자 미설정). 소셜 payload 에서 `sub` 위치가 다르면 `signup_subject_from_hook` 만 고치면 된다(트리거는 `auth.identities` 실제 값만 보므로 영향 없음). dev Auth 버전: GoTrue v2.197.0(2026-10-02).
 
 ## 4. 권한(D24)
 
