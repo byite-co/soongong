@@ -16,7 +16,9 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$DevFakeSettings {
 
- FakeSeatScenario get seat; int get seatAfterSeconds; FakeReadingScenario get reading; int get delayMs; EntitlementStatus get billing; bool get syncOffline;
+ FakeSeatScenario get seat; int get seatAfterSeconds;/// S04: `true` → `seatEngineProvider` returns the real camera engine
+/// (dev flavor only; prod always uses the real engine).
+ bool get seatReal; FakeReadingScenario get reading; int get delayMs; EntitlementStatus get billing; bool get syncOffline;
 /// Create a copy of DevFakeSettings
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -30,20 +32,20 @@ $DevFakeSettingsCopyWith<DevFakeSettings> get copyWith => _$DevFakeSettingsCopyW
 @override
 bool operator ==(Object other) {
   final _this = this as DevFakeSettings;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DevFakeSettings&&(identical(other.seat, _this.seat) || other.seat == _this.seat)&&(identical(other.seatAfterSeconds, _this.seatAfterSeconds) || other.seatAfterSeconds == _this.seatAfterSeconds)&&(identical(other.reading, _this.reading) || other.reading == _this.reading)&&(identical(other.delayMs, _this.delayMs) || other.delayMs == _this.delayMs)&&(identical(other.billing, _this.billing) || other.billing == _this.billing)&&(identical(other.syncOffline, _this.syncOffline) || other.syncOffline == _this.syncOffline));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DevFakeSettings&&(identical(other.seat, _this.seat) || other.seat == _this.seat)&&(identical(other.seatAfterSeconds, _this.seatAfterSeconds) || other.seatAfterSeconds == _this.seatAfterSeconds)&&(identical(other.seatReal, _this.seatReal) || other.seatReal == _this.seatReal)&&(identical(other.reading, _this.reading) || other.reading == _this.reading)&&(identical(other.delayMs, _this.delayMs) || other.delayMs == _this.delayMs)&&(identical(other.billing, _this.billing) || other.billing == _this.billing)&&(identical(other.syncOffline, _this.syncOffline) || other.syncOffline == _this.syncOffline));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
   final _this = this as DevFakeSettings;
-  return Object.hash(runtimeType,_this.seat,_this.seatAfterSeconds,_this.reading,_this.delayMs,_this.billing,_this.syncOffline);
+  return Object.hash(runtimeType,_this.seat,_this.seatAfterSeconds,_this.seatReal,_this.reading,_this.delayMs,_this.billing,_this.syncOffline);
 }
 
 @override
 String toString() {
   final _this = this as DevFakeSettings;
-  return 'DevFakeSettings(seat: ${_this.seat}, seatAfterSeconds: ${_this.seatAfterSeconds}, reading: ${_this.reading}, delayMs: ${_this.delayMs}, billing: ${_this.billing}, syncOffline: ${_this.syncOffline})';
+  return 'DevFakeSettings(seat: ${_this.seat}, seatAfterSeconds: ${_this.seatAfterSeconds}, seatReal: ${_this.seatReal}, reading: ${_this.reading}, delayMs: ${_this.delayMs}, billing: ${_this.billing}, syncOffline: ${_this.syncOffline})';
 }
 
 
@@ -54,7 +56,7 @@ abstract mixin class $DevFakeSettingsCopyWith<$Res>  {
   factory $DevFakeSettingsCopyWith(DevFakeSettings value, $Res Function(DevFakeSettings) _then) = _$DevFakeSettingsCopyWithImpl;
 @useResult
 $Res call({
- FakeSeatScenario seat, int seatAfterSeconds, FakeReadingScenario reading, int delayMs, EntitlementStatus billing, bool syncOffline
+ FakeSeatScenario seat, int seatAfterSeconds, bool seatReal, FakeReadingScenario reading, int delayMs, EntitlementStatus billing, bool syncOffline
 });
 
 
@@ -71,11 +73,12 @@ class _$DevFakeSettingsCopyWithImpl<$Res>
 
 /// Create a copy of DevFakeSettings
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? seat = null,Object? seatAfterSeconds = null,Object? reading = null,Object? delayMs = null,Object? billing = null,Object? syncOffline = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? seat = null,Object? seatAfterSeconds = null,Object? seatReal = null,Object? reading = null,Object? delayMs = null,Object? billing = null,Object? syncOffline = null,}) {
   return _then(DevFakeSettings(
 seat: null == seat ? _self.seat : seat // ignore: cast_nullable_to_non_nullable
 as FakeSeatScenario,seatAfterSeconds: null == seatAfterSeconds ? _self.seatAfterSeconds : seatAfterSeconds // ignore: cast_nullable_to_non_nullable
-as int,reading: null == reading ? _self.reading : reading // ignore: cast_nullable_to_non_nullable
+as int,seatReal: null == seatReal ? _self.seatReal : seatReal // ignore: cast_nullable_to_non_nullable
+as bool,reading: null == reading ? _self.reading : reading // ignore: cast_nullable_to_non_nullable
 as FakeReadingScenario,delayMs: null == delayMs ? _self.delayMs : delayMs // ignore: cast_nullable_to_non_nullable
 as int,billing: null == billing ? _self.billing : billing // ignore: cast_nullable_to_non_nullable
 as EntitlementStatus,syncOffline: null == syncOffline ? _self.syncOffline : syncOffline // ignore: cast_nullable_to_non_nullable
@@ -164,10 +167,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( FakeSeatScenario seat,  int seatAfterSeconds,  FakeReadingScenario reading,  int delayMs,  EntitlementStatus billing,  bool syncOffline)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( FakeSeatScenario seat,  int seatAfterSeconds,  bool seatReal,  FakeReadingScenario reading,  int delayMs,  EntitlementStatus billing,  bool syncOffline)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _DevFakeSettings() when $default != null:
-return $default(_that.seat,_that.seatAfterSeconds,_that.reading,_that.delayMs,_that.billing,_that.syncOffline);case _:
+return $default(_that.seat,_that.seatAfterSeconds,_that.seatReal,_that.reading,_that.delayMs,_that.billing,_that.syncOffline);case _:
   return orElse();
 
 }
@@ -185,10 +188,10 @@ return $default(_that.seat,_that.seatAfterSeconds,_that.reading,_that.delayMs,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( FakeSeatScenario seat,  int seatAfterSeconds,  FakeReadingScenario reading,  int delayMs,  EntitlementStatus billing,  bool syncOffline)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( FakeSeatScenario seat,  int seatAfterSeconds,  bool seatReal,  FakeReadingScenario reading,  int delayMs,  EntitlementStatus billing,  bool syncOffline)  $default,) {final _that = this;
 switch (_that) {
 case _DevFakeSettings():
-return $default(_that.seat,_that.seatAfterSeconds,_that.reading,_that.delayMs,_that.billing,_that.syncOffline);case _:
+return $default(_that.seat,_that.seatAfterSeconds,_that.seatReal,_that.reading,_that.delayMs,_that.billing,_that.syncOffline);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -205,10 +208,10 @@ return $default(_that.seat,_that.seatAfterSeconds,_that.reading,_that.delayMs,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( FakeSeatScenario seat,  int seatAfterSeconds,  FakeReadingScenario reading,  int delayMs,  EntitlementStatus billing,  bool syncOffline)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( FakeSeatScenario seat,  int seatAfterSeconds,  bool seatReal,  FakeReadingScenario reading,  int delayMs,  EntitlementStatus billing,  bool syncOffline)?  $default,) {final _that = this;
 switch (_that) {
 case _DevFakeSettings() when $default != null:
-return $default(_that.seat,_that.seatAfterSeconds,_that.reading,_that.delayMs,_that.billing,_that.syncOffline);case _:
+return $default(_that.seat,_that.seatAfterSeconds,_that.seatReal,_that.reading,_that.delayMs,_that.billing,_that.syncOffline);case _:
   return null;
 
 }
@@ -220,11 +223,14 @@ return $default(_that.seat,_that.seatAfterSeconds,_that.reading,_that.delayMs,_t
 @JsonSerializable()
 
 class _DevFakeSettings implements DevFakeSettings {
-  const _DevFakeSettings({this.seat = FakeSeatScenario.alwaysSeated, this.seatAfterSeconds = 10, this.reading = FakeReadingScenario.success, this.delayMs = 600, this.billing = EntitlementStatus.free, this.syncOffline = false});
+  const _DevFakeSettings({this.seat = FakeSeatScenario.alwaysSeated, this.seatAfterSeconds = 10, this.seatReal = false, this.reading = FakeReadingScenario.success, this.delayMs = 600, this.billing = EntitlementStatus.free, this.syncOffline = false});
   factory _DevFakeSettings.fromJson(Map<String, dynamic> json) => _$DevFakeSettingsFromJson(json);
 
 @override@JsonKey() final  FakeSeatScenario seat;
 @override@JsonKey() final  int seatAfterSeconds;
+/// S04: `true` → `seatEngineProvider` returns the real camera engine
+/// (dev flavor only; prod always uses the real engine).
+@override@JsonKey() final  bool seatReal;
 @override@JsonKey() final  FakeReadingScenario reading;
 @override@JsonKey() final  int delayMs;
 @override@JsonKey() final  EntitlementStatus billing;
@@ -243,18 +249,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _DevFakeSettings&&(identical(other.seat, seat) || other.seat == seat)&&(identical(other.seatAfterSeconds, seatAfterSeconds) || other.seatAfterSeconds == seatAfterSeconds)&&(identical(other.reading, reading) || other.reading == reading)&&(identical(other.delayMs, delayMs) || other.delayMs == delayMs)&&(identical(other.billing, billing) || other.billing == billing)&&(identical(other.syncOffline, syncOffline) || other.syncOffline == syncOffline));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _DevFakeSettings&&(identical(other.seat, seat) || other.seat == seat)&&(identical(other.seatAfterSeconds, seatAfterSeconds) || other.seatAfterSeconds == seatAfterSeconds)&&(identical(other.seatReal, seatReal) || other.seatReal == seatReal)&&(identical(other.reading, reading) || other.reading == reading)&&(identical(other.delayMs, delayMs) || other.delayMs == delayMs)&&(identical(other.billing, billing) || other.billing == billing)&&(identical(other.syncOffline, syncOffline) || other.syncOffline == syncOffline));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
-    return Object.hash(runtimeType,seat,seatAfterSeconds,reading,delayMs,billing,syncOffline);
+    return Object.hash(runtimeType,seat,seatAfterSeconds,seatReal,reading,delayMs,billing,syncOffline);
 }
 
 @override
 String toString() {
-    return 'DevFakeSettings(seat: $seat, seatAfterSeconds: $seatAfterSeconds, reading: $reading, delayMs: $delayMs, billing: $billing, syncOffline: $syncOffline)';
+    return 'DevFakeSettings(seat: $seat, seatAfterSeconds: $seatAfterSeconds, seatReal: $seatReal, reading: $reading, delayMs: $delayMs, billing: $billing, syncOffline: $syncOffline)';
 }
 
 
@@ -265,7 +271,7 @@ abstract mixin class _$DevFakeSettingsCopyWith<$Res> implements $DevFakeSettings
   factory _$DevFakeSettingsCopyWith(_DevFakeSettings value, $Res Function(_DevFakeSettings) _then) = __$DevFakeSettingsCopyWithImpl;
 @override @useResult
 $Res call({
- FakeSeatScenario seat, int seatAfterSeconds, FakeReadingScenario reading, int delayMs, EntitlementStatus billing, bool syncOffline
+ FakeSeatScenario seat, int seatAfterSeconds, bool seatReal, FakeReadingScenario reading, int delayMs, EntitlementStatus billing, bool syncOffline
 });
 
 
@@ -282,11 +288,12 @@ class __$DevFakeSettingsCopyWithImpl<$Res>
 
 /// Create a copy of DevFakeSettings
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? seat = null,Object? seatAfterSeconds = null,Object? reading = null,Object? delayMs = null,Object? billing = null,Object? syncOffline = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? seat = null,Object? seatAfterSeconds = null,Object? seatReal = null,Object? reading = null,Object? delayMs = null,Object? billing = null,Object? syncOffline = null,}) {
   return _then(_DevFakeSettings(
 seat: null == seat ? _self.seat : seat // ignore: cast_nullable_to_non_nullable
 as FakeSeatScenario,seatAfterSeconds: null == seatAfterSeconds ? _self.seatAfterSeconds : seatAfterSeconds // ignore: cast_nullable_to_non_nullable
-as int,reading: null == reading ? _self.reading : reading // ignore: cast_nullable_to_non_nullable
+as int,seatReal: null == seatReal ? _self.seatReal : seatReal // ignore: cast_nullable_to_non_nullable
+as bool,reading: null == reading ? _self.reading : reading // ignore: cast_nullable_to_non_nullable
 as FakeReadingScenario,delayMs: null == delayMs ? _self.delayMs : delayMs // ignore: cast_nullable_to_non_nullable
 as int,billing: null == billing ? _self.billing : billing // ignore: cast_nullable_to_non_nullable
 as EntitlementStatus,syncOffline: null == syncOffline ? _self.syncOffline : syncOffline // ignore: cast_nullable_to_non_nullable

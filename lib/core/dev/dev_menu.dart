@@ -24,6 +24,7 @@ import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/widgets.dart';
 import 'dev_fake_settings.dart';
+import 'seat_lab/seat_lab_screen.dart';
 import 'shake_detector.dart';
 
 /// Raw compile-time flag. Prefer [AppConfig.devToolsEnabled], which also
@@ -190,6 +191,36 @@ class DevMenuSheet extends ConsumerWidget {
           },
         ),
         section(DevStrings.sectionSeat),
+        // S04: real engine switch + measurement harness.
+        Row(
+          children: <Widget>[
+            Text(
+              DevStrings.seatImplLabel,
+              style: AppTypography.caption.copyWith(color: c.tx2),
+            ),
+            const SizedBox(width: AppSpacing.s8),
+            Expanded(
+              child: choices<bool>(
+                value: s.seatReal,
+                onChanged: ctl.setSeatReal,
+                items: const <(bool, String)>[
+                  (false, DevStrings.seatImplFake),
+                  (true, DevStrings.seatImplReal),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.s8),
+        AppButton.secondary(
+          label: DevStrings.openSeatLab,
+          size: AppButtonSize.small,
+          onPressed: () {
+            Navigator.of(context).pop();
+            GoRouter.of(context).push(seatLabPath);
+          },
+        ),
+        const SizedBox(height: AppSpacing.s8),
         choices<FakeSeatScenario>(
           value: s.seat,
           onChanged: ctl.setSeat,

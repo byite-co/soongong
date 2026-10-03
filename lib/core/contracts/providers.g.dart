@@ -92,7 +92,7 @@ final class SeatEngineProvider
   }
 }
 
-String _$seatEngineHash() => r'3bfacc7d718b46f73ad80f0c646441ace15535c4';
+String _$seatEngineHash() => r'3a1b52a92e8fbeab6d1671eccc1850fac0ffac91';
 
 @ProviderFor(readingEngine)
 final readingEngineProvider = ReadingEngineProvider._();
