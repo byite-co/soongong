@@ -33,7 +33,15 @@ class FakeSeatEngine implements SeatEngine {
       StreamController<SeatEngineEvent>.broadcast();
 
   Timer? _timer;
+
+  /// Scenario counter: the scenario resets it (e.g. after a recovery).
   int _tick = 0;
+
+  /// Run counter: ticks since `start()`, never reset inside a run. Drives
+  /// `sinceStart`, which must stay monotonic across Lost → Recovered
+  /// ([S04d] — the contract's `sinceStart` is the run's elapsed time).
+  int _ticks = 0;
+  int _periodMs = 1000;
   bool _running = false;
   bool _lost = false;
 
@@ -51,15 +59,29 @@ class FakeSeatEngine implements SeatEngine {
     if (_running) return;
     _running = true;
     _tick = 0;
+    _ticks = 0;
     _lost = false;
     final hz = config.sampleHz <= 0 ? 1 : config.sampleHz;
+    _periodMs = 1000 ~/ hz;
     _timer = Timer.periodic(
-      Duration(milliseconds: 1000 ~/ hz),
+      Duration(milliseconds: _periodMs),
       (_) => _onTick(),
     );
   }
 
+  /// [S04c] Monotonic elapsed since start, derived from the run tick count so
+  /// tests stay deterministic.
+  Duration get _elapsed => Duration(milliseconds: _ticks * _periodMs);
+
+  SeatSample _sample({required bool seated, double? confidence}) => SeatSample(
+        receivedAt: _now(),
+        sinceStart: _elapsed,
+        seated: seated,
+        confidence: confidence,
+      );
+
   void _onTick() {
+    _ticks++;
     _tick++;
     final seconds = _tick;
     switch (scenario) {
@@ -70,20 +92,18 @@ class FakeSeatEngine implements SeatEngine {
         } else if (_lost && seconds >= afterSeconds + 10) {
           _lost = false;
           _events.add(const SeatCameraRecovered());
-          _tick = 0;
+          _tick = 0; // scenario restarts; the run's elapsed time does not
         }
         if (!_lost) {
-          _samples.add(SeatSample(at: _now(), seated: true, confidence: 0.96));
+          _samples.add(_sample(seated: true, confidence: 0.96));
         }
       case FakeSeatScenario.awayAfter:
         final seated = seconds < afterSeconds;
-        _samples.add(
-          SeatSample(at: _now(), seated: seated, confidence: seated ? 0.95 : 0.1),
-        );
+        _samples.add(_sample(seated: seated, confidence: seated ? 0.95 : 0.1));
       case FakeSeatScenario.alwaysSeated:
       case FakeSeatScenario.permissionDenied:
       case FakeSeatScenario.cameraBusy:
-        _samples.add(SeatSample(at: _now(), seated: true, confidence: 0.97));
+        _samples.add(_sample(seated: true, confidence: 0.97));
     }
   }
 

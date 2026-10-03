@@ -32,6 +32,8 @@
 | flutter_secure_storage | ^11.2.0 | deviceId 보관 [S01 추가] |
 | lucide_icons_flutter | ^3.1.20 | Lucide 아이콘 [S01 추가] |
 | sensors_plus | ^7.1.0 | dev 메뉴 셰이크 [S01 추가] |
+| permission_handler | ^12.0.3 (→ 12.0.3 · android 13.0.1 · apple 9.6.2) | 카메라 권한 상태·프롬프트·설정 열기 [S04 추가]. 13.x 는 `permission_handler_android` 14 → compileSdk 37 요구(Flutter 3.47.5 기본 36)라 보류. iOS 는 SPM + `Info.plist` 키 자동 감지 |
+| battery_plus | ^7.1.1 | `/_seat_lab` 배터리 % 기록 [S04 추가] |
 | build_runner | ^2.16.1 | codegen |
 | flutter_lints / riverpod_lint | ^6.0.0 / ^3.1.9 | 린트 (riverpod_lint는 analysis_options.yaml `plugins:`로 설치되는 analyzer 플러그인) |
 

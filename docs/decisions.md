@@ -44,6 +44,8 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 ## D3. 착석 감지 엔진 — 확정 (A: 앱 내 신규 구현)
 - 출력은 착석 불리언 + 카메라 상태만.
 - 실기기 검증 케이스는 8월 관문 승계: 양성 4(정면·고개 숙임·측면·저조도) + 음성 10(빈 자리·의자에 옷·벽 포스터·사진 속 얼굴·반려동물·조명 변화·카메라 가림·화면 끄기·전화 수신·다른 앱 카메라 점유). S04 프로토콜에 반영.
+- [S04b] focus-engine 선별 참조(세대·종료·시각 분리), 엔진 출처는 A 유지. 7상태 판정·30초 확정 버퍼·백그라운드 서비스·MediaPipe 경로는 미도입(`docs/seat-engine.md` §3.6).
+- [S04d] run 토큰·검출기 교체(무응답 상한 2)·`sinceStart` 기준점 = `start()` 호출 시각(`docs/seat-engine.md` §3.2·§3.7).
 
 ## D4. 스트릭 — 확정
 하루에 저장된 세션 1회 이상. 3분 미만도 저장됐으면 포함.
@@ -353,3 +355,48 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **[S03b] 사진 파이프라인의 시계는 `app_now()`**: `photo_residue_run`·`photo_delete_claim`·`photo_delete_mark` 는 `now()` 대신 `public.app_now()`(= `app.test_now` 가 설정돼 있으면 그 값, 아니면 `now()`)를 읽는다. 운영에선 아무도 그 GUC 를 설정하지 않으므로 `now()` 와 같고, pgTAP 만 `set_config('app.test_now', …, true)` 로 주입한다. API 역할에는 EXECUTE 없음.
 - **[S03b] 고아 초안 tombstone 은 사용자 잠금 아래 재확인 후에만**(0011): `draft_orphan_tombstone_run` 은 후보를 고른 뒤 `user_lock(user_id)` 를 잡고 같은 트랜잭션에서 `status = 'selecting' and submitted_at is null and deleted_at is null and client_updated_at < now() − 30일` 을 다시 확인한 행만 tombstone 한다. `reading_submit`·`sync_push` 가 같은 잠금을 잡으므로, 잡이 대기하는 동안 커밋된 제출·재편집은 건너뛴다(이전 0007 본문은 잠금 뒤 재확인 없이 `sync_tombstone` 을 불러 `processing` 행도 tombstone 할 수 있었다). 증명은 `tests/08_s03b_orphan_lock.sql` 이 dblink 로 연 두 세션으로 한다(잡이 advisory lock 에서 실제로 대기하는 것을 `pg_stat_activity` 로 확인).
 
+## [S04] 세션 결정 — 지시문에 없던 사항 (2026-10-01)
+
+- **[S04] 검출기 = ML Kit Face Detection fast, presence only**: 랜드마크·분류·윤곽·추적 OFF, 결과에서 `faces.isNotEmpty` 만 읽는다(bbox·각도 미사용). Pose/MediaPipe 와의 비교와 전환 조건(P2 고개 숙임 < 90%)은 `docs/seat-engine.md` §2. 교체 지점은 `PresenceDetector` 하나.
+- **[S04] 유지 창(히스테리시스) 3초는 엔진 내부 고정값**: `SeatHysteresis(hold: 3s)`. 감도 0·1·2(60·75·90초)와 무관하며 `SeatEngineConfig` 에 없다. S06 이 바꾸려면 `CONTRACT-CHANGE`.
+- **[S04] 이벤트 의미**: `SeatCameraLost` = 실행 중 3초 프레임 없음 · 점유/치명/정책 오류 · ~~백그라운드 진입~~(S04c 부터 백그라운드는 `SeatPaused`). `SeatCameraRecovered` = Lost(·Paused) 이후 첫 프레임(그 사이 stop/start 여부 무관, 1회). Lost 동안 샘플 없음(D23 paused). `SeatError(code)` 는 `permission_denied · no_camera · camera_busy · camera_init_failed · detector_failed`(+ S04c `camera_init_timeout`).
+- **[S04] `checkAvailability` 는 권한 프롬프트를 띄울 수 있다**(미결정 상태일 때만). `start` 는 프롬프트 없이 `SeatError('permission_denied')`. 권한 흐름 헬퍼는 `CameraPermission.request()/status()/openSettings()`.
+- **[S04] iOS 점유는 `cameraBusy` 로 구분되지 않는다**: `camera_avfoundation` 이 세션 인터럽션을 노출하지 않아 프레임 정지 → 3초 뒤 Lost 로 나타난다. Android 는 CameraX `CameraState` 오류 문구로 점유를 분류(`classifyCameraFault`, 플러그인 버전 의존).
+- **[S04] 처리 주기**: `sampleHz` 는 1–2 로 클램프(1000ms/Hz), `lowPower` 는 2초 + 카메라 목표 fps 10(기본 15). 해상도는 `ResolutionPreset.low` 가 하한. 전면 카메라가 없으면 첫 카메라를 쓴다.
+- **[S04] `SeatSample.confidence` 는 null**: ML Kit 는 검출 신뢰도를 주지 않는다. Fake 의 숫자는 데모용.
+- **[S04] `seatEngineProvider` 분기**: prod flavor → `SeatEngineImpl.camera()`. dev → dev 메뉴 "구현: Fake / 실제 카메라" 스위치(`DevFakeSettings.seatReal`, 기본 Fake). 위젯 테스트는 기본 Fake 를 받는다.
+- **[S04] `/_seat_lab` 라우트 위치**: `app_router.dart` 는 S05 소유라 `features/measure/measure_routes.dart` 에 `AppConfig.devToolsEnabled` 조건부로 등록. 화면은 `core/dev/seat_lab/`. S05/S14 가 `/_gallery` 옆으로 옮겨도 된다.
+- **[S04] `minFaceSize` 기본 0.1**(ML Kit 기본). 포스터·사진 음성 케이스 결과에 따라 0.15/0.20 으로 올릴 수 있도록 실험실에서 선택 가능(엔진 생성자 인자).
+- **[S04] 새 패키지**: `permission_handler ^12.0.3`(권한 상태·프롬프트·설정 열기. 13.x 는 `permission_handler_android` 14 = compileSdk 37 요구라 Flutter 3.47.5 기본 36 과 맞을 때까지 보류) · `battery_plus ^7.1.1`(실험실 배터리 % 기록, 런타임은 dev 화면에서만 사용).
+
+## [S04b] 후속 결정 — focus-engine 선별 이식 (2026-10-03)
+
+- **[S04b] 세대(generation)**: `start()` 마다 세대 +1(`InferenceGate.open`), `stop()` 도 +1(펜스). 카메라 콜백(프레임·오류)은 카메라 세션을 연 세대를 들고 오고, 추론 결과는 시작 세대가 현재 세대일 때만 `samples`·`events`·`diagnostics` 에 반영한다. 이전 세대의 늦은 결과는 `suppressedResults` 로만 센다(재시작 경합 테스트 고정).
+- **[S04b] 종료 순서**: `stop()` = 펜스 → 카메라 해제 → 진행 중 추론 **최대 500 ms** 대기 → `SeatStopReport`. 펜스 뒤 결과는 기다렸든 아니든 버린다(`stop()` 이후 샘플·이벤트 없음). 검출기는 `stop()` 에서 닫지 않고 재사용하며, `dispose()` 는 추론 도중이면 close 를 미루고 돌아온 추론이 닫는다(추론 도중 close 0회). 지시문의 "완료 또는 타임아웃 후 close" 는 이 의미로 구현.
+- **[S04b] 시각 분리**: `SeatSample.at` = 촬영 시각(카메라 콜백 도착 순간의 벽시계; `camera` 플러그인은 프레임 타임스탬프를 Dart 로 주지 않아 콜백 도착 시각이 가장 가까운 값). 처리 완료 시각은 `SeatDiagnostic.completedAt` 로 실험실 전용. 유지 창 3초도 촬영 시각 기준. (S04c CONTRACT-CHANGE 로 `at` → `receivedAt` + `sinceStart`.)
+- **[S04b] 실험실 구간·제외**: 시작→정지가 1구간. 비정상 종료(엔진 자체 정지[백그라운드]·카메라 끊긴 채 종료·구간 중 오류·추론 대기 초과·restart) 구간은 요약 집계에서 제외하고 CSV 에 `excluded=1` 로 남긴다(focus-engine 의 stop-integrity "비교 불가" 개념의 축소판). 실험실과 엔진은 같은 단조 시계를 공유한다.
+- **[S04b] 미도입 명시**: 7상태 판정 · 30초 확정 버퍼 · 백그라운드 포그라운드 서비스 · MediaPipe 경로는 D23·PRD 와 충돌해 도입하지 않는다. MediaPipe 는 실기기 결과가 목표 미달일 때 ML Kit Pose 와 함께 비교 후보로만 기록.
+
+## [S04c] 후속 결정 — 무효화·상한·계약 변경 (2026-10-03)
+
+- **[S04c] CONTRACT-CHANGE `core/contracts/seat_engine.dart`**(S06 미착수라 승인): `SeatSample { DateTime receivedAt(콜백 수신 벽시계, 정보용) · Duration sinceStart(엔진 `start()` 기준 단조 경과, Stopwatch) · bool seated · double? confidence }` — 기존 `at` 제거. S06·`AwayPolicy`·`SessionTimeline` 은 `sinceStart` 만 쓰고 세션 기준 시각 1개(실행 시작 시점의 `SessionClock.now()`)에 더해 배치한다(`docs/seat-engine.md` §7). 기기 시각 ±1시간 변경에도 단조성·구간 길이·60/75/90초 임계 불변(테스트 고정). `SeatPaused(SeatPauseReason.background | backgroundDuringStart)` 이벤트 추가 — 백그라운드 진입은 더 이상 `SeatCameraLost` 가 아니다. Fake 엔진·dev 메뉴·실험실 동일 반영.
+- **[S04c] Lost 무효화**: `_markLost()` 가 추론 epoch 를 +1 해 진행 중 추론을 무효화하고 슬롯을 비운다. 발행 조건 = 티켓(세대·epoch) 일치 && `!lost` && `running`. Lost 뒤 Recovered 가 와도 옛 추론의 결과는 발행하지 않는다.
+- **[S04c] 초기화 중 라이프사이클**: `start()` 진입 즉시 라이프사이클 구독·현재 상태 확인(백그라운드면 카메라를 열지 않음), `await open` 뒤 재확인(백그라운드 이벤트가 있었거나 현재 백그라운드) → 카메라 해제·`running=false`·`SeatPaused(backgroundDuringStart)`. `LifecycleSource` 에 `current` 추가.
+- **[S04c] 무응답 상한 3경로**: (a) 카메라 열기 8초 — `checkAvailability` 는 즉시 `unavailable(lastAvailabilityReason='timeout')`, `start()` 는 `SeatError('camera_init_timeout')`; 늦게 열린 카메라는 백그라운드에서 해제(자체 2초 상한·실패 로그), 소스의 컨트롤러 dispose 도 2초 상한. (b) 추론 deadline 2초 — 워치독이 슬롯 해제·epoch +1·`inferenceTimeouts`+1, 검출기 실패로 집계(3연속 → `detector_failed`). (c) `stop()` 상한 = 카메라 해제 2초 + 추론 500 ms ≈ 2.5초, 초과분은 백그라운드. 재시작은 이전 세대의 정리 완료와 무관하게 허용. 영구 무응답 검출기는 `dispose()` 에서도 닫지 않는다(추론 도중 close 금지 우선).
+- **[S04c] 실험실 집계**: 정답·케이스는 변경 이력(시각 순)으로 보관하고 샘플의 촬영 시각에 유효하던 값을 붙인다. agreement 는 전체·실행(run)별·케이스별. CSV 범위 전체/이 실행/이 케이스(파일명 접미). 배터리 시작·종료 % 는 실행에 귀속, 실행 중 Lost/paused 1회라도 있으면 "60분 연속 유효" 불합격, 실행끼리 합산 금지. 준비 문구 "자동 꺼짐 10분 이상" → "화면 자동 꺼짐 해제 또는 70분 이상".
+
+## [S04d] 후속 결정 — open 소유권·검출기 교체·기준점·배터리 (2026-10-03)
+
+- **[S04d] open 소유권(run 토큰)**: `start()` 마다 run 토큰(`_Run`: 호출 시각·세대·카메라 핸들·취소/백그라운드 플래그)을 발급하고, `SeatFrameSource.open()` 은 그 세션을 소유하는 `SeatCameraHandle` 을 반환한다(소스 인터페이스에서 `close()/isOpen` 제거 — 닫는 것은 핸들). 8초 상한을 넘긴 늦은 open·`stop()` 이 취소한 run 의 open·라이프사이클로 중단된 run 은 **자기 run 의 핸들만** 닫고 현재 run 의 카메라·스트림은 건드리지 않는다. `CameraFrameSource` 도 `open()` 마다 컨트롤러 1개를 핸들에 담아 반환(소스 전역 컨트롤러 없음). 테스트: 첫 open 미완료 중 두 번째 `start()` 성공 → 첫 open 뒤늦게 완료 → 첫 컨트롤러만 dispose.
+- **[S04d] 초기화 중 `stop()`**: 카메라가 아직 열리는 중이면 `_starting` 을 기다리지 않고 run 토큰을 취소(세대 +1·라이프사이클 해제)한 뒤 **즉시 반환**한다. 열리던 카메라는 도착하는 순간 자기 핸들로 백그라운드 해제되고, 그 `start()` 는 이벤트 없이(`camera_init_timeout` 도 내지 않음) 끝난다. 취소된 run 이 아직 열리는 중이어도 새 `start()` 는 새 run 으로 진행한다. S04c 의 "stop() 최대 2.5초" 는 실행 중에만 해당하고, 초기화 중 상한은 0 이다.
+- **[S04d] 무응답 검출기 교체**: 엔진은 `PresenceDetector` 1개 대신 `PresenceDetectorFactory` 를 받는다. 추론 deadline(2초) 초과 시 슬롯만 비우지 않고 그 검출기를 **폐기 예정**으로 표시해 더 이상 제출하지 않고, **새 검출기를 만들어 이어서** 돈다(`detectorReplacements`). 폐기됐지만 돌아오지 않은 호출(`stalledDetections`)의 상한은 **2** — 상한에 닿으면 새 검출기를 만들지 않고 `SeatError('detector_failed')` + `SeatCameraLost(detector exhausted)`, 이후 프레임은 제출 없이 무시한다(60초 공급 테스트: 미완료 ≤ 2·새 제출 0·Lost 1회). 복구는 **새 검출기로만**: 매달린 호출 하나가 돌아오면(그 검출기는 그때 닫힘) 다음 프레임이 새 검출기를 만들고 `SeatCameraRecovered`; 상한 상태에서 `start()` 를 부르면 카메라를 열지 않고 `SeatError('detector_failed')`. 무응답은 예외 3연속 카운터와 별개로 센다. `dispose()` 는 활성 검출기를 폐기 표시만 하고(유휴면 즉시 close), 추론 도중 close 금지는 유지 — 영원히 돌아오지 않는 검출기는 끝내 닫지 않는다. `SeatStopReport.hadInFlight` 는 "가장 최근에 제출한 추론이 아직 돌아오지 않음" 이고 `stalledDetections` 를 함께 보고한다.
+- **[S04d] `sinceStart` 기준점**: `start()` 를 **호출한 순간**(카메라 open 전) 단조 시계를 잡는다. 카메라가 5초 걸려 열리면 첫 샘플의 `sinceStart` ≥ 5초, 백그라운드 뒤 재시작하면 복귀 첫 샘플은 중단 구간 뒤에 놓인다(테스트 고정). 프레임 워치독의 기준(`_lastFrameAt`)은 open 완료 시각이라 느린 open 이 Lost 를 내지 않는다. S06 은 `start()` 직전에 `runStartedAt = clock.now()` 1개를 잡고 `runStartedAt + sinceStart` 로 배치한다(`docs/seat-engine.md` §7).
+- **[S04d] FakeSeatEngine**: 실행 경과 카운터(`_ticks`, 단조·`sinceStart` 의 근거)와 시나리오 카운터(`_tick`, Recovered 에서 리셋)를 분리. Recovered 에서 `sinceStart` 가 0 으로 돌아가지 않는다(테스트 고정).
+- **[S04d] 실험실 배터리**: 시작 측정과 종료 측정은 **별도** — `beginSegment(batteryStart:)` / `endSegment(batteryEnd:, cameraReleaseTimedOut:)`. 화면은 정지 뒤 **종료 시각과 종료값을 먼저 읽고** `endSegment` 를 부른다(엔진 자체 정지도 같은 순서). 60초 주기 읽음은 CSV 행과 "최근 읽음" 표시일 뿐 시작·종료 값이 되지 않는다(첫 측정 1회로 둘 다 채우기 금지). `batteryVerdict` 무효 사유: `open · interrupted(Lost/paused) · abnormal(비정상 종료) · release_timeout(카메라 해제 상한 초과) · short · no_reading(시작 또는 종료 측정 실패)`. 종료 측정 실패 시 `batteryEnd = null` → 무효.
+- **[S04d] 가용성 장애 기대 이벤트**(`docs/seat-engine.md` §5.4 신설, 계산식은 §5.5 로): 화면 끄기·백그라운드 = `SeatPaused`(엔진 자체 정지, 복귀는 `start()`), 카메라 점유·전화 = `cameraLost`(프레임 정지 3초 또는 점유 오류, 자가 복구 또는 재시작). N8 행을 `cameraLost` 에서 `paused · background` 로 고쳤다. 실험실 이벤트 로그와 CSV 의 `cameraLost` 행은 엔진의 `lastLostReason` 을 덧붙인다(`cameraLost · frame timeout / inUse / detector exhausted`).
+
+## [S04e] 후속 결정 — 검출기 폐기 분리·run 재확인·해제 결과 (2026-10-03)
+
+- **[S04e] 검출기 폐기를 게이트와 분리**: 게이트 무효화(`stop()`·`_markLost`·백그라운드·deadline)가 일어날 때 미완료 호출이 있는 활성 검출기는 즉시 폐기 목록으로 옮기고 재사용하지 않는다(유휴 검출기만 재사용). 다음 run·복구는 새 검출기. 폐기 검출기는 자기 호출이 돌아올 때 close. 상한 2 는 카운터가 아니라 폐기 목록의 **실제 미완료 호출 수**(`unfinishedDetections` = pending 합산)로 판정한다(`stalledDetections` → `unfinishedDetections`, `stalledDetectionLimit` → `unfinishedDetectionLimit`). `detector_failed`(고갈)는 **스트릭당 1회** — 플래그는 `start()` 가 아니라 새 검출기가 만들어질 때 리셋되므로, 같은 스트릭 안의 반복 `start()` 는 조용히 거절된다(예외 3연속 보고 플래그와는 별개). 테스트: 무응답 추론 → deadline 전 stop → start ×5 = 미완료 2·새 제출 0·오류 1회 / 추론 중 Lost→Recovered ×5 = 동일. S06 은 복귀를 `SeatCameraRecovered` 로 판단한다.
+- **[S04e] `_start()` run 재확인**: 모든 await(이전 stop 대기·권한 조회·open·중단 시 카메라 해제) 뒤에 `this run == _run && !cancelled && !disposed` 를 다시 본다. 아니면 `_abortStart()` 없이 자기 핸들만 정리하고 반환. `SeatPaused` 발행과 라이프사이클 구독 해제는 현재 run 소유일 때만 — 늦게 끝난 옛 run 의 정리가 새 run 의 구독을 끊거나 가짜 `SeatPaused` 를 내지 않는다(테스트: A 초기화 중 paused → A 해제 지연 → stop → B start → A 정리 완료 → B 구독 유지 → 다음 paused 에 B 가 `SeatPaused`·카메라 해제).
+- **[S04e] 해제 결과 전파**: `SeatCameraHandle.close()` → `Future<CloseResult>`(`ok · failed(error) · timeout`), 던지지 않는다. `CameraFrameSource` 는 컨트롤러 dispose 의 예외·2초 timeout 을 결과로 반환(삼키지 않음; 컨트롤러 팩토리 `controllerFactory` 테스트 심으로 경계 테스트). 엔진 `_closeHandleBounded` 는 `stopReleaseTimeout` 초과를 `timeout` 으로 보고하고 `SeatStopReport.closeResult`·`cameraReleaseFailed`·`cameraReleaseTimedOut` 을 노출, `clean` = 추론 제때 반환 && 해제 `ok`. 실험실 `endSegment(cameraRelease: ok|failed|timeout)` — `failed`·`timeout` 모두 배터리 무효 사유(`release_failed`·`release_timeout`), 샘플은 유효(구간 정상).
