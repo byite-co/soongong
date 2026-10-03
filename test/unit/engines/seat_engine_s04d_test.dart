@@ -116,7 +116,7 @@ void main() {
         expect(r.detectors, hasLength(2), reason: 'one replacement, then the limit');
         expect(r.detectCalls, 2, reason: 'unfinished calls ≤ 2 and nothing more submitted');
         expect(r.detectors.every((d) => d.pendingCalls == 1), isTrue);
-        expect(r.engine.stalledDetections, 2);
+        expect(r.engine.unfinishedDetections, 2);
         expect(r.engine.detectorReplacements, 1);
         expect(r.engine.inferenceTimeouts, 2);
         expect(r.engine.detectorAvailable, isFalse);
@@ -136,14 +136,14 @@ void main() {
         final r = Rig(async, hangNewDetectors: true);
         r.start();
         r.stream(s(10), present: true);
-        expect(r.engine.stalledDetections, 2);
+        expect(r.engine.unfinishedDetections, 2);
         expect(r.events, hasLength(2));
 
         r.hangNewDetectors = false;
         r.detectors.first.releaseHung(); // detector #1 finally answers
         async.flushMicrotasks();
         expect(r.detectors.first.closeCalls, 1, reason: 'retired and idle → closed by its returning call');
-        expect(r.engine.stalledDetections, 1);
+        expect(r.engine.unfinishedDetections, 1);
         expect(r.samples, isEmpty, reason: 'its answer was discarded (expired ticket)');
         expect(r.engine.suppressedResults, 1);
 
@@ -165,14 +165,14 @@ void main() {
         r.stop();
         expect(r.engine.isRunning, isFalse);
         r.idle(ms(600)); // the stop waits ≤ 500 ms for the latest (hung) detection
-        expect(r.engine.lastStopReport!.stalledDetections, 2);
+        expect(r.engine.lastStopReport!.unfinishedDetections, 2);
         expect(r.engine.lastStopReport!.inferenceTimedOut, isTrue);
         final before = r.events.length;
         r.hangNewDetectors = false;
         r.start();
         expect(r.engine.isRunning, isFalse);
-        expect((r.events.last as SeatError).message, SeatErrorCode.detectorFailed);
-        expect(r.events.length, before + 1);
+        expect(r.events.length, before,
+            reason: 'S04e: detector_failed was already reported for this streak — a refused start stays silent');
         expect(r.source.openCount, 1, reason: 'the camera is not opened without a detector');
 
         r.detectors[1].releaseHung();
@@ -201,7 +201,7 @@ void main() {
         async.flushMicrotasks();
         expect(r.detector.closeCalls, 1);
         expect(r.detectors[1].closeCalls, 0);
-        expect(r.engine.stalledDetections, 0);
+        expect(r.engine.unfinishedDetections, 0);
         r.stop();
         expect(r.engine.lastStopReport!.clean, isTrue);
       });

@@ -255,9 +255,16 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
       end: end,
       reason: reason,
       batteryEnd: batteryEnd,
-      cameraReleaseTimedOut: _engine?.lastStopReport?.cameraReleaseTimedOut ?? false,
+      cameraRelease: _releaseOf(_engine?.lastStopReport),
     );
   }
+
+  static SeatLabCameraRelease _releaseOf(SeatStopReport? report) =>
+      switch (report?.closeResult.outcome) {
+        null || CloseOutcome.ok => SeatLabCameraRelease.ok,
+        CloseOutcome.failed => SeatLabCameraRelease.failed,
+        CloseOutcome.timeout => SeatLabCameraRelease.timeout,
+      };
 
   void _stopTimers() {
     _uiTimer?.cancel();
@@ -525,6 +532,7 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
         'open' => SeatLabStrings.batteryReasonOpen,
         'interrupted' => SeatLabStrings.batteryReasonInterrupted,
         'abnormal' => SeatLabStrings.batteryReasonAbnormal,
+        'release_failed' => SeatLabStrings.batteryReasonReleaseFailed,
         'release_timeout' => SeatLabStrings.batteryReasonReleaseTimeout,
         'short' => SeatLabStrings.batteryReasonShort,
         _ => SeatLabStrings.batteryReasonNoReading,
@@ -538,7 +546,12 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
       lastStop = SeatLabStrings.noData;
     } else {
       final kind = last.isExcluded ? SeatLabStrings.segmentAbnormal : SeatLabStrings.segmentNormal;
-      lastStop = last.reason.isEmpty ? kind : '$kind · ${last.reason}';
+      final release = switch (last.cameraRelease) {
+        SeatLabCameraRelease.ok => '',
+        SeatLabCameraRelease.failed => ' · ${SeatLabStrings.batteryReasonReleaseFailed}',
+        SeatLabCameraRelease.timeout => ' · ${SeatLabStrings.batteryReasonReleaseTimeout}',
+      };
+      lastStop = (last.reason.isEmpty ? kind : '$kind · ${last.reason}') + release;
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -603,8 +616,8 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
           c,
         ),
         _Kv(
-          SeatLabStrings.stalledDetections,
-          e == null ? SeatLabStrings.noData : '${e.stalledDetections}',
+          SeatLabStrings.unfinishedDetections,
+          e == null ? SeatLabStrings.noData : '${e.unfinishedDetections}',
           c,
         ),
         _Kv(SeatLabStrings.lastStop, lastStop, c),

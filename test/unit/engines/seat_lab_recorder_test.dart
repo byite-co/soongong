@@ -224,7 +224,7 @@ void main() {
       expect(va.dropPct, 8, reason: 'the numbers are still reported');
 
       final late = r.beginSegment(m(70), batteryStart: 82);
-      r.endSegment(m(135), end: SeatLabSegmentEnd.normal, batteryEnd: 74, cameraReleaseTimedOut: true);
+      r.endSegment(m(135), end: SeatLabSegmentEnd.normal, batteryEnd: 74, cameraRelease: SeatLabCameraRelease.timeout);
       expect(r.batteryVerdict(late, m(136)).reason, 'release_timeout');
       expect(late.isExcluded, isFalse, reason: 'the samples are fine; only the battery verdict is not');
     });

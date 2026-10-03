@@ -43,7 +43,9 @@ class Rig {
   final FakeLifecycleSource lifecycle;
   final FakeMonotonicClock mono;
   final FixedClock wall;
-  final Duration detectorLatency;
+
+  /// Latency given to detectors created from now on.
+  Duration detectorLatency;
 
   /// Detectors created from now on start hung.
   bool hangNewDetectors;

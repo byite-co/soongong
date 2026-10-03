@@ -19,8 +19,9 @@
 // read before the segment is closed). One reading never fills both ends; a
 // failed end reading leaves `batteryEnd` null and the verdict invalid.
 // Periodic readings during the run are logged and shown, nothing more. A run
-// that ended abnormally or whose camera release outlived its bound is not a
-// valid measurement either.
+// that ended abnormally, or whose camera release failed or outlived its bound
+// (S04e: the engine reports how the release ended), is not a valid
+// measurement either.
 //
 // A segment that ended abnormally is excluded from the summary (its rows
 // stay in the CSV). Facts only — no scoring, no grading.
@@ -37,6 +38,9 @@ enum SeatLabSegmentEnd { normal, abnormal }
 
 /// Which rows a CSV export contains.
 enum SeatLabCsvScope { all, run, caseId }
+
+/// How the engine released the run's camera at the stop (S04e §3).
+enum SeatLabCameraRelease { ok, failed, timeout }
 
 /// One run of the engine: start → stop.
 class SeatLabSegment {
@@ -58,8 +62,8 @@ class SeatLabSegment {
   /// Most recent reading during the run (display while the run is open).
   int? batteryLatest;
 
-  /// The engine's camera release outlived its bound at the stop (S04d).
-  bool cameraReleaseTimedOut = false;
+  /// How the engine released this run's camera at the stop (S04e).
+  SeatLabCameraRelease cameraRelease = SeatLabCameraRelease.ok;
 
   /// A camera loss or a pause happened during the run.
   bool interrupted = false;
@@ -86,8 +90,8 @@ class SeatLabBatteryVerdict {
   /// with a reading at both ends.
   final bool valid;
 
-  /// `ok` · `open` · `interrupted` · `abnormal` · `release_timeout` ·
-  /// `short` · `no_reading`.
+  /// `ok` · `open` · `interrupted` · `abnormal` · `release_failed` ·
+  /// `release_timeout` · `short` · `no_reading`.
   final String reason;
   final Duration duration;
 
@@ -263,7 +267,7 @@ class SeatLabRecorder {
     required SeatLabSegmentEnd end,
     String reason = '',
     int? batteryEnd,
-    bool cameraReleaseTimedOut = false,
+    SeatLabCameraRelease cameraRelease = SeatLabCameraRelease.ok,
   }) {
     final s = currentSegment;
     if (s == null) return;
@@ -272,7 +276,7 @@ class SeatLabRecorder {
       ..endKind = end
       ..reason = reason
       ..batteryEnd = batteryEnd
-      ..cameraReleaseTimedOut = cameraReleaseTimedOut;
+      ..cameraRelease = cameraRelease;
     if (batteryEnd != null) {
       s.batteryLatest = batteryEnd;
       _batteryRow(t, batteryEnd, s.index);
@@ -402,9 +406,9 @@ class SeatLabRecorder {
   // ── Battery (per run, never summed) ────────────────────────────────────
 
   /// Invalid when the run is still open, was interrupted (camera lost /
-  /// paused), ended abnormally, its camera release outlived the stop bound,
-  /// is shorter than [batteryWindow], or lacks the start or the end
-  /// measurement. The numbers are still reported where they exist.
+  /// paused), ended abnormally, its camera release failed or outlived the
+  /// stop bound, is shorter than [batteryWindow], or lacks the start or the
+  /// end measurement. The numbers are still reported where they exist.
   SeatLabBatteryVerdict batteryVerdict(SeatLabSegment s, Duration now) {
     final d = s.durationAt(now);
     final int? drop = s.batteryStart == null || s.batteryEnd == null
@@ -415,7 +419,14 @@ class SeatLabRecorder {
     if (s.isOpen) return invalid('open');
     if (s.interrupted) return invalid('interrupted');
     if (s.isExcluded) return invalid('abnormal');
-    if (s.cameraReleaseTimedOut) return invalid('release_timeout');
+    switch (s.cameraRelease) {
+      case SeatLabCameraRelease.failed:
+        return invalid('release_failed');
+      case SeatLabCameraRelease.timeout:
+        return invalid('release_timeout');
+      case SeatLabCameraRelease.ok:
+        break;
+    }
     if (d < batteryWindow) return invalid('short');
     if (drop == null) return invalid('no_reading');
     return SeatLabBatteryVerdict(valid: true, reason: 'ok', duration: d, dropPct: drop);

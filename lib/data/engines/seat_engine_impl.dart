@@ -1,5 +1,5 @@
-// SeatEngineImpl (S04 · S04b · S04c · S04d): the S01 `SeatEngine` contract on
-// a real camera.
+// SeatEngineImpl (S04 · S04b · S04c · S04d · S04e): the S01 `SeatEngine`
+// contract on a real camera.
 //
 // Output is a seated boolean on a 1-second cadence plus camera state events —
 // nothing else (D3, CLAUDE.md §1). The engine is deliberately dumb: the away
@@ -13,7 +13,11 @@
 //   * [PresenceDetectorFactory] — "is a person in this frame?" (ML Kit face
 //                           bbox presence; bbox/landmarks are never read).
 //                           A detector that stops answering is retired and
-//                           replaced (S04d §2)
+//                           replaced (S04d §2); so is any detector still
+//                           mid-call when the gate is invalidated — stop,
+//                           camera lost, deadline (S04e §1). At most
+//                           [unfinishedDetectionLimit] calls may be left
+//                           unfinished on retired detectors
 //   * [CameraPermissionGateway] — permission status / prompt
 //   * [LifecycleSource]   — background → automatic stop
 //
@@ -44,11 +48,13 @@
 // place every sample of the run with `runStartedAt + sinceStart`.
 // `receivedAt` is the wall clock at capture, informational only.
 //
-// Runs (S04d §1): every `start()` creates a run token. The camera handle the
-// open returns belongs to that run; a late open (after the bound), an open
-// that lands after `stop()` cancelled the run, or a start aborted by the
-// lifecycle releases ITS OWN handle only — the run that replaced it keeps its
-// camera and its stream.
+// Runs (S04d §1 · S04e §2): every `start()` creates a run token. The camera
+// handle the open returns belongs to that run; a late open (after the
+// bound), an open that lands after `stop()` cancelled the run, or a start
+// aborted by the lifecycle releases ITS OWN handle only — the run that
+// replaced it keeps its camera and its stream. After every await inside
+// `_start()` the run re-checks that it is still the current one; a stale run
+// never emits a pause or touches the lifecycle subscription.
 //
 // Bounds: camera open ≤ [openTimeout] (8 s) for both `checkAvailability` and
 // `start` — on expiry the caller gets an answer at once and the late camera
@@ -89,8 +95,9 @@ abstract final class SeatErrorCode {
   static const String cameraInitTimeout = 'camera_init_timeout';
 
   /// The detector keeps throwing ([SeatEngineImpl.detectorFailureLimit] in a
-  /// row), or [SeatEngineImpl.stalledDetectionLimit] retired detectors are
-  /// still hanging so no new one may be created (S04d §2).
+  /// row), or [SeatEngineImpl.unfinishedDetectionLimit] calls are still
+  /// unfinished on retired detectors so no new one may be created (S04d §2 ·
+  /// S04e §1 — reported once per such streak).
   static const String detectorFailed = 'detector_failed';
 }
 
@@ -114,9 +121,9 @@ class SeatStopReport {
     required this.inferenceWait,
     required this.inferenceTimedOut,
     required this.cameraReleaseWait,
-    required this.cameraReleaseTimedOut,
+    required this.closeResult,
     required this.suppressedResults,
-    required this.stalledDetections,
+    required this.unfinishedDetections,
   });
 
   final SeatEngineStopReason reason;
@@ -137,21 +144,27 @@ class SeatStopReport {
   /// How long the stop waited for the camera to be released.
   final Duration cameraReleaseWait;
 
-  /// The camera release did not finish within
-  /// [SeatEngineImpl.stopReleaseTimeout]; it continues in the background.
-  final bool cameraReleaseTimedOut;
+  /// How this run's camera release ended (S04e §3): `ok`, `failed` (the
+  /// platform dispose threw — the camera may still be held) or `timeout`
+  /// (the release outlived [SeatEngineImpl.stopReleaseTimeout] or the
+  /// source's own bound and continues in the background).
+  final CloseResult closeResult;
+
+  bool get cameraReleaseTimedOut => closeResult.outcome == CloseOutcome.timeout;
+
+  bool get cameraReleaseFailed => closeResult.outcome == CloseOutcome.failed;
 
   /// Results discarded so far because their ticket was no longer current.
   final int suppressedResults;
 
-  /// Retired detectors whose call had still not returned at the stop
-  /// (S04d §2). They are closed when they return; a permanently hung one
-  /// never is.
-  final int stalledDetections;
+  /// Calls still running on retired detectors at the stop (S04d §2 · S04e
+  /// §1: the actual count, summed over the retired list). They close their
+  /// detector when they return; a permanently hung one never does.
+  final int unfinishedDetections;
 
-  /// The stop left nothing behind: no detection and no camera release
-  /// outlived its bound.
-  bool get clean => !inferenceTimedOut && !cameraReleaseTimedOut;
+  /// The stop left nothing behind: the detection returned in time and the
+  /// camera release ended `ok`.
+  bool get clean => !inferenceTimedOut && closeResult.isOk;
 }
 
 /// Per-processed-frame diagnostics for the `/_seat_lab` harness. Not part of
@@ -242,7 +255,7 @@ class SeatEngineImpl implements SeatEngine {
     this.frameTimeout = defaultFrameTimeout,
     this.watchdogInterval = const Duration(seconds: 1),
     this.detectorFailureLimit = 3,
-    this.stalledDetectionLimit = defaultStalledDetectionLimit,
+    this.unfinishedDetectionLimit = defaultUnfinishedDetectionLimit,
     this.stopInferenceTimeout = defaultStopInferenceTimeout,
     this.stopReleaseTimeout = defaultStopReleaseTimeout,
     this.openTimeout = defaultOpenTimeout,
@@ -279,9 +292,10 @@ class SeatEngineImpl implements SeatEngine {
   /// Bound on opening the camera, for the probe and for `start()` (S04c §3a).
   static const Duration defaultOpenTimeout = Duration(seconds: 8);
 
-  /// Retired detectors that may be left hanging at once (S04d §2). At the
-  /// limit no new detector is created: `detector_failed` + Lost.
-  static const int defaultStalledDetectionLimit = 2;
+  /// Calls that may be left unfinished on retired detectors at once (S04d
+  /// §2 · S04e §1). At the limit no new detector is created:
+  /// `detector_failed` + Lost.
+  static const int defaultUnfinishedDetectionLimit = 2;
 
   /// Reason code of the last `unavailable` from [checkAvailability].
   static const String availabilityReasonTimeout = 'timeout';
@@ -297,7 +311,7 @@ class SeatEngineImpl implements SeatEngine {
   final Duration frameTimeout;
   final Duration watchdogInterval;
   final int detectorFailureLimit;
-  final int stalledDetectionLimit;
+  final int unfinishedDetectionLimit;
   final Duration stopInferenceTimeout;
   final Duration stopReleaseTimeout;
   final Duration openTimeout;
@@ -330,6 +344,7 @@ class SeatEngineImpl implements SeatEngine {
   int _framesDelivered = 0;
   int _detectorFailures = 0;
   bool _detectorErrorReported = false;
+  bool _exhaustionReported = false;
   SeatEngineStopReason? _lastStopReason;
   SeatStopReport? _lastStop;
   String? _lastFault;
@@ -372,8 +387,9 @@ class SeatEngineImpl implements SeatEngine {
   /// for good.
   bool get inferenceInFlight => _physicalInFlight > 0;
 
-  /// Retired detectors whose call has not returned (S04d §2).
-  int get stalledDetections => _retired.where((s) => s.pending > 0).length;
+  /// Calls that have not returned on retired detectors (S04d §2 · S04e §1:
+  /// the actual count, not a counter).
+  int get unfinishedDetections => _retired.fold(0, (n, s) => n + s.pending);
 
   /// Detectors created to replace a retired one.
   int get detectorReplacements => _detectorReplacements;
@@ -382,7 +398,7 @@ class SeatEngineImpl implements SeatEngine {
   bool get detectorAvailable {
     final a = _active;
     if (a != null && !a.retired) return true;
-    return !_disposed && stalledDetections < stalledDetectionLimit;
+    return !_disposed && unfinishedDetections < unfinishedDetectionLimit;
   }
 
   Duration get processingInterval => _cadence.interval;
@@ -475,10 +491,14 @@ class SeatEngineImpl implements SeatEngine {
     });
   }
 
+  /// [run] still owns the engine: it was not replaced by a later `start()`,
+  /// not cancelled by `stop()`, and the engine is not disposed (S04e §2).
+  bool _isCurrent(_Run run) => identical(run, _run) && !run.cancelled && !_disposed;
+
   Future<void> _start(SeatEngineConfig config, _Run run) async {
     final stopping = _stopping;
     if (stopping != null) await stopping;
-    if (_disposed || run.cancelled) return;
+    if (!_isCurrent(run)) return;
 
     // Lifecycle first (S04c §2): subscribe before touching the camera and
     // refuse to open it while the app is not in the foreground.
@@ -489,7 +509,7 @@ class SeatEngineImpl implements SeatEngine {
     }
 
     final permission = await _permission.status();
-    if (run.cancelled) return;
+    if (!_isCurrent(run)) return;
     if (!permission.isGranted) {
       _detachLifecycle();
       _events.add(const SeatError(SeatErrorCode.permissionDenied));
@@ -500,8 +520,8 @@ class SeatEngineImpl implements SeatEngine {
     // wait for a hung call to return.
     if (_detectorForWork() == null) {
       _detachLifecycle();
-      appLog.w('seat engine: start refused — $stalledDetections detector(s) still hanging');
-      _events.add(const SeatError(SeatErrorCode.detectorFailed));
+      appLog.w('seat engine: start refused — $unfinishedDetections detector call(s) still unfinished');
+      _reportExhaustion();
       return;
     }
     _config = config;
@@ -539,10 +559,10 @@ class SeatEngineImpl implements SeatEngine {
       );
       return;
     }
-    if (run.cancelled) {
+    if (!_isCurrent(run)) {
       // stop() / dispose() arrived while the camera was opening (S04d §6a):
       // the run is already over; release this run's camera in the background.
-      appLog.d('seat engine: camera opened for a cancelled run (gen=$gen) — releasing it');
+      appLog.d('seat engine: camera opened for a stale run (gen=$gen) — releasing it');
       unawaited(_closeHandleBounded(camera, 'cancelled start'));
       return;
     }
@@ -553,6 +573,13 @@ class SeatEngineImpl implements SeatEngine {
       _gate.cancel();
       run.camera = camera;
       await _closeRunCamera(run, 'start aborted');
+      // S04e §2: stop(), dispose() or a new start() may have happened while
+      // the camera was being released. Then this run owns nothing any more:
+      // no pause event, and the lifecycle subscription is the current run's.
+      if (!_isCurrent(run)) {
+        appLog.d('seat engine: aborted start (gen=$gen) finished after the run was replaced');
+        return;
+      }
       _abortStart(SeatPauseReason.backgroundDuringStart);
       return;
     }
@@ -569,11 +596,11 @@ class SeatEngineImpl implements SeatEngine {
     );
   }
 
-  /// A start that could not run. Nothing is reported for a run `stop()`
-  /// already cancelled.
+  /// A start that could not run. Nothing is reported for a run that is no
+  /// longer current (`stop()` cancelled it, or a later `start()` replaced it).
   void _failStart(_Run run, String code, String why, [Object? e, StackTrace? st]) {
-    if (run.cancelled) {
-      appLog.d('seat engine: $why (run already cancelled)');
+    if (!_isCurrent(run)) {
+      appLog.d('seat engine: $why (run no longer current)');
       return;
     }
     _gate.cancel();
@@ -671,13 +698,14 @@ class SeatEngineImpl implements SeatEngine {
     final pendingDetection = latest != null && !latest.isCompleted ? latest : null;
     final hadInFlight = pendingDetection != null;
     _gate.cancel();
+    _retireActiveIfBusy('stop'); // S04e §1: a detector mid-call is never reused
     _watchdog?.cancel();
     _watchdog = null;
     _detachLifecycle();
 
     // 2. This run's camera, bounded.
     final tRelease = _mono.elapsed;
-    final releaseTimedOut = run != null && !await _closeRunCamera(run, 'stop');
+    final closeResult = run == null ? const CloseResult.ok() : await _closeRunCamera(run, 'stop');
     final releaseWait = _mono.elapsed - tRelease;
 
     // 3. In-flight detection, bounded.
@@ -695,41 +723,50 @@ class SeatEngineImpl implements SeatEngine {
       inferenceWait: waited,
       inferenceTimedOut: timedOut,
       cameraReleaseWait: releaseWait,
-      cameraReleaseTimedOut: releaseTimedOut,
+      closeResult: closeResult,
       suppressedResults: _gate.suppressed,
-      stalledDetections: stalledDetections,
+      unfinishedDetections: unfinishedDetections,
     );
     appLog.d(
       'seat engine: stopped (${reason.name}) gen=$generation '
-      'release=${releaseWait.inMilliseconds}ms${releaseTimedOut ? ' (timed out)' : ''} '
+      'release=${releaseWait.inMilliseconds}ms (${closeResult.outcome.name}) '
       'inFlight=$hadInFlight waited=${waited.inMilliseconds}ms timedOut=$timedOut '
-      'stalled=$stalledDetections',
+      'unfinished=$unfinishedDetections',
     );
   }
 
   /// Releases the run's camera (if it has one), waiting at most
-  /// [stopReleaseTimeout]. `false` when the release is still running in the
-  /// background.
-  Future<bool> _closeRunCamera(_Run run, String why) {
+  /// [stopReleaseTimeout]. The result says how the release ended (S04e §3).
+  Future<CloseResult> _closeRunCamera(_Run run, String why) {
     final handle = run.camera;
     run.camera = null;
-    if (handle == null) return Future<bool>.value(true);
+    if (handle == null) return Future<CloseResult>.value(const CloseResult.ok());
     return _closeHandleBounded(handle, why);
   }
 
-  /// Closes one camera handle — that session only — with a bound.
-  Future<bool> _closeHandleBounded(SeatCameraHandle handle, String why) {
-    final close = handle.close().then(
-          (_) {},
-          onError: (Object e, StackTrace st) =>
-              appLog.w('seat engine: camera close failed ($why)', error: e, stackTrace: st),
-        );
-    return _awaitWithTimeout(close, stopReleaseTimeout).then((ok) {
-      if (!ok) {
-        appLog.w('seat engine: camera release still pending after ${stopReleaseTimeout.inMilliseconds}ms ($why)');
-      }
-      return ok;
+  /// Closes one camera handle — that session only — with a bound. A release
+  /// that throws, reports a failure, or outlives [stopReleaseTimeout] is
+  /// returned as the result; the overdue one continues in the background.
+  Future<CloseResult> _closeHandleBounded(SeatCameraHandle handle, String why) {
+    final done = Completer<CloseResult>();
+    final timer = Timer(stopReleaseTimeout, () {
+      if (done.isCompleted) return;
+      appLog.w('seat engine: camera release still pending after ${stopReleaseTimeout.inMilliseconds}ms ($why)');
+      done.complete(CloseResult.timeout(stopReleaseTimeout));
     });
+    handle.close().then(
+      (r) {
+        timer.cancel();
+        if (!r.isOk) appLog.w('seat engine: camera release ended ${r.outcome.name} ($why): $r');
+        if (!done.isCompleted) done.complete(r);
+      },
+      onError: (Object e, StackTrace st) {
+        timer.cancel();
+        appLog.w('seat engine: camera close threw ($why)', error: e, stackTrace: st);
+        if (!done.isCompleted) done.complete(CloseResult.failed(e, st));
+      },
+    );
+    return done.future;
   }
 
   /// `true` when [future] completed within [timeout].
@@ -777,12 +814,28 @@ class SeatEngineImpl implements SeatEngine {
   _DetectorSlot? _detectorForWork() {
     final a = _active;
     if (a != null && !a.retired) return a;
-    if (_disposed || stalledDetections >= stalledDetectionLimit) return null;
+    if (_disposed || unfinishedDetections >= unfinishedDetectionLimit) return null;
     final slot = _newDetectorSlot();
     _active = slot;
     _detectorReplacements++;
-    appLog.d('seat engine: detector #${slot.id} created (stalled=$stalledDetections)');
+    _exhaustionReported = false; // a new detector ends the streak
+    appLog.d('seat engine: detector #${slot.id} created (unfinished=$unfinishedDetections)');
     return slot;
+  }
+
+  /// Gate invalidation while a call is running (stop · camera lost ·
+  /// background · deadline): that detector is retired at once and never
+  /// reused — the next run or the recovery gets a fresh one (S04e §1).
+  void _retireActiveIfBusy(String why) {
+    final a = _active;
+    if (a != null && !a.retired && a.pending > 0) _retireActive(why);
+  }
+
+  /// Invalidates the detection in flight (its result will not post) and
+  /// retires its detector when one is mid-call.
+  void _invalidateGate(String why) {
+    if (_gate.invalidate()) _cadence.release();
+    _retireActiveIfBusy(why);
   }
 
   /// Nothing more is submitted to the active detector. It is closed now when
@@ -833,7 +886,12 @@ class SeatEngineImpl implements SeatEngine {
     _lastFrameAt = capturedAt;
     _framesDelivered++;
     final slot = _detectorForWork();
-    if (slot == null) return; // no detector left: frames arrive, nothing can be decided
+    if (slot == null) {
+      // No detector left (S04e §1): frames arrive, nothing can be decided.
+      _reportExhaustion();
+      if (!_lost) _markLost(SeatLostReason.detectorExhausted);
+      return;
+    }
     if (_lost) {
       _lost = false;
       _lastLostReason = null;
@@ -924,6 +982,15 @@ class SeatEngineImpl implements SeatEngine {
     _events.add(const SeatError(SeatErrorCode.detectorFailed));
   }
 
+  /// No detector may be created (S04d §2 · S04e §1): once per streak — the
+  /// flag resets when a new detector is created, not on `start()`.
+  void _reportExhaustion() {
+    if (_exhaustionReported) return;
+    _exhaustionReported = true;
+    appLog.w('seat engine: no detector available — $unfinishedDetections call(s) unfinished');
+    _events.add(const SeatError(SeatErrorCode.detectorFailed));
+  }
+
   // ── Camera health ───────────────────────────────────────────────────────
 
   void _watchdogTick() {
@@ -937,7 +1004,7 @@ class SeatEngineImpl implements SeatEngine {
       appLog.w('seat engine: inference overdue (${(now - expired.startedAt).inMilliseconds}ms) — detector retired');
       _retireActive('inference deadline');
       if (_detectorForWork() == null) {
-        _reportDetectorFailed();
+        _reportExhaustion();
         _markLost(SeatLostReason.detectorExhausted);
       }
     }
@@ -965,7 +1032,7 @@ class SeatEngineImpl implements SeatEngine {
     if (_lost) return;
     _lost = true;
     _lastLostReason = why;
-    if (_gate.invalidate()) _cadence.release();
+    _invalidateGate(why);
     appLog.d('seat engine: camera lost ($why)');
     _events.add(const SeatCameraLost());
   }
@@ -990,7 +1057,7 @@ class SeatEngineImpl implements SeatEngine {
     if (!_running) return;
     _lost = true; // no more samples; the next run's first frame reports a recovery
     _lastLostReason = SeatPauseReason.background.name;
-    if (_gate.invalidate()) _cadence.release();
+    _invalidateGate('background');
     appLog.d('seat engine: paused (background)');
     _events.add(const SeatPaused(SeatPauseReason.background));
     await _stop(SeatEngineStopReason.background);

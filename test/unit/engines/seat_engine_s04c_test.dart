@@ -203,7 +203,7 @@ void main() {
         r.idle(ms(2100)); // watchdog at 1 s (too early) and 2 s (expired)
         expect(r.engine.inferenceTimeouts, 1);
         expect(r.engine.inferenceInFlight, isTrue, reason: 'physically still hanging');
-        expect(r.engine.stalledDetections, 1);
+        expect(r.engine.unfinishedDetections, 1);
         expect(r.engine.detectorReplacements, 1, reason: 'S04d: replaced at once');
         expect(r.detectors, hasLength(2));
         expect(r.samples, isEmpty);
@@ -236,7 +236,7 @@ void main() {
         r.idle(s(3));
         expect(disposed, isTrue, reason: 'dispose is bounded');
         expect(r.engine.lastStopReport!.inferenceTimedOut, isTrue);
-        expect(r.engine.lastStopReport!.stalledDetections, 2);
+        expect(r.engine.lastStopReport!.unfinishedDetections, 2);
         expect(r.detectors.every((d) => d.closeCalls == 0), isTrue,
             reason: 'never closed during an inference, even a stuck one');
       });

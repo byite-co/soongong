@@ -1,4 +1,4 @@
-// CameraFrameSource (S04 · S04d): `camera` plugin → [SeatFrameSource].
+// CameraFrameSource (S04 · S04d · S04e): `camera` plugin → [SeatFrameSource].
 //
 // Front camera, lowest resolution preset (320×240 on Android, 352×288 on
 // iOS), no audio, single-plane stream format (NV21 on Android, BGRA on iOS)
@@ -10,6 +10,11 @@
 // only, so a controller that finished initialising after its run was
 // abandoned can be released without touching the controller of the run that
 // replaced it.
+//
+// S04e: the handle's `close()` answers with a [CloseResult] — a dispose that
+// threw or outlived [disposeTimeout] is returned, not swallowed. The
+// controller factory is injectable so that boundary can be tested without a
+// device.
 
 import 'dart:async';
 
@@ -29,24 +34,34 @@ class CameraSeatFrame extends SeatFrame {
   final int rotationDegrees;
 }
 
+/// Builds the plugin controller for one session (test seam).
+typedef SeatCameraControllerFactory = CameraController Function(
+  CameraDescription camera, {
+  required int fps,
+  ImageFormatGroup? imageFormatGroup,
+});
+
 class CameraFrameSource implements SeatFrameSource {
   CameraFrameSource({
     Future<List<CameraDescription>> Function()? listCameras,
+    SeatCameraControllerFactory? controllerFactory,
     this.probeWindow = const Duration(milliseconds: 600),
     this.openTimeout = const Duration(seconds: 8),
     this.disposeTimeout = const Duration(seconds: 2),
-  }) : _listCameras = listCameras ?? availableCameras;
+  })  : _listCameras = listCameras ?? availableCameras,
+        _controllerFactory = controllerFactory ?? _defaultController;
 
   final Future<List<CameraDescription>> Function() _listCameras;
+  final SeatCameraControllerFactory _controllerFactory;
 
   /// How long the probe waits for an asynchronous "camera in use" fault
   /// after the camera opened.
   final Duration probeWindow;
   final Duration openTimeout;
 
-  /// S04c §3a: a controller dispose that outlives this bound continues in
-  /// the background (logged) instead of blocking the probe, the open or the
-  /// stop sequence.
+  /// S04c §3a: a controller dispose that outlives this bound is reported as
+  /// [CloseOutcome.timeout] and continues in the background instead of
+  /// blocking the probe, the open or the stop sequence.
   final Duration disposeTimeout;
 
   final Set<_CameraSession> _sessions = <_CameraSession>{};
@@ -74,14 +89,21 @@ class CameraFrameSource implements SeatFrameSource {
           ? ImageFormatGroup.bgra8888
           : null;
 
-  CameraController _newController(CameraDescription camera, {required int fps}) =>
+  static CameraController _defaultController(
+    CameraDescription camera, {
+    required int fps,
+    ImageFormatGroup? imageFormatGroup,
+  }) =>
       CameraController(
         camera,
         ResolutionPreset.low,
         enableAudio: false,
         fps: fps,
-        imageFormatGroup: _streamFormat,
+        imageFormatGroup: imageFormatGroup,
       );
+
+  CameraController _newController(CameraDescription camera, {required int fps}) =>
+      _controllerFactory(camera, fps: fps, imageFormatGroup: _streamFormat);
 
   @override
   Future<CameraProbeResult> probe() async {
@@ -117,7 +139,7 @@ class CameraFrameSource implements SeatFrameSource {
     } catch (_) {
       return CameraProbeResult.failed;
     } finally {
-      await _disposeQuietly(controller);
+      await _disposeBounded(controller, 'probe');
     }
   }
 
@@ -142,13 +164,13 @@ class CameraFrameSource implements SeatFrameSource {
     try {
       await controller.initialize().timeout(openTimeout);
     } on CameraException catch (e) {
-      await _disposeQuietly(controller);
+      await _disposeBounded(controller, 'open failed');
       throw SeatFrameSourceException(_openCode(e.code), e.description);
     } on TimeoutException {
-      await _disposeQuietly(controller);
+      await _disposeBounded(controller, 'open timed out');
       throw const SeatFrameSourceException('camera_init_failed', 'timeout');
     } catch (e) {
-      await _disposeQuietly(controller);
+      await _disposeBounded(controller, 'open failed');
       throw SeatFrameSourceException('camera_init_failed', '$e');
     }
 
@@ -173,7 +195,7 @@ class CameraFrameSource implements SeatFrameSource {
       });
     } on CameraException catch (e) {
       session._abandon();
-      await _disposeQuietly(controller);
+      await _disposeBounded(controller, 'stream start failed');
       throw SeatFrameSourceException('camera_init_failed', e.description);
     }
     _sessions.add(session);
@@ -182,26 +204,33 @@ class CameraFrameSource implements SeatFrameSource {
     return session;
   }
 
-  /// Dispose bounded by [disposeTimeout]; a late or failing dispose is only
-  /// logged (no frame data in the message).
-  Future<void> _disposeQuietly(CameraController controller) {
-    final done = Completer<void>();
+  /// Dispose bounded by [disposeTimeout]. A dispose that throws or does not
+  /// finish in time is returned as the result (S04e §3) and logged (no
+  /// frame data in the message).
+  Future<CloseResult> _disposeBounded(CameraController controller, String why) {
+    final done = Completer<CloseResult>();
     final timer = Timer(disposeTimeout, () {
       if (done.isCompleted) return;
-      appLog.w('camera source: dispose still pending after ${disposeTimeout.inMilliseconds}ms');
-      done.complete();
+      appLog.w('camera source: dispose still pending after ${disposeTimeout.inMilliseconds}ms ($why)');
+      done.complete(CloseResult.timeout(disposeTimeout));
     });
-    controller.dispose().then(
-      (_) {
-        timer.cancel();
-        if (!done.isCompleted) done.complete();
-      },
-      onError: (Object e, StackTrace st) {
-        timer.cancel();
-        appLog.w('camera source: dispose failed', error: e, stackTrace: st);
-        if (!done.isCompleted) done.complete();
-      },
-    );
+    void failed(Object e, StackTrace st) {
+      timer.cancel();
+      appLog.w('camera source: dispose failed ($why)', error: e, stackTrace: st);
+      if (!done.isCompleted) done.complete(CloseResult.failed(e, st));
+    }
+
+    try {
+      controller.dispose().then(
+        (_) {
+          timer.cancel();
+          if (!done.isCompleted) done.complete(const CloseResult.ok());
+        },
+        onError: failed,
+      );
+    } catch (e, st) {
+      failed(e, st);
+    }
     return done.future;
   }
 
@@ -244,16 +273,16 @@ class _CameraSession implements SeatCameraHandle {
   }
 
   @override
-  Future<void> close() async {
-    if (!_open) return;
+  Future<CloseResult> close() async {
+    if (!_open) return const CloseResult.ok();
     _open = false;
     _owner._sessions.remove(this);
     _controller.removeListener(_reportFault);
     try {
       if (_controller.value.isStreamingImages) await _controller.stopImageStream();
     } catch (_) {
-      // Already stopped or the camera is gone — dispose below releases it.
+      // Already stopped or the camera is gone — the dispose below decides.
     }
-    await _owner._disposeQuietly(_controller);
+    return _owner._disposeBounded(_controller, 'close');
   }
 }

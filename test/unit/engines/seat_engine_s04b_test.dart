@@ -36,8 +36,10 @@ void main() {
         expect(report.generation, oldGen);
         expect(r.samples, isEmpty);
 
-        // New run with an instant detector and a different answer.
-        r.detector.latency = Duration.zero;
+        // New run with an instant detector and a different answer. (S04e:
+        // the detector that was mid-call at the stop is retired, so the new
+        // run gets a fresh one — created with the rig's current latency.)
+        r.detectorLatency = Duration.zero;
         r.start();
         final newGen = r.engine.generation;
         expect(newGen, greaterThan(oldGen));
@@ -125,22 +127,25 @@ void main() {
   });
 
   group('stop sequence', () {
-    test('stop during inference: no sample, no exception, detector kept open for reuse', () {
+    test('stop during inference: no sample, no exception; the busy detector is retired and closed by its returning call (S04e)', () {
       fakeAsync((async) {
         final r = Rig(async, detectorLatency: const Duration(milliseconds: 300));
         r.start();
         r.source.emit(present: true);
         r.tick(const Duration(milliseconds: 100));
         r.engine.stop();
+        async.flushMicrotasks();
+        expect(r.detector.closeCalls, 0, reason: 'never closed while its call is running');
         r.idle(const Duration(seconds: 1));
         expect(r.samples, isEmpty);
-        expect(r.detector.closeCalls, 0, reason: 'stop() does not close the detector');
-        expect(r.detector.closed, isFalse);
-        // Reuse after the stop works.
-        r.detector.latency = Duration.zero;
+        expect(r.detector.closeCalls, 1, reason: 'retired at the stop, closed when the call returned');
+        expect(r.detector.closed, isTrue);
+        // The next run gets a fresh detector.
+        r.detectorLatency = Duration.zero;
         r.start();
         r.stream(const Duration(seconds: 1), present: true);
         expect(r.samples, hasLength(1));
+        expect(r.detectors, hasLength(2));
       });
     });
 

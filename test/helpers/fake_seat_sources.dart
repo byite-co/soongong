@@ -36,13 +36,16 @@ class FakeCameraHandle implements SeatCameraHandle {
   bool get closed => !_open;
 
   @override
-  Future<void> close() async {
+  Future<CloseResult> close() async {
     closeCalls++;
-    if (!_open) return;
+    if (!_open) return const CloseResult.ok();
     _open = false;
     _source.closeCount++;
     _source._lastClosed = this;
     if (_source.hangClose) await Completer<void>().future;
+    final err = _source.closeError;
+    if (err != null) return CloseResult.failed(err);
+    return _source.closeResult ?? const CloseResult.ok();
   }
 
   void emit({required bool present}) => _onFrame(FakeSeatFrame(present: present));
@@ -71,6 +74,14 @@ class FakeSeatFrameSource implements SeatFrameSource {
   /// A handle's [FakeCameraHandle.close] never completes (the session is
   /// still marked closed at once).
   bool hangClose = false;
+
+  /// When set, [FakeCameraHandle.close] answers `CloseResult.failed(closeError)`
+  /// (the platform dispose threw).
+  Object? closeError;
+
+  /// When set (and [closeError] is not), [FakeCameraHandle.close] answers
+  /// this result — e.g. the source's own `timeout`.
+  CloseResult? closeResult;
 
   /// Every session opened so far, in order of completed opens.
   final List<FakeCameraHandle> handles = <FakeCameraHandle>[];
