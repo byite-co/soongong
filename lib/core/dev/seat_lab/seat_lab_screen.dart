@@ -1,13 +1,17 @@
-// `/_seat_lab` (S04, dev flavor only): measurement harness for
+// `/_seat_lab` (S04 · S04b, dev flavor only): measurement harness for
 // SeatEngineImpl. Shows the live seated boolean, per-frame latency, the
 // detection rate over the last 60 s, elapsed time, battery drop, engine
 // events, and lets the tester mark the real state (ground truth) and the
-// protocol case; everything goes into a CSV (docs/seat-engine.md §3).
+// protocol case; everything goes into a CSV (docs/seat-engine.md §4).
 //
 // The screen owns its own engine instance (not the provider's) so the
-// diagnostics stream is available and the minFaceSize can be changed. No
-// preview is shown — the status icon is the only camera feedback, as on the
-// real measurement screen.
+// diagnostics stream is available and the minFaceSize can be changed. The
+// engine shares the lab's monotonic clock, so sample rows carry the frame's
+// capture time and the detection's completion time on one time base. Each
+// start → stop is a segment; one that ends abnormally (engine stopped
+// itself, camera lost at the stop, error, detection outliving the stop
+// bound) is marked excluded from the summary. No preview is shown — the
+// status icon is the only camera feedback, as on the real measurement screen.
 
 import 'dart:async';
 
@@ -18,6 +22,7 @@ import '../../../data/engines/engines.dart';
 import '../../../data/export/export_service.dart';
 import '../../../data/export/share_export.dart';
 import '../../contracts/seat_engine.dart';
+import '../../domain/clock.dart';
 import '../../logging/app_logger.dart';
 import '../../strings/seat_lab_strings.dart';
 import '../../theme/app_theme.dart';
@@ -27,7 +32,10 @@ import 'seat_lab_recorder.dart';
 
 const String seatLabPath = '/_seat_lab';
 
-typedef SeatLabEngineBuilder = SeatEngineImpl Function({required double minFaceSize});
+typedef SeatLabEngineBuilder = SeatEngineImpl Function({
+  required double minFaceSize,
+  required MonotonicClock monotonic,
+});
 typedef SeatLabBatteryReader = Future<int?> Function();
 typedef SeatLabShare = Future<void> Function(ExportFile file);
 
@@ -39,6 +47,7 @@ class SeatLabScreen extends StatefulWidget {
     this.engineBuilder,
     this.batteryReader,
     this.share,
+    this.monotonic,
     this.batteryPollInterval = const Duration(seconds: 60),
   });
 
@@ -52,6 +61,9 @@ class SeatLabScreen extends StatefulWidget {
   /// Test seam. Default: the system share sheet.
   final SeatLabShare? share;
 
+  /// Lab time base, shared with the engine (test seam; default: a stopwatch).
+  final MonotonicClock? monotonic;
+
   final Duration batteryPollInterval;
 
   @override
@@ -62,8 +74,9 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
   static const List<double> _minFaceSizes = <double>[0.1, 0.15, 0.2];
 
   final SeatLabRecorder _recorder = SeatLabRecorder();
-  final Stopwatch _elapsed = Stopwatch();
   final List<String> _eventLog = <String>[];
+  late final MonotonicClock _mono = widget.monotonic ?? StopwatchMonotonicClock();
+  late final Duration _t0 = _mono.elapsed;
 
   SeatEngineImpl? _engine;
   StreamSubscription<SeatDiagnostic>? _diagSub;
@@ -79,15 +92,24 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
   String? _availability;
   String? _permission;
   bool _busy = false;
+  bool _lostNow = false;
+  bool _segmentHadError = false;
 
   bool get _running => _state == _LabState.running || _state == _LabState.lost;
+
+  /// Lab time base: elapsed since the screen opened, on the shared clock.
+  Duration get _now => _mono.elapsed - _t0;
+
+  Duration get _segmentElapsed =>
+      _recorder.lastSegment?.durationAt(_now) ?? Duration.zero;
 
   SeatEngineImpl _ensureEngine() {
     final existing = _engine;
     if (existing != null) return existing;
     final build = widget.engineBuilder ??
-        ({required double minFaceSize}) => SeatEngineImpl.camera(minFaceSize: minFaceSize);
-    final engine = build(minFaceSize: _minFaceSize);
+        ({required double minFaceSize, required MonotonicClock monotonic}) =>
+            SeatEngineImpl.camera(minFaceSize: minFaceSize, monotonic: monotonic);
+    final engine = build(minFaceSize: _minFaceSize, monotonic: _mono);
     _diagSub = engine.diagnostics.listen(_onDiagnostic);
     _eventSub = engine.events.listen(_onEvent);
     _engine = engine;
@@ -117,12 +139,13 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
   // ── Engine callbacks ───────────────────────────────────────────────────
 
   void _onDiagnostic(SeatDiagnostic d) {
+    // Same clock as the engine: capture and completion land on the lab base.
     _recorder.sample(
-      _elapsed.elapsed,
+      d.capturedAt - _t0,
       detected: d.detected,
       seated: d.seated,
       held: d.held,
-      latency: d.latency,
+      completed: d.completedAt - _t0,
     );
     if (!mounted) return;
     setState(() => _lastDiag = d);
@@ -139,19 +162,56 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     setState(() {
       switch (e) {
         case SeatCameraLost():
+          _lostNow = true;
           _state = _LabState.lost;
         case SeatCameraRecovered():
+          _lostNow = false;
           _state = _LabState.running;
         case SeatError():
-          if (!(_engine?.isRunning ?? false)) _state = _LabState.idle;
+          if (_running) _segmentHadError = true;
+          if (!(_engine?.isRunning ?? false) && _state == _LabState.starting) {
+            _state = _LabState.idle;
+          }
       }
     });
+    _checkSelfStop();
   }
 
   void _log(String name) {
-    _recorder.event(_elapsed.elapsed, name);
-    _eventLog.insert(0, '${_fmtElapsed(_elapsed.elapsed)} · $name');
+    _recorder.event(_now, name);
+    _logLine(name);
+  }
+
+  void _logLine(String name) {
+    _eventLog.insert(0, '${_fmtElapsed(_now)} · $name');
     if (_eventLog.length > 10) _eventLog.removeLast();
+  }
+
+  /// The engine stopped on its own (background → auto stop): close the
+  /// segment as abnormal so its samples leave the summary.
+  void _checkSelfStop() {
+    final engine = _engine;
+    if (!_running || _busy || engine == null || engine.isRunning) return;
+    final reason = switch (engine.lastStopReason) {
+      SeatEngineStopReason.background => SeatLabStrings.reasonBackground,
+      _ => SeatLabStrings.reasonSelfStop,
+    };
+    _finishSegment(end: SeatLabSegmentEnd.abnormal, reason: reason);
+    _logLine(SeatLabStrings.eventSelfStopped);
+    _stopTimers();
+    if (mounted) setState(() => _state = _LabState.idle);
+  }
+
+  void _finishSegment({required SeatLabSegmentEnd end, String reason = ''}) {
+    if (_recorder.currentSegment == null) return;
+    _recorder.endSegment(_now, end: end, reason: reason);
+  }
+
+  void _stopTimers() {
+    _uiTimer?.cancel();
+    _uiTimer = null;
+    _batteryTimer?.cancel();
+    _batteryTimer = null;
   }
 
   // ── Actions ────────────────────────────────────────────────────────────
@@ -163,8 +223,10 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
       _state = _LabState.starting;
     });
     final engine = _ensureEngine();
-    if (!_elapsed.isRunning) _elapsed.start();
-    _log(SeatLabStrings.eventStarted);
+    _lostNow = false;
+    _segmentHadError = false;
+    _recorder.beginSegment(_now);
+    _logLine(SeatLabStrings.eventStarted);
     await _readBattery();
     try {
       await engine.start(SeatEngineConfig(lowPower: _lowPower));
@@ -178,25 +240,42 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     });
     if (engine.isRunning) {
       _uiTimer ??= Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() {});
+        if (!mounted) return;
+        setState(() {});
+        _checkSelfStop();
       });
       _batteryTimer ??= Timer.periodic(widget.batteryPollInterval, (_) => _readBattery());
+    } else {
+      // start failed: the segment never ran
+      _finishSegment(
+        end: SeatLabSegmentEnd.abnormal,
+        reason: SeatLabStrings.reasonError,
+      );
     }
   }
 
   Future<void> _stop() async {
     if (_busy) return;
     setState(() => _busy = true);
+    final engine = _engine;
     try {
-      await _engine?.stop();
+      await engine?.stop();
     } finally {
-      _uiTimer?.cancel();
-      _uiTimer = null;
-      _batteryTimer?.cancel();
-      _batteryTimer = null;
-      _elapsed.stop();
+      _stopTimers();
+      final report = engine?.lastStopReport;
+      final String? abnormal = report != null && report.inferenceTimedOut
+          ? SeatLabStrings.reasonInferenceTimeout
+          : _lostNow
+              ? SeatLabStrings.reasonLost
+              : _segmentHadError
+                  ? SeatLabStrings.reasonError
+                  : null;
+      _finishSegment(
+        end: abnormal == null ? SeatLabSegmentEnd.normal : SeatLabSegmentEnd.abnormal,
+        reason: abnormal ?? '',
+      );
+      _logLine(SeatLabStrings.eventStopped);
       await _readBattery();
-      _log(SeatLabStrings.eventStopped);
       if (mounted) {
         setState(() {
           _busy = false;
@@ -213,7 +292,7 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     } catch (e) {
       appLog.d('seat lab: battery unavailable ($e)');
     }
-    if (level != null) _recorder.battery(_elapsed.elapsed, level);
+    if (level != null) _recorder.battery(_now, level);
     if (mounted) setState(() {});
   }
 
@@ -253,10 +332,7 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
         _recorder.clear();
         _eventLog.clear();
         _lastDiag = null;
-        _elapsed
-          ..reset()
-          ..stop();
-        if (_running) _elapsed.start();
+        if (_running) _recorder.beginSegment(_now); // the run in progress stays tracked
       });
 
   Future<void> _setMinFaceSize(double v) async {
@@ -265,11 +341,11 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     await _disposeEngine(); // the detector is rebuilt with the new size on next use
   }
 
-  void _setTruth(SeatLabTruth t) => setState(() => _recorder.mark(_elapsed.elapsed, t));
+  void _setTruth(SeatLabTruth t) => setState(() => _recorder.mark(_now, t));
 
   void _setCase(String id) => setState(() {
         _caseId = id;
-        _recorder.setCase(_elapsed.elapsed, id);
+        _recorder.setCase(_now, id);
       });
 
   // ── Build ──────────────────────────────────────────────────────────────
@@ -345,7 +421,7 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
 
   Widget _numbersBody(AppColors c) {
     final e = _engine;
-    final now = _elapsed.elapsed;
+    final now = _now;
     final rate = _recorder.detectionRate(now);
     final seatedRate = _recorder.seatedRate(now);
     final latency = _recorder.meanLatency(now);
@@ -355,9 +431,18 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     final battery = bStart == null || bLast == null
         ? SeatLabStrings.batteryUnknown
         : '$bStart% → $bLast% (−${bStart - bLast}%p)';
+    final last = _recorder.lastSegment;
+    final String lastStop;
+    if (last == null || last.isOpen) {
+      lastStop = SeatLabStrings.noData;
+    } else {
+      final kind = last.isExcluded ? SeatLabStrings.segmentAbnormal : SeatLabStrings.segmentNormal;
+      lastStop = last.reason.isEmpty ? kind : '$kind · ${last.reason}';
+    }
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _Kv(SeatLabStrings.elapsed, _fmtElapsed(now), c),
+        _Kv(SeatLabStrings.elapsed, _fmtElapsed(_segmentElapsed), c),
         _Kv(
           SeatLabStrings.framesProcessed,
           e == null ? SeatLabStrings.noData : '${e.framesProcessed} / ${e.framesDelivered}',
@@ -384,6 +469,20 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
           '${agreement.truthAwayAsSeated} / ${agreement.truthAway} (${_pct(agreement.awayFalseSeatedRate)})',
           c,
         ),
+        _Kv(
+          SeatLabStrings.segments,
+          '${_recorder.segments.length} (${_recorder.excludedSegments})',
+          c,
+        ),
+        _Kv(SeatLabStrings.excludedSamples, '${_recorder.excludedSamples}', c),
+        _Kv(
+          SeatLabStrings.suppressedResults,
+          e == null ? SeatLabStrings.noData : '${e.suppressedResults}',
+          c,
+        ),
+        _Kv(SeatLabStrings.lastStop, lastStop, c),
+        const SizedBox(height: AppSpacing.s6),
+        Text(SeatLabStrings.summaryNote, style: AppTypography.caption.copyWith(color: c.tx3)),
       ],
     );
   }

@@ -23,6 +23,12 @@ class FakeSeatFrameSource implements SeatFrameSource {
 
   SeatFrameCallback? _onFrame;
   SeatFaultCallback? _onFault;
+
+  /// Callbacks of the most recently closed session, so a test can replay a
+  /// platform callback that arrives late (after the camera was released,
+  /// possibly after the next session opened) with [emitLate] / [faultLate].
+  SeatFrameCallback? _lateOnFrame;
+  SeatFaultCallback? _lateOnFault;
   SeatFrameSourceConfig? lastConfig;
   int openCount = 0;
   int closeCount = 0;
@@ -55,6 +61,8 @@ class FakeSeatFrameSource implements SeatFrameSource {
   Future<void> close() async {
     if (_onFrame == null) return;
     closeCount++;
+    _lateOnFrame = _onFrame;
+    _lateOnFault = _onFault;
     _onFrame = null;
     _onFault = null;
   }
@@ -65,6 +73,14 @@ class FakeSeatFrameSource implements SeatFrameSource {
 
   void fault(CameraFault fault, [String description = 'fault']) =>
       _onFault?.call(fault, description);
+
+  /// A frame from the previous camera session arriving after [close].
+  void emitLate({required bool present}) =>
+      _lateOnFrame?.call(FakeSeatFrame(present: present));
+
+  /// A fault from the previous camera session arriving after [close].
+  void faultLate(CameraFault fault, [String description = 'late fault']) =>
+      _lateOnFault?.call(fault, description);
 }
 
 class FakePresenceDetector implements PresenceDetector {
@@ -78,6 +94,7 @@ class FakePresenceDetector implements PresenceDetector {
   Object? error;
 
   int calls = 0;
+  int closeCalls = 0;
   bool closed = false;
 
   @override
@@ -92,7 +109,10 @@ class FakePresenceDetector implements PresenceDetector {
   }
 
   @override
-  Future<void> close() async => closed = true;
+  Future<void> close() async {
+    closeCalls++;
+    closed = true;
+  }
 }
 
 class FakeCameraPermissionGateway implements CameraPermissionGateway {

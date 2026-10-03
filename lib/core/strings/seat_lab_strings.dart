@@ -33,7 +33,21 @@ abstract final class SeatLabStrings {
   static const String events = '이벤트 수';
   static const String agreementSeated = '정답 착석 중 착석 판정';
   static const String agreementAway = '정답 이탈 중 착석 판정';
+  static const String segments = '구간 (제외)';
+  static const String excludedSamples = '제외된 샘플';
+  static const String suppressedResults = '폐기된 늦은 결과';
+  static const String lastStop = '마지막 종료';
+  static const String summaryNote = '제외 구간은 요약 집계에서 빠집니다 (CSV 에는 남음)';
   static const String noData = '—';
+
+  // Segment end
+  static const String segmentNormal = '정상';
+  static const String segmentAbnormal = '비정상';
+  static const String reasonBackground = '백그라운드로 엔진이 멈춤';
+  static const String reasonLost = '카메라 끊긴 채 종료';
+  static const String reasonError = '구간 중 오류';
+  static const String reasonInferenceTimeout = '추론 대기 초과 (500ms)';
+  static const String reasonSelfStop = '엔진이 스스로 멈춤';
 
   // Settings
   static const String sectionSettings = '실험 설정';
@@ -76,6 +90,7 @@ abstract final class SeatLabStrings {
   static const String eventError = 'error';
   static const String eventStarted = 'start';
   static const String eventStopped = 'stop';
+  static const String eventSelfStopped = 'self-stop';
 
   // Protocol cases (docs/seat-engine.md §3) — id · short name
   static const List<(String, String)> cases = <(String, String)>[

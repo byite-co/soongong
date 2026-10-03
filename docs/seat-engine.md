@@ -1,6 +1,6 @@
-# 착석 감지 엔진 (S04) — 기술 선택 · 구현 · 측정 프로토콜
+# 착석 감지 엔진 (S04 · S04b) — 기술 선택 · 구현 · 측정 프로토콜
 
-작성 2026-10-01 · 브랜치 `ccr-d3a4cdaa-goy1d8` · 계약 `core/contracts/seat_engine.dart`(S01, 변경 없음) · 결정 D3 · D23
+작성 2026-10-01 · S04b 보완 2026-10-03 · 브랜치 `ccr-d3a4cdaa-goy1d8` · 계약 `core/contracts/seat_engine.dart`(S01, 변경 없음) · 결정 D3 · D23
 
 이 문서는 세 가지를 담는다. (1) 검출기 선택 스파이크의 비교표와 선택 이유, (2) `SeatEngineImpl` 의 동작 규약(S06 이 의존하는 이벤트 의미), (3) 실기기 측정 프로토콜과 목표치. 측정 결과 기록 칸은 `docs/handoff/S04.md` 에 있다(사람이 채움).
 
@@ -56,7 +56,8 @@ camera 플러그인(전면 · ResolutionPreset.low · NV21/BGRA · fps 15, 저�
 
 | 파일 | 역할 |
 |---|---|
-| `lib/data/engines/seat_engine_impl.dart` | 계약 구현. 가용성·시작/정지·워치독·라이프사이클·이벤트. 진단 스트림(`diagnostics`)은 실험실 전용 |
+| `lib/data/engines/seat_engine_impl.dart` | 계약 구현. 가용성·시작/정지(세대·종료 순서, §3.6)·워치독·라이프사이클·이벤트. 진단 스트림(`diagnostics`)·`lastStopReport` 는 실험실 전용 |
+| `seat/work_generation.dart` | S04b. `WorkGeneration`(세대 번호) + `InferenceGate`(진행 중 추론 1건의 세대 게이트). 순수 Dart |
 | `seat/seat_frame_source.dart` | 추상화: `SeatFrame`·`SeatFrameSource`·`PresenceDetector`·`CameraPermissionGateway`·`LifecycleSource` |
 | `seat/camera_frame_source.dart` | `camera` 플러그인 어댑터. 전면 카메라 선택, 프로브(점유 판정), 스트림, 플러그인 오류 → `CameraFault` |
 | `seat/mlkit_face_presence_detector.dart` | ML Kit 어댑터 + `inputImageFromCamera`(NV21/BGRA 단일 평면만) |
@@ -67,14 +68,39 @@ camera 플러그인(전면 · ResolutionPreset.low · NV21/BGRA · fps 15, 저�
 ### 3.2 S06 이 의존하는 규약
 
 - **`checkAvailability()`**: 권한 상태 확인 → 미결정이면 **프롬프트를 띄운다**(이미 거부/영구 거부/제한이면 띄우지 않음) → 하드웨어·점유 프로브(카메라를 잠깐 열고 닫음, Android 는 열린 뒤 600 ms 안의 "in use" 오류를 봄) → `ok · permissionDenied · cameraBusy · unavailable`. 온보딩에서 `CameraPermission.request()` 를 먼저 호출했다면 프롬프트는 다시 뜨지 않는다.
-- **`start(config)`**: 프롬프트 없음. 권한이 없으면 `SeatError('permission_denied')` 를 내고 실행하지 않는다. 카메라를 못 열면 `SeatError(code)` — 코드는 `permission_denied · no_camera · camera_busy · camera_init_failed`. 성공하면 `isRunning == true`. 재호출은 무시(멱등).
-- **`samples`**: 처리된 프레임마다 1건(기본 1초, `sampleHz` 는 1–2 로 클램프, `lowPower` 는 2초). **카메라가 끊긴 동안은 샘플이 없다**(판정 없음 = D23 의 paused).
+- **`start(config)`**: 프롬프트 없음. 권한이 없으면 `SeatError('permission_denied')` 를 내고 실행하지 않는다. 카메라를 못 열면 `SeatError(code)` — 코드는 `permission_denied · no_camera · camera_busy · camera_init_failed`. 성공하면 `isRunning == true`. 재호출은 무시(멱등). 호출마다 **세대가 +1** 된다(§3.6).
+- **`stop()`**: 즉시 펜스(새 프레임 거부·세대 +1) → 카메라 해제 → 진행 중 추론을 **최대 500 ms** 기다린 뒤 반환. 펜스 뒤에 돌아온 결과는 기다렸든 아니든 버린다 — `stop()` 이후 샘플·이벤트는 오지 않는다. 검출기는 닫지 않고 재사용한다(닫는 것은 `dispose()`, 추론 도중에는 절대 닫지 않음).
+- **`samples`**: 처리된 프레임마다 1건(기본 1초, `sampleHz` 는 1–2 로 클램프, `lowPower` 는 2초). `SeatSample.at` 은 **프레임 촬영 시각**(카메라 콜백이 도착한 벽시계 순간)이며 추론이 끝난 시각이 아니다 — 지연이 커도 샘플의 시각은 뒤로 밀리지 않는다. **카메라가 끊긴 동안은 샘플이 없다**(판정 없음 = D23 의 paused).
 - **`SeatCameraLost`**: (1) 실행 중 3초간 프레임 없음, (2) 플러그인이 점유·치명·정책 오류를 보고, (3) 앱이 포그라운드를 벗어남(`hidden/paused/detached`). (3) 에서는 엔진이 **스스로 stop** 하고 카메라를 해제한다. 복귀 후 `start()` 는 호출자(S06) 책임.
 - **`SeatCameraRecovered`**: Lost 이후 **첫 프레임**이 오면 1회. 그 사이에 stop/start 가 있었는지와 무관하다(자가 복구·재연결·백그라운드 복귀 모두 같은 경로). `SessionTimeline.resume` 은 paused 가 아니면 무시하므로 중복 호출은 무해.
 - **`SeatError('detector_failed')`**: 검출기가 3회 연속 실패하면 1회. 카메라는 계속 돌고, 성공이 끼면 다시 셀 수 있다.
 - **`previewOrNull()`** 은 항상 `null`(측정 화면은 상태 아이콘만).
 - **`SeatSample.confidence`** 는 `null`. ML Kit 는 검출 신뢰도를 주지 않으며 지어내지 않는다.
 - 감도(0·1·2)는 `SeatEngineConfig` 에 없다. 유지 창 N초를 S06 이 바꾸려면 `CONTRACT-CHANGE` 로 조율(현재 `SeatEngineImpl(hold:)` 생성자 인자로만 노출).
+
+### 3.6 세대 · 종료 순서 · 시각 분리 (S04b, focus-engine 선별 참조)
+
+`byite-co/focus-engine`(main `9b090ab`)의 `WorkGeneration` · `AnalysisGate` · `StopSequence` · 시간 기준(Timebase) **설계만** 참조해 Dart 계약에 맞게 다시 구현했다(코드 복사 없음). 엔진의 출처(검출기 A = ML Kit Face)는 그대로다.
+
+| 항목 | focus-engine 설계 | `SeatEngineImpl` 구현 |
+|---|---|---|
+| 세대(WorkGeneration) | 작업 시작 시 세대 포착, 종료 타임아웃에 bump, 세대가 다르면 결과 미게시 | `start()` 마다 `InferenceGate.open()` 으로 +1. 카메라 콜백(프레임·오류)은 열 때의 세대를 들고 오고, 추론 결과는 시작 세대가 현재 세대일 때만 `samples`·`events`·`diagnostics` 에 반영. `stop()` 도 +1(펜스) |
+| 게이트(AnalysisGate) | begin/end/cancel, 억제 건수 | `InferenceGate.begin()`(닫혀 있으면 null → 아무것도 게시 안 함) · `end(gen)`(현재 세대일 때만 true) · `cancel()`(닫고 +1, 진행 중 여부 반환). `suppressedResults` 로 폐기 건수 노출 |
+| 종료 순서(StopSequence) | 입력 중단 → 펜스 → 분석 스레드 대기(500 ms, 초과 시 bump) → Pose 대기(500 ms) → 큐 drain → 펜스 시각에 finish | ① 펜스(`isRunning=false`, 게이트 cancel) ② 카메라 해제 ③ 진행 중 추론 ≤ 500 ms 대기 → `SeatStopReport(hadInFlight · inferenceWait · inferenceTimedOut · suppressedResults)`. 늦은 결과는 게이트가 버린다 |
+| 추론 중 close 금지 | 워커가 실행 중 run 이 돌아온 뒤 스스로 landmarker 를 닫음 | `dispose()` 는 추론이 진행 중이면 `detector.close()` 를 미루고, 돌아온 추론이 닫는다. 추론 도중 close 호출 0 |
+| 시각 분리(Timebase) | raw 촬영 timestamp 가 프레임의 정체성, 처리 시각은 별도 | `SeatSample.at` = 촬영 시각(벽시계). `SeatDiagnostic.capturedAt/completedAt`(단조) + `latency` 는 실험실 전용. 유지 창 3초도 촬영 시각 기준 |
+| 종료 무결성(StopIntegrity) | drain 미완·늦은 결과가 있으면 세션 비교 불가 | 실험실: 비정상 종료 구간(엔진 자체 정지·끊긴 채 종료·오류·추론 대기 초과)은 **요약에서 제외 표시**, CSV 에는 `excluded=1` 로 남김(§4) |
+
+재시작 경합(`stop()` → `start()` 사이에 이전 세대의 결과가 도착)은 `test/unit/engines/seat_engine_s04b_test.dart` 가 고정한다: 이전 세대의 `seated=true` 결과가 새 세션(`seated=false`)에 섞이지 않고 `suppressedResults` 로만 센다.
+
+**도입하지 않은 focus-engine 항목(의도적)** — D23·PRD 와 충돌한다.
+
+| focus-engine 항목 | 미도입 이유 |
+|---|---|
+| 7상태 판정(PHONE · ABSENT · PRONE · SLEEP · AWAY · INVALID · PAUSED 등 초당 상태·점수) | 순공 엔진 출력은 착석 불리언 + 카메라 상태뿐(D3). 평가·점수 없음(CLAUDE.md §1) |
+| 30초 확정 버퍼(저움직임 30초 등 N초 연속 버킷 확정) | 이탈 확정은 S06 `AwayPolicy` 60·75·90초(D23) 하나뿐. 엔진 안의 시간 논리는 3초 유지 창만 |
+| 백그라운드 포그라운드 서비스(`CaptureService`, 화면 꺼짐 중 측정) | 화면 꺼짐·백그라운드는 측정이 아니라 `paused`(D23). 엔진은 백그라운드에서 스스로 멈춘다 |
+| MediaPipe Face/Pose Landmarker 경로(478 랜드마크·blendshape·IMU) | 얼굴 특징·랜드마크를 계산하지 않는다(§1). MediaPipe 는 실기기 결과가 §6 목표에 미달할 때 **ML Kit Pose 와 함께 비교 후보로만** 기록(§2.3) |
 
 ### 3.3 저전력 모드(`lowPower`)
 
@@ -105,15 +131,17 @@ dev flavor + `DEV_MENU=true` 에서만 컴파일된다. dev 메뉴(흔들기) �
 | 영역 | 내용 |
 |---|---|
 | 상태 | 대기 / 시작 중 / 실행 중(착석 · 미검출 · 샘플 없음) / 카메라 끊김 · 최근 프레임 검출 여부 · 유지 창 적용 여부 |
-| 수치 | 경과 · 처리/전달 프레임 · 드롭 · 처리 주기 · 검출률(60초) · 착석 비율(60초) · 평균 지연(60초) · 배터리 시작→현재 · 이벤트 수 · 정답 대비 집계 |
+| 수치 | 경과(현재 구간) · 처리/전달 프레임 · 드롭 · 처리 주기 · 검출률(60초) · 착석 비율(60초) · 평균 지연(60초) · 배터리 시작→현재 · 이벤트 수 · 정답 대비 집계 · 구간 수(제외 수) · 제외된 샘플 · 폐기된 늦은 결과 · 마지막 종료(정상/비정상 · 사유) |
 | 제어 | 가용성 확인 · 권한 요청 · 설정 열기 · 시작/정지 · CSV 내보내기 · 기록 지우기 |
 | 정답 라벨 | 실제 착석 / 실제 이탈 / 표시 안 함 — 누른 시점부터의 샘플에 라벨이 붙는다 |
 | 실험 설정 | 저전력 · `minFaceSize`(0.10/0.15/0.20, 정지 상태에서만) · 프로토콜 케이스(P1–P4 · N1–N10) |
 | 이벤트 | 최근 10건(`start · stop · cameraLost · cameraRecovered · error: <code>`) |
 
-CSV 열: `t_ms,kind,detected,seated,held,latency_ms,truth,battery,case,note`
-- `kind=sample` 처리 프레임 1행: `detected`(검출기 원답) · `seated`(엔진 출력) · `held`(유지 창 때문에 seated) · `latency_ms`
-- `kind=event` 엔진 이벤트 · `kind=mark` 정답/케이스 변경 · `kind=battery` 배터리 % (시작·정지·60초마다)
+CSV 열(S04b): `t_ms,kind,segment,excluded,detected,seated,held,completed_ms,latency_ms,truth,battery,case,note`
+- 시간 기준은 실험실과 엔진이 **같은 단조 시계**를 쓴다(화면을 연 시점 = 0).
+- `kind=sample` 처리 프레임 1행: `t_ms` = **촬영 시각**, `completed_ms` = 추론 완료 시각, `latency_ms` = 그 차이, `detected`(검출기 원답) · `seated`(엔진 출력) · `held`(유지 창 때문에 seated)
+- `segment` = 시작→정지 구간 번호, `excluded` = 그 구간이 비정상 종료(`stop · abnormal · 사유`)면 1. 제외 구간의 행은 CSV 에 남지만 화면 요약(검출률·착석 비율·지연·정답 대비)에서는 빠진다. 사유: 백그라운드로 엔진이 멈춤 · 카메라 끊긴 채 종료 · 구간 중 오류 · 추론 대기 초과(500ms) · restart
+- `kind=event` 엔진 이벤트(`start · stop · normal/abnormal · cameraLost · cameraRecovered · error: <code> · self-stop`) · `kind=mark` 정답/케이스 변경 · `kind=battery` 배터리 % (시작·정지·60초마다)
 - `truth` 는 그 행 시점의 정답 라벨, `case` 는 선택된 케이스 id
 
 ## 5. 측정 프로토콜 (D3 승계)
@@ -154,8 +182,8 @@ P1 조건으로 60분 연속(화면 켜짐). CSV `battery` 행의 첫 값 − �
 
 - 검출률 = `truth=seated` 인 sample 중 `seated=1` 비율(하니스 "정답 착석 중 착석 판정" 과 같다).
 - (a) 오검출 = `truth=away` 인 sample 중 `seated=1` 비율.
-- (b) 장애 이벤트 = 케이스마다 `event` 행에 `cameraLost` 가 있고, Lost 와 다음 Recovered/stop 사이에 `sample` 행이 없으면 통과.
-- 처리 시간 = `latency_ms` 의 중앙값·p95(스프레드시트).
+- (b) 장애 이벤트 = 케이스마다 `event` 행에 `cameraLost` 가 있고, Lost 와 다음 Recovered/stop 사이에 `sample` 행이 없으면 통과. (b) 케이스는 정지가 "끊긴 채 종료" 로 기록되어 `excluded=1` 이 되는 것이 정상이다 — 장애 이벤트 판정은 CSV 로 하고, 화면 요약은 양성·(a) 케이스에만 쓴다.
+- 처리 시간 = `latency_ms`(촬영→결과) 의 중앙값·p95(스프레드시트). `excluded=1` 행은 뺀다.
 
 ## 6. 목표치
 
