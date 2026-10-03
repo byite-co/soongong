@@ -19,7 +19,8 @@ void main() {
       expect(r.samples.length, 5);
       expect(r.samples.every((s) => s.seated), isTrue);
       expect(r.samples.every((s) => s.confidence == null), isTrue);
-      expect(r.samples.first.at, DateTime.utc(2026, 10, 1, 9));
+      expect(r.samples.first.receivedAt, DateTime.utc(2026, 10, 1, 9));
+      expect(r.samples.first.sinceStart, Duration.zero);
       expect(r.engine.framesDelivered, greaterThan(70));
       expect(r.engine.framesProcessed, 5);
       expect(r.engine.framesDropped, r.engine.framesDelivered - 5);
@@ -127,7 +128,7 @@ void main() {
     });
   });
 
-  test('background → camera released, Lost; restart by the caller → Recovered on the first frame', () {
+  test('background → camera released, Paused; restart by the caller → Recovered on the first frame', () {
     fakeAsync((async) {
       final r = Rig(async);
       r.start();
@@ -144,7 +145,8 @@ void main() {
       expect(r.source.isOpen, isFalse);
       expect(r.source.closeCount, 1);
       expect(r.engine.lastStopReason, SeatEngineStopReason.background);
-      expect(r.events.single, isA<SeatCameraLost>());
+      expect(r.events.single, isA<SeatPaused>());
+      expect((r.events.single as SeatPaused).reason, SeatPauseReason.background);
 
       r.lifecycle.add(AppLifecycleState.paused);
       async.flushMicrotasks();

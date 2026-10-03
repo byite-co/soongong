@@ -94,6 +94,7 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
   bool _busy = false;
   bool _lostNow = false;
   bool _segmentHadError = false;
+  SeatLabCsvScope _csvScope = SeatLabCsvScope.all;
 
   bool get _running => _state == _LabState.running || _state == _LabState.lost;
 
@@ -155,15 +156,25 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     final name = switch (e) {
       SeatCameraLost() => SeatLabStrings.eventCameraLost,
       SeatCameraRecovered() => SeatLabStrings.eventCameraRecovered,
+      SeatPaused(:final reason) => '${SeatLabStrings.eventPaused} · ${reason.name}',
       SeatError(:final message) => '${SeatLabStrings.eventError}: $message',
     };
-    _log(name);
+    // A loss or a pause breaks the run's continuity (battery verdict).
+    if (e is SeatCameraLost || e is SeatPaused) {
+      _recorder.interrupt(_now, name);
+      _logLine(name);
+    } else {
+      _log(name);
+    }
     if (!mounted) return;
     setState(() {
       switch (e) {
         case SeatCameraLost():
           _lostNow = true;
           _state = _LabState.lost;
+        case SeatPaused():
+          _lostNow = true;
+          if (_running) _state = _LabState.lost;
         case SeatCameraRecovered():
           _lostNow = false;
           _state = _LabState.running;
@@ -299,9 +310,11 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
   static Future<int?> _platformBattery() => Battery().batteryLevel;
 
   Future<void> _checkAvailability() async {
-    final a = await _ensureEngine().checkAvailability();
+    final engine = _ensureEngine();
+    final a = await engine.checkAvailability();
     if (!mounted) return;
-    setState(() => _availability = a.name);
+    final reason = engine.lastAvailabilityReason;
+    setState(() => _availability = reason == null ? a.name : '${a.name} ($reason)');
   }
 
   Future<void> _requestPermission() async {
@@ -314,9 +327,16 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
 
   Future<void> _export() async {
     final stamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+    final segment = _recorder.lastSegment?.index;
+    final caseId = _recorder.caseId;
+    final suffix = switch (_csvScope) {
+      SeatLabCsvScope.all => '',
+      SeatLabCsvScope.run => '_run${segment ?? 0}',
+      SeatLabCsvScope.caseId => caseId.isEmpty ? '_case' : '_$caseId',
+    };
     final file = ExportFile(
-      name: 'seat_lab_$stamp.csv',
-      bytes: _recorder.toCsvBytes(),
+      name: 'seat_lab_$stamp$suffix.csv',
+      bytes: _recorder.toCsvBytes(scope: _csvScope, segment: segment, caseId: caseId),
       mimeType: 'text/csv',
     );
     try {
@@ -426,12 +446,29 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     final seatedRate = _recorder.seatedRate(now);
     final latency = _recorder.meanLatency(now);
     final agreement = _recorder.agreement();
-    final bStart = _recorder.batteryStart;
-    final bLast = _recorder.batteryLast;
+    final last = _recorder.lastSegment;
+    final bStart = last?.batteryStart;
+    final bLast = last?.batteryEnd;
     final battery = bStart == null || bLast == null
         ? SeatLabStrings.batteryUnknown
         : '$bStart% → $bLast% (−${bStart - bLast}%p)';
-    final last = _recorder.lastSegment;
+    final verdict = last == null ? null : _recorder.batteryVerdict(last, now);
+    final String batteryValid;
+    if (verdict == null) {
+      batteryValid = SeatLabStrings.noData;
+    } else if (verdict.valid) {
+      batteryValid = '${SeatLabStrings.batteryValidYes} (−${verdict.dropPct}%p / ${_fmtElapsed(verdict.duration)})';
+    } else {
+      final why = switch (verdict.reason) {
+        'open' => SeatLabStrings.batteryReasonOpen,
+        'interrupted' => SeatLabStrings.batteryReasonInterrupted,
+        'short' => SeatLabStrings.batteryReasonShort,
+        _ => SeatLabStrings.batteryReasonNoReading,
+      };
+      batteryValid = '${SeatLabStrings.batteryValidNo} · $why';
+    }
+    final runAgreement = last == null ? null : _recorder.agreementForRun(last.index);
+    final byCase = _recorder.agreementByCase();
     final String lastStop;
     if (last == null || last.isOpen) {
       lastStop = SeatLabStrings.noData;
@@ -457,7 +494,8 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
         _Kv(SeatLabStrings.detectionRate60, _pct(rate), c),
         _Kv(SeatLabStrings.seatedRate60, _pct(seatedRate), c),
         _Kv(SeatLabStrings.latency60, latency == null ? SeatLabStrings.noData : '${latency.inMilliseconds} ms', c),
-        _Kv(SeatLabStrings.battery, battery, c),
+        _Kv(SeatLabStrings.batteryRun, battery, c),
+        _Kv(SeatLabStrings.batteryValid60, batteryValid, c),
         _Kv(SeatLabStrings.events, '${_recorder.eventCount}', c),
         _Kv(
           SeatLabStrings.agreementSeated,
@@ -469,6 +507,21 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
           '${agreement.truthAwayAsSeated} / ${agreement.truthAway} (${_pct(agreement.awayFalseSeatedRate)})',
           c,
         ),
+        _Kv(
+          SeatLabStrings.runAgreement,
+          runAgreement == null ? SeatLabStrings.noData : _agreementText(runAgreement),
+          c,
+        ),
+        const SizedBox(height: AppSpacing.s4),
+        Text(SeatLabStrings.caseAgreement, style: AppTypography.label.copyWith(color: c.tx2)),
+        if (byCase.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.s4),
+            child: Text(SeatLabStrings.caseAgreementNone, style: AppTypography.caption.copyWith(color: c.tx3)),
+          )
+        else
+          for (final e in byCase.entries) _Kv('  ${e.key}', _agreementText(e.value), c),
+        const SizedBox(height: AppSpacing.s4),
         _Kv(
           SeatLabStrings.segments,
           '${_recorder.segments.length} (${_recorder.excludedSegments})',
@@ -483,9 +536,14 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
         _Kv(SeatLabStrings.lastStop, lastStop, c),
         const SizedBox(height: AppSpacing.s6),
         Text(SeatLabStrings.summaryNote, style: AppTypography.caption.copyWith(color: c.tx3)),
+        Text(SeatLabStrings.batteryNoSum, style: AppTypography.caption.copyWith(color: c.tx3)),
       ],
     );
   }
+
+  static String _agreementText(SeatLabAgreement a) =>
+      '${a.truthSeatedAsSeated} / ${a.truthSeated} (${_pct(a.seatedDetectionRate)}) · '
+      '${a.truthAwayAsSeated} / ${a.truthAway} (${_pct(a.awayFalseSeatedRate)})';
 
   Widget _controlsBody(AppColors c) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -531,6 +589,18 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
             '${SeatLabStrings.availabilityLabel}: ${_availability ?? SeatLabStrings.noData} · '
             '${SeatLabStrings.permissionLabel}: ${_permission ?? SeatLabStrings.noData}',
             style: AppTypography.caption.copyWith(color: c.tx2),
+          ),
+          const SizedBox(height: AppSpacing.s8),
+          Text(SeatLabStrings.csvScope, style: AppTypography.label.copyWith(color: c.tx2)),
+          const SizedBox(height: AppSpacing.s6),
+          _Choices<SeatLabCsvScope>(
+            value: _csvScope,
+            onChanged: (v) => setState(() => _csvScope = v),
+            items: const <(SeatLabCsvScope, String)>[
+              (SeatLabCsvScope.all, SeatLabStrings.csvScopeAll),
+              (SeatLabCsvScope.run, SeatLabStrings.csvScopeRun),
+              (SeatLabCsvScope.caseId, SeatLabStrings.csvScopeCase),
+            ],
           ),
           const SizedBox(height: AppSpacing.s12),
           AppButton(
@@ -678,11 +748,15 @@ class _Kv extends StatelessWidget {
           children: <Widget>[
             Expanded(child: Text(label, style: AppTypography.label.copyWith(color: c.tx2))),
             const SizedBox(width: AppSpacing.s12),
-            Text(
-              value,
-              style: AppTypography.label.copyWith(
-                color: c.tx,
-                fontFeatures: AppTypography.tabularFigures,
+            Flexible(
+              flex: 2,
+              child: Text(
+                value,
+                textAlign: TextAlign.end,
+                style: AppTypography.label.copyWith(
+                  color: c.tx,
+                  fontFeatures: AppTypography.tabularFigures,
+                ),
               ),
             ),
           ],

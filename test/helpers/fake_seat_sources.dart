@@ -21,6 +21,18 @@ class FakeSeatFrameSource implements SeatFrameSource {
   /// When set, [open] throws it.
   SeatFrameSourceException? openError;
 
+  /// [open] completes only after this delay (a slow camera).
+  Duration openDelay = Duration.zero;
+
+  /// [open] never completes (a camera that hangs while initialising).
+  bool hangOpen = false;
+
+  /// [probe] never completes.
+  bool hangProbe = false;
+
+  /// [close] never completes (the callbacks are still detached at once).
+  bool hangClose = false;
+
   SeatFrameCallback? _onFrame;
   SeatFaultCallback? _onFault;
 
@@ -40,6 +52,7 @@ class FakeSeatFrameSource implements SeatFrameSource {
   @override
   Future<CameraProbeResult> probe() async {
     probeCount++;
+    if (hangProbe) await Completer<void>().future;
     return probeResult;
   }
 
@@ -51,6 +64,8 @@ class FakeSeatFrameSource implements SeatFrameSource {
   }) async {
     final err = openError;
     if (err != null) throw err;
+    if (hangOpen) await Completer<void>().future;
+    if (openDelay > Duration.zero) await Future<void>.delayed(openDelay);
     openCount++;
     lastConfig = config;
     _onFrame = onFrame;
@@ -65,6 +80,7 @@ class FakeSeatFrameSource implements SeatFrameSource {
     _lateOnFault = _onFault;
     _onFrame = null;
     _onFault = null;
+    if (hangClose) await Completer<void>().future;
   }
 
   /// Delivers one frame (no-op when closed, like a real camera).
@@ -93,6 +109,9 @@ class FakePresenceDetector implements PresenceDetector {
   /// When set, every call throws it.
   Object? error;
 
+  /// [detect] never returns (an unresponsive detector).
+  bool hang = false;
+
   int calls = 0;
   int closeCalls = 0;
   bool closed = false;
@@ -100,6 +119,7 @@ class FakePresenceDetector implements PresenceDetector {
   @override
   Future<bool> detect(SeatFrame frame) async {
     calls++;
+    if (hang) await Completer<void>().future;
     if (latency > Duration.zero) {
       await Future<void>.delayed(latency);
     }
@@ -147,13 +167,22 @@ class FakeCameraPermissionGateway implements CameraPermissionGateway {
 }
 
 class FakeLifecycleSource implements LifecycleSource {
+  FakeLifecycleSource({AppLifecycleState? initial}) : current = initial;
+
   final StreamController<AppLifecycleState> _controller =
       StreamController<AppLifecycleState>.broadcast();
 
   @override
+  AppLifecycleState? current;
+
+  @override
   Stream<AppLifecycleState> get states => _controller.stream;
 
-  void add(AppLifecycleState state) => _controller.add(state);
+  /// Records the new state and notifies listeners.
+  void add(AppLifecycleState state) {
+    current = state;
+    _controller.add(state);
+  }
 
   Future<void> close() => _controller.close();
 }

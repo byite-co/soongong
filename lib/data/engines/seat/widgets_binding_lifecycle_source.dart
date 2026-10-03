@@ -21,6 +21,9 @@ class WidgetsBindingLifecycleSource implements LifecycleSource {
   @override
   Stream<AppLifecycleState> get states => _controller.stream;
 
+  @override
+  AppLifecycleState? get current => WidgetsBinding.instance.lifecycleState;
+
   void _attach() {
     if (_observer != null) return;
     final o = _LifecycleObserver(_controller.add);

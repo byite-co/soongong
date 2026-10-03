@@ -91,4 +91,16 @@ abstract class CameraPermissionGateway {
 /// App lifecycle feed. Production wraps `WidgetsBinding`; tests use a stream.
 abstract class LifecycleSource {
   Stream<AppLifecycleState> get states;
+
+  /// Current state when known (`null` before the first transition).
+  AppLifecycleState? get current;
 }
+
+/// `true` for the states in which the engine must not hold the camera.
+bool isBackgroundState(AppLifecycleState? state) => switch (state) {
+      AppLifecycleState.hidden ||
+      AppLifecycleState.paused ||
+      AppLifecycleState.detached =>
+        true,
+      AppLifecycleState.resumed || AppLifecycleState.inactive || null => false,
+    };

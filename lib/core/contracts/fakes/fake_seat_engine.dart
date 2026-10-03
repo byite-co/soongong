@@ -34,6 +34,7 @@ class FakeSeatEngine implements SeatEngine {
 
   Timer? _timer;
   int _tick = 0;
+  int _periodMs = 1000;
   bool _running = false;
   bool _lost = false;
 
@@ -53,11 +54,23 @@ class FakeSeatEngine implements SeatEngine {
     _tick = 0;
     _lost = false;
     final hz = config.sampleHz <= 0 ? 1 : config.sampleHz;
+    _periodMs = 1000 ~/ hz;
     _timer = Timer.periodic(
-      Duration(milliseconds: 1000 ~/ hz),
+      Duration(milliseconds: _periodMs),
       (_) => _onTick(),
     );
   }
+
+  /// [S04c] Monotonic elapsed since start, derived from the tick count so
+  /// tests stay deterministic.
+  Duration get _sinceStart => Duration(milliseconds: _tick * _periodMs);
+
+  SeatSample _sample({required bool seated, double? confidence}) => SeatSample(
+        receivedAt: _now(),
+        sinceStart: _sinceStart,
+        seated: seated,
+        confidence: confidence,
+      );
 
   void _onTick() {
     _tick++;
@@ -73,17 +86,15 @@ class FakeSeatEngine implements SeatEngine {
           _tick = 0;
         }
         if (!_lost) {
-          _samples.add(SeatSample(at: _now(), seated: true, confidence: 0.96));
+          _samples.add(_sample(seated: true, confidence: 0.96));
         }
       case FakeSeatScenario.awayAfter:
         final seated = seconds < afterSeconds;
-        _samples.add(
-          SeatSample(at: _now(), seated: seated, confidence: seated ? 0.95 : 0.1),
-        );
+        _samples.add(_sample(seated: seated, confidence: seated ? 0.95 : 0.1));
       case FakeSeatScenario.alwaysSeated:
       case FakeSeatScenario.permissionDenied:
       case FakeSeatScenario.cameraBusy:
-        _samples.add(SeatSample(at: _now(), seated: true, confidence: 0.97));
+        _samples.add(_sample(seated: true, confidence: 0.97));
     }
   }
 

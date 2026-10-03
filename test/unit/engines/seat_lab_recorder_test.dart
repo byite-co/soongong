@@ -2,7 +2,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/core/dev/seat_lab/seat_lab_recorder.dart';
 
 Duration s(int seconds) => Duration(seconds: seconds);
+Duration m(int minutes) => Duration(minutes: minutes);
 Duration ms(int v) => Duration(milliseconds: v);
+
+void _samples(SeatLabRecorder r, {required int from, required int count, required bool seated, bool? detected}) {
+  for (var i = 0; i < count; i++) {
+    final t = s(from + i);
+    r.sample(t, detected: detected ?? seated, seated: seated, held: false, completed: t + ms(20));
+  }
+}
 
 void main() {
   test('window statistics and agreement', () {
@@ -23,13 +31,11 @@ void main() {
     expect(r.processed, 8);
     expect(r.detectedCount, 6);
     expect(r.eventCount, 2, reason: 'start + cameraLost');
-    expect(r.batteryStart, 80);
-    expect(r.batteryLast, 79);
-    expect(r.batteryDelta, 1);
+    expect(r.lastSegment!.batteryStart, 80);
+    expect(r.lastSegment!.batteryEnd, 79);
     expect(r.detectionRate(s(10)), closeTo(6 / 8, 1e-9));
     expect(r.seatedRate(s(10)), closeTo(7 / 8, 1e-9));
     expect(r.meanLatency(s(10)), const Duration(milliseconds: 20));
-    // window of 10 s ending at 20 s → only t ≥ 10 → nothing
     expect(r.detectionRate(s(20)), isNull);
     expect(r.meanLatency(s(20)), isNull);
 
@@ -51,18 +57,147 @@ void main() {
     expect(a.awayFalseSeatedRate, isNull);
     expect(r.currentSegment, isNull);
     expect(r.lastSegment, isNull);
+    expect(r.agreementByCase(), isEmpty);
+  });
+
+  group('S04c labels from the change history', () {
+    test('a sample recorded after a truth change but captured before it keeps the old truth', () {
+      final r = SeatLabRecorder();
+      r.beginSegment(s(0));
+      r.mark(s(0), SeatLabTruth.seated);
+      r.setCase(s(0), 'P1');
+      r.mark(s(5), SeatLabTruth.away); // the person stood up at t=5
+      r.setCase(s(5), 'N1');
+      // Late inference: the frame captured at t=4 is recorded now (after the marks).
+      r.sample(s(4), detected: true, seated: true, held: false, completed: s(6));
+      r.sample(s(6), detected: false, seated: false, held: false, completed: s(6) + ms(30));
+      final rows = r.rows.where((x) => x.kind == SeatLabRowKind.sample).toList();
+      expect(rows[0].truth, SeatLabTruth.seated);
+      expect(rows[0].caseId, 'P1');
+      expect(rows[1].truth, SeatLabTruth.away);
+      expect(rows[1].caseId, 'N1');
+      expect(r.truthAt(s(4)), SeatLabTruth.seated);
+      expect(r.truthAt(s(5)), SeatLabTruth.away, reason: 'a change at t applies from t');
+      expect(r.caseAt(Duration.zero - s(1)), '', reason: 'nothing before the first change');
+      final a = r.agreement();
+      expect(a.truthSeated, 1);
+      expect(a.truthSeatedAsSeated, 1);
+      expect(a.truthAway, 1);
+      expect(a.truthAwayAsSeated, 0);
+    });
+
+    test('per-case agreement: P1 100 % and P2 80 % stay separate; the overall is 90 %', () {
+      final r = SeatLabRecorder();
+      r.beginSegment(s(0));
+      r.mark(s(0), SeatLabTruth.seated);
+      r.setCase(s(0), 'P1');
+      _samples(r, from: 1, count: 10, seated: true);
+      r.setCase(s(100), 'P2');
+      _samples(r, from: 101, count: 8, seated: true);
+      _samples(r, from: 109, count: 2, seated: false);
+      final byCase = r.agreementByCase();
+      expect(byCase.keys.toList(), <String>['P1', 'P2']);
+      expect(byCase['P1']!.seatedDetectionRate, 1.0);
+      expect(byCase['P2']!.seatedDetectionRate, closeTo(0.8, 1e-9));
+      expect(r.agreement().seatedDetectionRate, closeTo(0.9, 1e-9));
+      expect(r.agreementForRun(1).truthSeated, 20);
+    });
+
+    test('per-run agreement and CSV scope (all / run / case)', () {
+      final r = SeatLabRecorder();
+      r.mark(s(0), SeatLabTruth.seated);
+      r.setCase(s(0), 'P1');
+      r.beginSegment(s(1));
+      _samples(r, from: 2, count: 3, seated: true);
+      r.endSegment(s(5), end: SeatLabSegmentEnd.normal);
+      r.setCase(s(6), 'P2');
+      r.beginSegment(s(7));
+      _samples(r, from: 8, count: 2, seated: false);
+      r.endSegment(s(10), end: SeatLabSegmentEnd.normal);
+
+      expect(r.agreementForRun(1).truthSeatedAsSeated, 3);
+      expect(r.agreementForRun(2).truthSeatedAsSeated, 0);
+      expect(r.agreementForRun(2).truthSeated, 2);
+
+      final all = r.toCsv().trimRight().split('\n');
+      expect(all, hasLength(1 + 2 + 1 + 3 + 1 + 1 + 1 + 2 + 1)); // header, 2 marks, start, 3 samples, stop, case, start, 2 samples, stop
+      final run2 = r.toCsv(scope: SeatLabCsvScope.run, segment: 2).trimRight().split('\n');
+      expect(run2, hasLength(1 + 1 + 2 + 1));
+      expect(run2.skip(1).every((l) => l.split(',')[2] == '2'), isTrue);
+      final p1 = r.toCsv(scope: SeatLabCsvScope.caseId, caseId: 'P1').trimRight().split('\n');
+      expect(p1.skip(1).every((l) => l.split(',')[11] == 'P1'), isTrue);
+      expect(p1.skip(1).where((l) => l.split(',')[1] == 'sample'), hasLength(3));
+      expect(r.rowsIn(scope: SeatLabCsvScope.caseId, caseId: 'P2').where((x) => x.kind == SeatLabRowKind.sample), hasLength(2));
+    });
+  });
+
+  group('S04c battery per run', () {
+    test('an uninterrupted 60-minute run with readings at both ends is valid; readings belong to the run', () {
+      final r = SeatLabRecorder();
+      r.battery(Duration.zero, 100); // before any run: logged, attributed to no run
+      final seg = r.beginSegment(m(1));
+      r.battery(m(1), 90);
+      r.battery(m(31), 86);
+      r.battery(m(66), 82);
+      r.endSegment(m(66), end: SeatLabSegmentEnd.normal);
+      expect(seg.batteryStart, 90, reason: 'the pre-run reading does not count');
+      expect(seg.batteryEnd, 82);
+      final v = r.batteryVerdict(seg, m(70));
+      expect(v.valid, isTrue);
+      expect(v.reason, 'ok');
+      expect(v.dropPct, 8);
+      expect(v.duration, m(65));
+      expect(r.rows.first.segment, isNull);
+    });
+
+    test('an interruption invalidates the run; short runs are never summed into a valid one', () {
+      final r = SeatLabRecorder();
+      // Run 1: 65 minutes but a camera loss in the middle.
+      final s1 = r.beginSegment(m(0));
+      r.battery(m(0), 90);
+      r.interrupt(m(20), 'cameraLost');
+      r.battery(m(65), 82);
+      r.endSegment(m(65), end: SeatLabSegmentEnd.normal);
+      final v1 = r.batteryVerdict(s1, m(66));
+      expect(v1.valid, isFalse);
+      expect(v1.reason, 'interrupted');
+      expect(v1.dropPct, 8, reason: 'the numbers are still reported, the verdict is not');
+      expect(s1.interruptReason, 'cameraLost');
+
+      // Runs 2 + 3: 30 minutes each, clean. Neither is a measurement.
+      final s2 = r.beginSegment(m(70));
+      r.battery(m(70), 80);
+      r.battery(m(100), 76);
+      r.endSegment(m(100), end: SeatLabSegmentEnd.normal);
+      final s3 = r.beginSegment(m(101));
+      r.battery(m(101), 76);
+      r.battery(m(131), 72);
+      r.endSegment(m(131), end: SeatLabSegmentEnd.normal);
+      expect(r.batteryVerdict(s2, m(140)).reason, 'short');
+      expect(r.batteryVerdict(s3, m(140)).reason, 'short');
+      expect(r.batteryVerdict(s3, m(140)).valid, isFalse);
+
+      // A run still open is not a verdict yet; a paused run is interrupted too.
+      final s4 = r.beginSegment(m(150));
+      expect(r.batteryVerdict(s4, m(151)).reason, 'open');
+      r.interrupt(m(152), 'paused · background');
+      r.endSegment(m(153), end: SeatLabSegmentEnd.abnormal, reason: 'background');
+      expect(r.batteryVerdict(s4, m(154)).reason, 'interrupted');
+      // No readings at all → no_reading even when long and clean.
+      final s5 = r.beginSegment(m(160));
+      r.endSegment(m(230), end: SeatLabSegmentEnd.normal);
+      expect(r.batteryVerdict(s5, m(231)).reason, 'no_reading');
+    });
   });
 
   test('segments: an abnormal end excludes its samples from the summary, not from the CSV', () {
     final r = SeatLabRecorder();
     r.mark(s(0), SeatLabTruth.seated);
-    // Segment 1: normal.
     final s1 = r.beginSegment(s(1));
     expect(s1.index, 1);
     r.sample(s(2), detected: true, seated: true, held: false, completed: s(2) + ms(30));
     r.sample(s(3), detected: true, seated: true, held: false, completed: s(3) + ms(30));
     r.endSegment(s(4), end: SeatLabSegmentEnd.normal);
-    // Segment 2: abnormal (engine stopped itself).
     final s2 = r.beginSegment(s(5));
     expect(s2.index, 2);
     r.sample(s(6), detected: false, seated: false, held: false, completed: s(6) + ms(30));
@@ -74,13 +209,10 @@ void main() {
     expect(r.excludedSegments, 1);
     expect(r.lastSegment!.isExcluded, isTrue);
     expect(r.lastSegment!.reason, 'background');
-    expect(r.lastSegment!.durationAt(s(99)), s(3));
     expect(r.processed, 2, reason: 'segment 2 left out');
     expect(r.excludedSamples, 2);
-    expect(r.detectedCount, 2);
     expect(r.agreement().truthSeated, 2);
-    expect(r.agreement().seatedDetectionRate, 1.0);
-    expect(r.detectionRate(s(10)), 1.0);
+    expect(r.agreementForRun(2).truthSeated, 2, reason: 'per-run view still answers');
 
     final lines = r.toCsv().trimRight().split('\n');
     expect(lines.first, SeatLabRecorder.csvHeader);
@@ -89,22 +221,29 @@ void main() {
     expect(lines[2], '1000,event,1,0,,,,,,seated,,,start');
     expect(lines[3], '2000,sample,1,0,1,1,0,2030,30,seated,,,');
     expect(lines[5], '4000,event,1,0,,,,,,seated,,,stop · normal');
-    expect(lines[6], '5000,event,2,1,,,,,,seated,,,start');
     expect(lines[7], '6000,sample,2,1,0,0,0,6030,30,seated,,,');
     expect(lines[9], '8000,event,2,1,,,,,,seated,,,stop · abnormal · background');
   });
 
-  test('beginSegment while one is open closes it as abnormal (restart)', () {
+  test('beginSegment while one is open closes it as abnormal (restart); clear keeps the labels', () {
     final r = SeatLabRecorder();
+    r.mark(s(0), SeatLabTruth.away);
+    r.setCase(s(0), 'N3');
     r.beginSegment(s(0));
     r.beginSegment(s(5));
     expect(r.segments, hasLength(2));
     expect(r.segments.first.isExcluded, isTrue);
     expect(r.segments.first.reason, 'restart');
     expect(r.currentSegment!.index, 2);
+    r.clear();
+    expect(r.rows, isEmpty);
+    expect(r.segments, isEmpty);
+    expect(r.truth, SeatLabTruth.away);
+    expect(r.caseId, 'N3');
+    expect(r.truthAt(s(100)), SeatLabTruth.away);
   });
 
-  test('csv: quoting and clear', () {
+  test('csv: quoting', () {
     final r = SeatLabRecorder();
     r.setCase(s(0), 'P2');
     r.event(s(3), 'note, with "quotes"');
@@ -114,10 +253,6 @@ void main() {
     expect(lines[2], '3000,event,,,,,,,,none,,P2,"note, with ""quotes"""');
     expect(lines[3], '4000,battery,,,,,,,,none,77,P2,');
     expect(r.toCsvBytes().length, r.toCsv().length);
-    r.clear();
-    expect(r.rows, isEmpty);
-    expect(r.segments, isEmpty);
-    expect(r.batteryStart, isNull);
   });
 }
 

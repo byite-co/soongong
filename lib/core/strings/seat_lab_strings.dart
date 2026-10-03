@@ -34,6 +34,22 @@ abstract final class SeatLabStrings {
   static const String agreementSeated = '정답 착석 중 착석 판정';
   static const String agreementAway = '정답 이탈 중 착석 판정';
   static const String segments = '구간 (제외)';
+  static const String runAgreement = '이 실행 · 정답 착석 중 착석 / 이탈 중 착석';
+  static const String caseAgreement = '케이스별 · 정답 착석 중 착석 / 이탈 중 착석';
+  static const String caseAgreementNone = '케이스 라벨이 붙은 샘플 없음';
+  static const String batteryRun = '이 실행 배터리 (시작 → 끝)';
+  static const String batteryValid60 = '60분 연속 배터리 측정';
+  static const String batteryValidYes = '유효';
+  static const String batteryValidNo = '유효하지 않음';
+  static const String batteryReasonOpen = '실행 중';
+  static const String batteryReasonInterrupted = '실행 중 끊김/일시정지';
+  static const String batteryReasonShort = '60분 미만';
+  static const String batteryReasonNoReading = '배터리 읽음 없음';
+  static const String batteryNoSum = '실행끼리 합산하지 않음';
+  static const String csvScope = 'CSV 범위';
+  static const String csvScopeAll = '전체';
+  static const String csvScopeRun = '이 실행';
+  static const String csvScopeCase = '이 케이스';
   static const String excludedSamples = '제외된 샘플';
   static const String suppressedResults = '폐기된 늦은 결과';
   static const String lastStop = '마지막 종료';
@@ -91,6 +107,7 @@ abstract final class SeatLabStrings {
   static const String eventStarted = 'start';
   static const String eventStopped = 'stop';
   static const String eventSelfStopped = 'self-stop';
+  static const String eventPaused = 'paused';
 
   // Protocol cases (docs/seat-engine.md §3) — id · short name
   static const List<(String, String)> cases = <(String, String)>[

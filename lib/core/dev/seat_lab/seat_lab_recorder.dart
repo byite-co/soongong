@@ -1,12 +1,21 @@
-// SeatLabRecorder (S04 · S04b, pure Dart). Keeps the `/_seat_lab` measurement
-// log: processed frames (detected / seated / latency, capture and completion
-// time), engine events, manual ground-truth marks, battery readings, the
-// protocol case id and the run segments (start → stop). A segment that ended
-// abnormally (engine stopped itself, camera lost at the stop, error, or a
-// detection that outlived the stop bound) is marked excluded: its samples
-// stay in the CSV but leave the summary statistics (design reference:
-// focus-engine's "stop integrity" verdict — a session whose stop was not
-// clean is not comparable). Facts only — no scoring, no grading.
+// SeatLabRecorder (S04 · S04b · S04c, pure Dart). Keeps the `/_seat_lab`
+// measurement log: processed frames (detected / seated / latency, capture
+// and completion time), engine events, manual ground-truth marks, battery
+// readings, the protocol case id and the run segments (start → stop).
+//
+// S04c:
+//   * Truth and case are change histories. A sample gets the value that was
+//     in force at its CAPTURE time, so a label changed while a detection was
+//     still running does not re-label the frames captured before the change.
+//   * Agreement is available per run and per case, and the CSV can be
+//     scoped to everything, one run or one case.
+//   * Battery readings belong to the run they were taken in. A run is a
+//     valid "60 minutes continuous" battery measurement only when it lasted
+//     60 minutes, was never interrupted (camera lost / paused) and has a
+//     reading at both ends. Runs are never summed.
+//
+// A segment that ended abnormally is excluded from the summary (its rows
+// stay in the CSV). Facts only — no scoring, no grading.
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -18,6 +27,9 @@ enum SeatLabRowKind { sample, event, mark, battery }
 
 enum SeatLabSegmentEnd { normal, abnormal }
 
+/// Which rows a CSV export contains.
+enum SeatLabCsvScope { all, run, caseId }
+
 /// One run of the engine: start → stop.
 class SeatLabSegment {
   SeatLabSegment({required this.index, required this.start});
@@ -28,12 +40,41 @@ class SeatLabSegment {
   SeatLabSegmentEnd? endKind;
   String reason = '';
 
+  /// Battery % at the first / last reading taken during this run.
+  int? batteryStart;
+  int? batteryEnd;
+
+  /// A camera loss or a pause happened during the run.
+  bool interrupted = false;
+  String interruptReason = '';
+
   bool get isOpen => end == null;
 
   /// Ended abnormally → left out of the summary.
   bool get isExcluded => endKind == SeatLabSegmentEnd.abnormal;
 
   Duration durationAt(Duration now) => (end ?? now) - start;
+}
+
+/// Verdict of one run as a battery measurement (docs/seat-engine.md §5.3).
+class SeatLabBatteryVerdict {
+  const SeatLabBatteryVerdict({
+    required this.valid,
+    required this.reason,
+    required this.duration,
+    this.dropPct,
+  });
+
+  /// `true` only for an uninterrupted run of at least [SeatLabRecorder.batteryWindow]
+  /// with a reading at both ends.
+  final bool valid;
+
+  /// `ok` · `interrupted` · `short` · `no_reading` · `open`.
+  final String reason;
+  final Duration duration;
+
+  /// Start % − end % when both readings exist.
+  final int? dropPct;
 }
 
 class SeatLabRow {
@@ -54,7 +95,11 @@ class SeatLabRow {
   /// Row time on the lab time base. For a sample: the frame's capture time.
   final Duration t;
   final SeatLabRowKind kind;
+
+  /// Truth in force at [t] (samples: at the capture time).
   final SeatLabTruth truth;
+
+  /// Case in force at [t].
   final String caseId;
 
   /// Segment the row belongs to (`null` outside a run).
@@ -81,6 +126,13 @@ class SeatLabAgreement {
     required this.truthAwayAsSeated,
   });
 
+  static const SeatLabAgreement empty = SeatLabAgreement(
+    truthSeated: 0,
+    truthSeatedAsSeated: 0,
+    truthAway: 0,
+    truthAwayAsSeated: 0,
+  );
+
   /// Samples taken while the truth was `seated`, and how many of them came
   /// out seated.
   final int truthSeated;
@@ -96,6 +148,8 @@ class SeatLabAgreement {
 
   double? get awayFalseSeatedRate =>
       truthAway == 0 ? null : truthAwayAsSeated / truthAway;
+
+  int get total => truthSeated + truthAway;
 }
 
 class SeatLabRecorder {
@@ -104,19 +158,40 @@ class SeatLabRecorder {
   /// Window for the live statistics (instruction §4.5: last 60 s).
   final Duration window;
 
+  /// Length a run must reach to count as a battery measurement (PRD §8: %/h).
+  static const Duration batteryWindow = Duration(minutes: 60);
+
   final List<SeatLabRow> _rows = <SeatLabRow>[];
   final List<SeatLabSegment> _segments = <SeatLabSegment>[];
-  SeatLabTruth _truth = SeatLabTruth.none;
-  String _caseId = '';
-  int? _batteryStart;
-  int? _batteryLast;
+  final List<(Duration, SeatLabTruth)> _truthChanges = <(Duration, SeatLabTruth)>[];
+  final List<(Duration, String)> _caseChanges = <(Duration, String)>[];
 
   List<SeatLabRow> get rows => List<SeatLabRow>.unmodifiable(_rows);
   List<SeatLabSegment> get segments => List<SeatLabSegment>.unmodifiable(_segments);
-  SeatLabTruth get truth => _truth;
-  String get caseId => _caseId;
-  int? get batteryStart => _batteryStart;
-  int? get batteryLast => _batteryLast;
+
+  /// Current (latest) truth / case.
+  SeatLabTruth get truth => _truthChanges.isEmpty ? SeatLabTruth.none : _truthChanges.last.$2;
+  String get caseId => _caseChanges.isEmpty ? '' : _caseChanges.last.$2;
+
+  /// Truth in force at [t] (the latest change at or before [t]).
+  SeatLabTruth truthAt(Duration t) {
+    var out = SeatLabTruth.none;
+    for (final (at, v) in _truthChanges) {
+      if (at > t) break;
+      out = v;
+    }
+    return out;
+  }
+
+  /// Case in force at [t].
+  String caseAt(Duration t) {
+    var out = '';
+    for (final (at, v) in _caseChanges) {
+      if (at > t) break;
+      out = v;
+    }
+    return out;
+  }
 
   /// The run in progress, if any.
   SeatLabSegment? get currentSegment {
@@ -128,14 +203,10 @@ class SeatLabRecorder {
   /// The most recent run, open or closed.
   SeatLabSegment? get lastSegment => _segments.isEmpty ? null : _segments.last;
 
-  int get excludedSegments => _segments.where((s) => s.isExcluded).length;
+  SeatLabSegment? segment(int index) =>
+      index >= 1 && index <= _segments.length ? _segments[index - 1] : null;
 
-  /// Battery drop since the first reading (positive = consumed).
-  int? get batteryDelta {
-    final a = _batteryStart;
-    final b = _batteryLast;
-    return a == null || b == null ? null : a - b;
-  }
+  int get excludedSegments => _segments.where((s) => s.isExcluded).length;
 
   int? get _segmentIndex => currentSegment?.index;
 
@@ -153,8 +224,8 @@ class SeatLabRecorder {
       SeatLabRow(
         t: t,
         kind: SeatLabRowKind.event,
-        truth: _truth,
-        caseId: _caseId,
+        truth: truth,
+        caseId: caseId,
         segment: s.index,
         note: 'start',
       ),
@@ -174,18 +245,31 @@ class SeatLabRecorder {
       SeatLabRow(
         t: t,
         kind: SeatLabRowKind.event,
-        truth: _truth,
-        caseId: _caseId,
+        truth: truth,
+        caseId: caseId,
         segment: s.index,
         note: reason.isEmpty ? 'stop · ${end.name}' : 'stop · ${end.name} · $reason',
       ),
     );
   }
 
+  /// Camera lost / paused during the run: the run is no longer a continuous
+  /// measurement (battery verdict). Also logs the event.
+  void interrupt(Duration t, String name) {
+    final s = currentSegment;
+    if (s != null && !s.interrupted) {
+      s
+        ..interrupted = true
+        ..interruptReason = name;
+    }
+    event(t, name);
+  }
+
   // ── Rows ───────────────────────────────────────────────────────────────
 
   /// One processed frame. [t] is the capture time, [completed] when the
-  /// detection returned (same time base).
+  /// detection returned (same time base). Truth and case are the ones in
+  /// force at [t].
   void sample(
     Duration t, {
     required bool detected,
@@ -197,8 +281,8 @@ class SeatLabRecorder {
         SeatLabRow(
           t: t,
           kind: SeatLabRowKind.sample,
-          truth: _truth,
-          caseId: _caseId,
+          truth: truthAt(t),
+          caseId: caseAt(t),
           segment: _segmentIndex,
           detected: detected,
           seated: seated,
@@ -211,21 +295,21 @@ class SeatLabRecorder {
         SeatLabRow(
           t: t,
           kind: SeatLabRowKind.event,
-          truth: _truth,
-          caseId: _caseId,
+          truth: truth,
+          caseId: caseId,
           segment: _segmentIndex,
           note: name,
         ),
       );
 
   void mark(Duration t, SeatLabTruth truth) {
-    _truth = truth;
+    _truthChanges.add((t, truth));
     _rows.add(
       SeatLabRow(
         t: t,
         kind: SeatLabRowKind.mark,
         truth: truth,
-        caseId: _caseId,
+        caseId: caseId,
         segment: _segmentIndex,
         note: truth.name,
       ),
@@ -233,12 +317,12 @@ class SeatLabRecorder {
   }
 
   void setCase(Duration t, String caseId) {
-    _caseId = caseId;
+    _caseChanges.add((t, caseId));
     _rows.add(
       SeatLabRow(
         t: t,
         kind: SeatLabRowKind.mark,
-        truth: _truth,
+        truth: truth,
         caseId: caseId,
         segment: _segmentIndex,
         note: 'case',
@@ -246,26 +330,61 @@ class SeatLabRecorder {
     );
   }
 
+  /// Battery reading. Attributed to the run in progress (first → start,
+  /// latest → end); readings outside a run are logged only.
   void battery(Duration t, int level) {
-    _batteryStart ??= level;
-    _batteryLast = level;
+    final s = currentSegment;
+    if (s != null) {
+      s.batteryStart ??= level;
+      s.batteryEnd = level;
+    }
     _rows.add(
       SeatLabRow(
         t: t,
         kind: SeatLabRowKind.battery,
-        truth: _truth,
-        caseId: _caseId,
+        truth: truth,
+        caseId: caseId,
         segment: _segmentIndex,
         battery: level,
       ),
     );
   }
 
+  /// Clears rows and runs. The current truth / case labels are kept (they
+  /// describe the situation, not the log).
   void clear() {
+    final t = truth;
+    final c = caseId;
     _rows.clear();
     _segments.clear();
-    _batteryStart = null;
-    _batteryLast = null;
+    _truthChanges
+      ..clear()
+      ..add((Duration.zero, t));
+    _caseChanges
+      ..clear()
+      ..add((Duration.zero, c));
+  }
+
+  // ── Battery (per run, never summed) ────────────────────────────────────
+
+  SeatLabBatteryVerdict batteryVerdict(SeatLabSegment s, Duration now) {
+    final d = s.durationAt(now);
+    final int? drop = s.batteryStart == null || s.batteryEnd == null
+        ? null
+        : s.batteryStart! - s.batteryEnd!;
+    if (s.isOpen) {
+      return SeatLabBatteryVerdict(valid: false, reason: 'open', duration: d, dropPct: drop);
+    }
+    if (s.interrupted) {
+      return SeatLabBatteryVerdict(valid: false, reason: 'interrupted', duration: d, dropPct: drop);
+    }
+    if (d < batteryWindow) {
+      return SeatLabBatteryVerdict(valid: false, reason: 'short', duration: d, dropPct: drop);
+    }
+    if (drop == null) {
+      return SeatLabBatteryVerdict(valid: false, reason: 'no_reading', duration: d);
+    }
+    return SeatLabBatteryVerdict(valid: true, reason: 'ok', duration: d, dropPct: drop);
   }
 
   // ── Statistics (excluded segments left out) ────────────────────────────
@@ -322,9 +441,9 @@ class SeatLabRecorder {
     return Duration(microseconds: total ~/ recent.length);
   }
 
-  SeatLabAgreement agreement() {
+  static SeatLabAgreement _agree(Iterable<SeatLabRow> samples) {
     var ts = 0, tss = 0, ta = 0, tas = 0;
-    for (final r in _samples) {
+    for (final r in samples) {
       switch (r.truth) {
         case SeatLabTruth.seated:
           ts++;
@@ -344,6 +463,25 @@ class SeatLabRecorder {
     );
   }
 
+  /// All counted samples.
+  SeatLabAgreement agreement() => _agree(_samples);
+
+  /// One run (included or not — the caller decides what to show).
+  SeatLabAgreement agreementForRun(int segment) =>
+      _agree(_allSamples.where((r) => r.segment == segment));
+
+  /// Per case, counted samples only, in first-seen order.
+  Map<String, SeatLabAgreement> agreementByCase() {
+    final byCase = <String, List<SeatLabRow>>{};
+    for (final r in _samples) {
+      if (r.caseId.isEmpty) continue;
+      byCase.putIfAbsent(r.caseId, () => <SeatLabRow>[]).add(r);
+    }
+    return <String, SeatLabAgreement>{
+      for (final e in byCase.entries) e.key: _agree(e.value),
+    };
+  }
+
   // ── CSV ────────────────────────────────────────────────────────────────
 
   /// `t_ms` is the capture time for samples; `completed_ms` when the
@@ -352,9 +490,24 @@ class SeatLabRecorder {
   static const String csvHeader =
       't_ms,kind,segment,excluded,detected,seated,held,completed_ms,latency_ms,truth,battery,case,note';
 
-  String toCsv() {
+  Iterable<SeatLabRow> rowsIn({
+    SeatLabCsvScope scope = SeatLabCsvScope.all,
+    int? segment,
+    String? caseId,
+  }) =>
+      switch (scope) {
+        SeatLabCsvScope.all => _rows,
+        SeatLabCsvScope.run => _rows.where((r) => r.segment == segment),
+        SeatLabCsvScope.caseId => _rows.where((r) => r.caseId == caseId),
+      };
+
+  String toCsv({
+    SeatLabCsvScope scope = SeatLabCsvScope.all,
+    int? segment,
+    String? caseId,
+  }) {
     final b = StringBuffer()..writeln(csvHeader);
-    for (final r in _rows) {
+    for (final r in rowsIn(scope: scope, segment: segment, caseId: caseId)) {
       b.writeln(
         <String>[
           '${r.t.inMilliseconds}',
@@ -376,7 +529,12 @@ class SeatLabRecorder {
     return b.toString();
   }
 
-  Uint8List toCsvBytes() => Uint8List.fromList(utf8.encode(toCsv()));
+  Uint8List toCsvBytes({
+    SeatLabCsvScope scope = SeatLabCsvScope.all,
+    int? segment,
+    String? caseId,
+  }) =>
+      Uint8List.fromList(utf8.encode(toCsv(scope: scope, segment: segment, caseId: caseId)));
 
   static String _bool(bool? v) => v == null ? '' : (v ? '1' : '0');
 

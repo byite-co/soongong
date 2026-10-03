@@ -214,14 +214,14 @@ void main() {
         expect(r.engine.lastStopReport, isNull, reason: 'still waiting for the detection');
         r.idle(const Duration(milliseconds: 300));
         expect(r.engine.lastStopReport!.reason, SeatEngineStopReason.background);
-        expect(r.events.single, isA<SeatCameraLost>());
+        expect(r.events.single, isA<SeatPaused>());
         expect(r.samples, isEmpty);
       });
     });
   });
 
   group('time', () {
-    test('SeatSample.at is the capture time; completion time is diagnostics only', () {
+    test('SeatSample.receivedAt is the capture time; completion time is diagnostics only', () {
       fakeAsync((async) {
         final r = Rig(async, detectorLatency: const Duration(milliseconds: 300));
         r.start();
@@ -229,7 +229,8 @@ void main() {
         final captureMono = r.mono.elapsed;
         r.source.emit(present: true);
         r.idle(const Duration(milliseconds: 400));
-        expect(r.samples.single.at, captureWall);
+        expect(r.samples.single.receivedAt, captureWall);
+        expect(r.samples.single.sinceStart, Duration.zero);
         final d = r.diagnostics.single;
         expect(d.capturedWall, captureWall);
         expect(d.capturedAt, captureMono);

@@ -358,7 +358,7 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 
 - **[S04] 검출기 = ML Kit Face Detection fast, presence only**: 랜드마크·분류·윤곽·추적 OFF, 결과에서 `faces.isNotEmpty` 만 읽는다(bbox·각도 미사용). Pose/MediaPipe 와의 비교와 전환 조건(P2 고개 숙임 < 90%)은 `docs/seat-engine.md` §2. 교체 지점은 `PresenceDetector` 하나.
 - **[S04] 유지 창(히스테리시스) 3초는 엔진 내부 고정값**: `SeatHysteresis(hold: 3s)`. 감도 0·1·2(60·75·90초)와 무관하며 `SeatEngineConfig` 에 없다. S06 이 바꾸려면 `CONTRACT-CHANGE`.
-- **[S04] 이벤트 의미**: `SeatCameraLost` = 실행 중 3초 프레임 없음 · 점유/치명/정책 오류 · 백그라운드 진입(엔진이 스스로 stop, 카메라 해제). `SeatCameraRecovered` = Lost 이후 첫 프레임(그 사이 stop/start 여부 무관, 1회). Lost 동안 샘플 없음(D23 paused). `SeatError(code)` 는 `permission_denied · no_camera · camera_busy · camera_init_failed · detector_failed`.
+- **[S04] 이벤트 의미**: `SeatCameraLost` = 실행 중 3초 프레임 없음 · 점유/치명/정책 오류 · ~~백그라운드 진입~~(S04c 부터 백그라운드는 `SeatPaused`). `SeatCameraRecovered` = Lost(·Paused) 이후 첫 프레임(그 사이 stop/start 여부 무관, 1회). Lost 동안 샘플 없음(D23 paused). `SeatError(code)` 는 `permission_denied · no_camera · camera_busy · camera_init_failed · detector_failed`(+ S04c `camera_init_timeout`).
 - **[S04] `checkAvailability` 는 권한 프롬프트를 띄울 수 있다**(미결정 상태일 때만). `start` 는 프롬프트 없이 `SeatError('permission_denied')`. 권한 흐름 헬퍼는 `CameraPermission.request()/status()/openSettings()`.
 - **[S04] iOS 점유는 `cameraBusy` 로 구분되지 않는다**: `camera_avfoundation` 이 세션 인터럽션을 노출하지 않아 프레임 정지 → 3초 뒤 Lost 로 나타난다. Android 는 CameraX `CameraState` 오류 문구로 점유를 분류(`classifyCameraFault`, 플러그인 버전 의존).
 - **[S04] 처리 주기**: `sampleHz` 는 1–2 로 클램프(1000ms/Hz), `lowPower` 는 2초 + 카메라 목표 fps 10(기본 15). 해상도는 `ResolutionPreset.low` 가 하한. 전면 카메라가 없으면 첫 카메라를 쓴다.
@@ -372,6 +372,14 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 
 - **[S04b] 세대(generation)**: `start()` 마다 세대 +1(`InferenceGate.open`), `stop()` 도 +1(펜스). 카메라 콜백(프레임·오류)은 카메라 세션을 연 세대를 들고 오고, 추론 결과는 시작 세대가 현재 세대일 때만 `samples`·`events`·`diagnostics` 에 반영한다. 이전 세대의 늦은 결과는 `suppressedResults` 로만 센다(재시작 경합 테스트 고정).
 - **[S04b] 종료 순서**: `stop()` = 펜스 → 카메라 해제 → 진행 중 추론 **최대 500 ms** 대기 → `SeatStopReport`. 펜스 뒤 결과는 기다렸든 아니든 버린다(`stop()` 이후 샘플·이벤트 없음). 검출기는 `stop()` 에서 닫지 않고 재사용하며, `dispose()` 는 추론 도중이면 close 를 미루고 돌아온 추론이 닫는다(추론 도중 close 0회). 지시문의 "완료 또는 타임아웃 후 close" 는 이 의미로 구현.
-- **[S04b] 시각 분리**: `SeatSample.at` = 촬영 시각(카메라 콜백 도착 순간의 벽시계; `camera` 플러그인은 프레임 타임스탬프를 Dart 로 주지 않아 콜백 도착 시각이 가장 가까운 값). 처리 완료 시각은 `SeatDiagnostic.completedAt` 로 실험실 전용. 유지 창 3초도 촬영 시각 기준.
+- **[S04b] 시각 분리**: `SeatSample.at` = 촬영 시각(카메라 콜백 도착 순간의 벽시계; `camera` 플러그인은 프레임 타임스탬프를 Dart 로 주지 않아 콜백 도착 시각이 가장 가까운 값). 처리 완료 시각은 `SeatDiagnostic.completedAt` 로 실험실 전용. 유지 창 3초도 촬영 시각 기준. (S04c CONTRACT-CHANGE 로 `at` → `receivedAt` + `sinceStart`.)
 - **[S04b] 실험실 구간·제외**: 시작→정지가 1구간. 비정상 종료(엔진 자체 정지[백그라운드]·카메라 끊긴 채 종료·구간 중 오류·추론 대기 초과·restart) 구간은 요약 집계에서 제외하고 CSV 에 `excluded=1` 로 남긴다(focus-engine 의 stop-integrity "비교 불가" 개념의 축소판). 실험실과 엔진은 같은 단조 시계를 공유한다.
 - **[S04b] 미도입 명시**: 7상태 판정 · 30초 확정 버퍼 · 백그라운드 포그라운드 서비스 · MediaPipe 경로는 D23·PRD 와 충돌해 도입하지 않는다. MediaPipe 는 실기기 결과가 목표 미달일 때 ML Kit Pose 와 함께 비교 후보로만 기록.
+
+## [S04c] 후속 결정 — 무효화·상한·계약 변경 (2026-10-03)
+
+- **[S04c] CONTRACT-CHANGE `core/contracts/seat_engine.dart`**(S06 미착수라 승인): `SeatSample { DateTime receivedAt(콜백 수신 벽시계, 정보용) · Duration sinceStart(엔진 `start()` 기준 단조 경과, Stopwatch) · bool seated · double? confidence }` — 기존 `at` 제거. S06·`AwayPolicy`·`SessionTimeline` 은 `sinceStart` 만 쓰고 세션 기준 시각 1개(실행 시작 시점의 `SessionClock.now()`)에 더해 배치한다(`docs/seat-engine.md` §7). 기기 시각 ±1시간 변경에도 단조성·구간 길이·60/75/90초 임계 불변(테스트 고정). `SeatPaused(SeatPauseReason.background | backgroundDuringStart)` 이벤트 추가 — 백그라운드 진입은 더 이상 `SeatCameraLost` 가 아니다. Fake 엔진·dev 메뉴·실험실 동일 반영.
+- **[S04c] Lost 무효화**: `_markLost()` 가 추론 epoch 를 +1 해 진행 중 추론을 무효화하고 슬롯을 비운다. 발행 조건 = 티켓(세대·epoch) 일치 && `!lost` && `running`. Lost 뒤 Recovered 가 와도 옛 추론의 결과는 발행하지 않는다.
+- **[S04c] 초기화 중 라이프사이클**: `start()` 진입 즉시 라이프사이클 구독·현재 상태 확인(백그라운드면 카메라를 열지 않음), `await open` 뒤 재확인(백그라운드 이벤트가 있었거나 현재 백그라운드) → 카메라 해제·`running=false`·`SeatPaused(backgroundDuringStart)`. `LifecycleSource` 에 `current` 추가.
+- **[S04c] 무응답 상한 3경로**: (a) 카메라 열기 8초 — `checkAvailability` 는 즉시 `unavailable(lastAvailabilityReason='timeout')`, `start()` 는 `SeatError('camera_init_timeout')`; 늦게 열린 카메라는 백그라운드에서 해제(자체 2초 상한·실패 로그), 소스의 컨트롤러 dispose 도 2초 상한. (b) 추론 deadline 2초 — 워치독이 슬롯 해제·epoch +1·`inferenceTimeouts`+1, 검출기 실패로 집계(3연속 → `detector_failed`). (c) `stop()` 상한 = 카메라 해제 2초 + 추론 500 ms ≈ 2.5초, 초과분은 백그라운드. 재시작은 이전 세대의 정리 완료와 무관하게 허용. 영구 무응답 검출기는 `dispose()` 에서도 닫지 않는다(추론 도중 close 금지 우선).
+- **[S04c] 실험실 집계**: 정답·케이스는 변경 이력(시각 순)으로 보관하고 샘플의 촬영 시각에 유효하던 값을 붙인다. agreement 는 전체·실행(run)별·케이스별. CSV 범위 전체/이 실행/이 케이스(파일명 접미). 배터리 시작·종료 % 는 실행에 귀속, 실행 중 Lost/paused 1회라도 있으면 "60분 연속 유효" 불합격, 실행끼리 합산 금지. 준비 문구 "자동 꺼짐 10분 이상" → "화면 자동 꺼짐 해제 또는 70분 이상".

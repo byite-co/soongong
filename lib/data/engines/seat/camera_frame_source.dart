@@ -10,6 +10,7 @@ import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/logging/app_logger.dart';
 import 'camera_geometry.dart';
 import 'seat_availability.dart';
 import 'seat_frame_source.dart';
@@ -27,6 +28,7 @@ class CameraFrameSource implements SeatFrameSource {
     Future<List<CameraDescription>> Function()? listCameras,
     this.probeWindow = const Duration(milliseconds: 600),
     this.openTimeout = const Duration(seconds: 8),
+    this.disposeTimeout = const Duration(seconds: 2),
   }) : _listCameras = listCameras ?? availableCameras;
 
   final Future<List<CameraDescription>> Function() _listCameras;
@@ -35,6 +37,11 @@ class CameraFrameSource implements SeatFrameSource {
   /// after the camera opened.
   final Duration probeWindow;
   final Duration openTimeout;
+
+  /// S04c §3a: a controller dispose that outlives this bound continues in
+  /// the background (logged) instead of blocking the probe, the open or the
+  /// stop sequence.
+  final Duration disposeTimeout;
 
   CameraController? _controller;
   VoidCallback? _listener;
@@ -197,12 +204,27 @@ class CameraFrameSource implements SeatFrameSource {
     await _disposeQuietly(controller);
   }
 
-  static Future<void> _disposeQuietly(CameraController controller) async {
-    try {
-      await controller.dispose();
-    } catch (_) {
-      // Nothing left to release.
-    }
+  /// Dispose bounded by [disposeTimeout]; a late or failing dispose is only
+  /// logged (no frame data in the message).
+  Future<void> _disposeQuietly(CameraController controller) {
+    final done = Completer<void>();
+    final timer = Timer(disposeTimeout, () {
+      if (done.isCompleted) return;
+      appLog.w('camera source: dispose still pending after ${disposeTimeout.inMilliseconds}ms');
+      done.complete();
+    });
+    controller.dispose().then(
+      (_) {
+        timer.cancel();
+        if (!done.isCompleted) done.complete();
+      },
+      onError: (Object e, StackTrace st) {
+        timer.cancel();
+        appLog.w('camera source: dispose failed', error: e, stackTrace: st);
+        if (!done.isCompleted) done.complete();
+      },
+    );
+    return done.future;
   }
 
   static String _openCode(String exceptionCode) =>

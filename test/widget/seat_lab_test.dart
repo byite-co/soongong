@@ -166,6 +166,21 @@ void main() {
     expect(r.csv, contains(',event,1,1,,,,,,away,,P2,stop · abnormal · ${SeatLabStrings.reasonLost}'));
     expect(r.csv, contains(',event,2,0,,,,,,away,,P2,stop · normal'));
     expect(r.csv, contains(',sample,1,1,1,1,0,'), reason: 'excluded samples stay in the CSV');
+    expect(r.shared.last.name, endsWith('.csv'));
+    expect(r.shared.last.name, isNot(contains('_run')));
+    await tester.pump(const Duration(seconds: 4));
+
+    // Per-case agreement row for P2 (run 2 only counts: 1 seated frame while the truth was away).
+    expect(find.text('  P2'), findsOneWidget);
+
+    // CSV scope: this run → only segment-2 rows, file name carries the run.
+    await tester.tap(find.text(SeatLabStrings.csvScopeRun));
+    await tester.pump();
+    await tester.tap(find.byTooltip(SeatLabStrings.exportCsv));
+    await tester.pump();
+    expect(r.shared.last.name, endsWith('_run2.csv'));
+    final runCsv = utf8.decode(r.shared.last.bytes).trimRight().split('\n');
+    expect(runCsv.skip(1).every((l) => l.split(',')[2] == '2'), isTrue);
     await tester.pump(const Duration(seconds: 4));
 
     await tester.pumpWidget(const SizedBox());
@@ -196,7 +211,13 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining(SeatLabStrings.eventSelfStopped), findsOneWidget);
-    expect(find.textContaining(SeatLabStrings.eventCameraLost), findsOneWidget);
+    expect(find.textContaining(SeatLabStrings.eventPaused), findsOneWidget);
+    expect(find.textContaining(SeatLabStrings.eventCameraLost), findsNothing);
+    expect(
+      find.text('${SeatLabStrings.batteryValidNo} · ${SeatLabStrings.batteryReasonInterrupted}'),
+      findsOneWidget,
+      reason: 'a paused run is not a 60-minute battery measurement',
+    );
 
     await tester.tap(find.byTooltip(SeatLabStrings.exportCsv));
     await tester.pump();
