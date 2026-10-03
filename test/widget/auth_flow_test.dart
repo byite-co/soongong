@@ -3,12 +3,14 @@
 // hook rejection on an existing-account attempt, the reset deep link while
 // signed out, and restored sessions landing on the right step.
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/core/router/app_router.dart';
 import 'package:soongong/core/strings/auth_strings.dart';
 import 'package:soongong/core/strings/home_strings.dart';
 import 'package:soongong/core/strings/onboarding_strings.dart';
 import 'package:soongong/data/auth/auth_models.dart';
+import 'package:soongong/data/auth/password_recovery.dart';
 import 'package:soongong/features/auth/application/signup_flow.dart';
 
 import '../helpers/app_harness.dart';
@@ -143,6 +145,27 @@ void main() {
     expect(find.text(AuthStrings.resetTitle), findsOneWidget);
     expect(find.text(AuthStrings.resetLinkInvalid), findsOneWidget);
     expect(find.text(AuthStrings.ageGateTitle), findsNothing);
+    await h.unmount(tester);
+  });
+
+  testWidgets('SDK exchanged a recovery link → /auth/reset form → new password → home (S05b)', (tester) async {
+    h = AppHarness()..scriptSignup();
+    h.backend.profileRow = kProfileRowOnboardingDone;
+    await h.pumpApp(tester);
+    expect(find.text(AuthStrings.ageGateTitle), findsOneWidget);
+
+    h.backend.emitPasswordRecovery(session: const AuthSession(userId: 'u-1', email: 'a@x.io'));
+    await tester.pumpAndSettle();
+    expect(find.text(AuthStrings.resetTitle), findsOneWidget);
+    expect(find.text(AuthStrings.resetCta), findsOneWidget, reason: 'session present → form, not the invalid-link panel');
+    expect(h.container.read(passwordRecoveryProvider), isTrue);
+
+    await tester.enterText(find.byType(TextField), 'new-password-1');
+    await tapText(tester, AuthStrings.resetCta);
+    expect(h.backend.callNames, contains('updatePassword'));
+    expect(h.container.read(passwordRecoveryProvider), isFalse);
+    expect(find.text(AuthStrings.resetDone), findsOneWidget);
+    expect(find.text(HomeStrings.todayTodos), findsOneWidget);
     await h.unmount(tester);
   });
 

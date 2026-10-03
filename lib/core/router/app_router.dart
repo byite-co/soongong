@@ -8,14 +8,17 @@
 //   /gate /gate/blocked /login/* /auth/reset /signup/complete /onboarding/*
 //   StatefulShellRoute — 4 tabs: /home /planner /timetable /stats
 //   /settings /measure/* … (outside the shell, pushed on the root navigator)
-// Guard: `resolveAuthRedirect` (pure) over `authGateProvider`; the router
-// re-evaluates it whenever the gate state changes (refreshListenable).
+// Guard: `resolveAuthRedirect` (pure) over `authGateProvider` and the
+// `passwordRecoveryProvider` flag (S05b); the router re-evaluates it whenever
+// either changes (refreshListenable). The reset deep link itself is handled
+// by the Supabase SDK, never by go_router.
 
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../data/auth/auth_gate.dart';
+import '../../data/auth/password_recovery.dart';
 import '../../features/auth/auth_routes.dart';
 import '../../features/auth/domain/auth_redirect.dart';
 import '../../features/billing/billing_routes.dart';
@@ -56,14 +59,18 @@ class RouterRefresh extends ChangeNotifier {
 GoRouter appRouter(Ref ref) {
   final refresh = RouterRefresh();
   ref.listen<AuthGateState>(authGateProvider, (_, _) => refresh.ping());
+  ref.listen<bool>(passwordRecoveryProvider, (_, _) => refresh.ping());
   ref.onDispose(refresh.dispose);
 
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: AppPaths.launch,
     refreshListenable: refresh,
-    redirect: (_, state) =>
-        resolveAuthRedirect(gate: ref.read(authGateProvider), uri: state.uri),
+    redirect: (_, state) => resolveAuthRedirect(
+      gate: ref.read(authGateProvider),
+      uri: state.uri,
+      passwordRecovery: ref.read(passwordRecoveryProvider),
+    ),
     routes: <RouteBase>[
       GoRoute(
         path: AppPaths.launch,

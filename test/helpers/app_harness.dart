@@ -1,6 +1,7 @@
 // AppHarness (S05 tests): one place for the provider overrides the gate /
 // login / onboarding / home tests need — in-memory DB, fixed clock, fake
 // auth backend, fake social SDK, fake camera permission, zero-delay fakes.
+// Pass `db:` to share a database between two harnesses (app restart).
 
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:flutter/material.dart';
@@ -33,10 +34,13 @@ class AppHarness {
     FakeAuthBackend? backend,
     FakeSocialSignIn? social,
     FakeCameraPermission? camera,
-  }) : clock = FixedClock(now ?? kHarnessNow),
-       backend = backend ?? FakeAuthBackend(),
-       social = social ?? FakeSocialSignIn(),
-       camera = camera ?? FakeCameraPermission() {
+    AppDatabase? db,
+  })  : clock = FixedClock(now ?? kHarnessNow),
+        backend = backend ?? FakeAuthBackend(),
+        social = social ?? FakeSocialSignIn(),
+        camera = camera ?? FakeCameraPermission(),
+        db = db ?? AppDatabase.inMemory(),
+        _ownsDb = db == null {
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   }
 
@@ -45,7 +49,10 @@ class AppHarness {
   final FakeAuthBackend backend;
   final FakeSocialSignIn social;
   final FakeCameraPermission camera;
-  final AppDatabase db = AppDatabase.inMemory();
+
+  /// Shared between harnesses to simulate an app restart on the same device.
+  final AppDatabase db;
+  final bool _ownsDb;
 
   late final ProviderContainer container = ProviderContainer(
     overrides: [
@@ -56,32 +63,22 @@ class AppHarness {
       authBackendProvider.overrideWithValue(backend),
       socialSignInProvider.overrideWithValue(social),
       cameraPermissionProvider.overrideWithValue(camera),
-      syncEngineProvider.overrideWithValue(
-        FakeSyncEngine(delay: Duration.zero),
-      ),
-      billingGatewayProvider.overrideWithValue(
-        FakeBillingGateway(delay: Duration.zero),
-      ),
+      syncEngineProvider.overrideWithValue(FakeSyncEngine(delay: Duration.zero)),
+      billingGatewayProvider.overrideWithValue(FakeBillingGateway(delay: Duration.zero)),
     ],
   );
 
   /// Scripts the server answers of a successful signup.
   void scriptSignup({bool allowed = true}) {
     backend.responses['age-check'] = allowed
-        ? <String, dynamic>{
-            'allowed': true,
-            'ticket': 't.t.t',
-            'expires_in': 600,
-          }
+        ? <String, dynamic>{'allowed': true, 'ticket': 't.t.t', 'expires_in': 600}
         : <String, dynamic>{'allowed': false};
     backend.responses['issue-pass'] = <String, dynamic>{
       'issued': true,
       'provider': 'google',
       'expires_at': '2099-01-01T00:00:00.000Z',
     };
-    backend.responses['complete-signup'] = <String, dynamic>{
-      'profile': kProfileRowOnboardingPending,
-    };
+    backend.responses['complete-signup'] = <String, dynamic>{'profile': kProfileRowOnboardingPending};
     backend.responses['update-consent'] = <String, dynamic>{
       'profile': <String, dynamic>{
         ...kProfileRowOnboardingPending,
@@ -89,8 +86,7 @@ class AppHarness {
         'consent_reading_at': '2026-10-03T01:00:00+00:00',
       },
     };
-    backend.responses['rpc:profile_set_onboarding_done'] =
-        kProfileRowOnboardingDone;
+    backend.responses['rpc:profile_set_onboarding_done'] = kProfileRowOnboardingDone;
     backend.responses['check-email'] = <String, dynamic>{'exists': false};
   }
 
@@ -125,6 +121,6 @@ class AppHarness {
 
   Future<void> dispose() async {
     container.dispose();
-    await db.close();
+    if (_ownsDb) await db.close();
   }
 }

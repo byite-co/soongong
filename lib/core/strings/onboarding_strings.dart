@@ -1,6 +1,8 @@
 // Onboarding strings (S05, PRD 4.4 · prototype 00). Fact-only wording.
 // Checked by tool/check_forbidden_phrases.dart.
 
+import 'consent_strings.dart';
+
 abstract final class OnboardingStrings {
   static String stepOf(int step) => '$step / 3';
 
@@ -20,9 +22,10 @@ abstract final class OnboardingStrings {
   static const String step2CardTitle = '이 기능만 사진이 기기 밖으로 나갑니다 · 30일 뒤 삭제';
   static const String step2CardSub = '얼굴은 찍지 않고, 학습에 쓰지 않습니다.';
   static const String step2Premium = '프리미엄';
-  static const String consent1 = '채점한 페이지 사진이 외부 판독 서버로 전송됩니다.';
-  static const String consent2 = '사진은 판독에만 쓰이고 학습에 쓰지 않습니다.';
-  static const String consent3 = '사진은 30일 뒤 삭제되며, 동의는 설정에서 언제든 철회할 수 있습니다.';
+  // 동의 ② 3문장 = D14 표 (S05b): ConsentStrings 를 그대로 참조한다.
+  static const String consent1 = ConsentStrings.readingDevice;
+  static const String consent2 = ConsentStrings.readingServer;
+  static const String consent3 = ConsentStrings.readingVendor;
   static const String consentCheck = '확인했습니다';
   static const String consentNext = '동의하고 다음';
   static const String consentRequired = '동의가 필요합니다';

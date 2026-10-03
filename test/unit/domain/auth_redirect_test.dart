@@ -1,5 +1,5 @@
-// resolveAuthRedirect (S05): the five guard cases of the instruction plus the
-// reset deep-link exception, host normalisation and local-only mode.
+// resolveAuthRedirect (S05 · S05b): the five guard cases of the instruction
+// plus the reset route exception, the password-recovery flag and local-only.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/data/auth/auth_gate.dart';
@@ -42,9 +42,20 @@ void main() {
       expect(_go(signedOut, '/auth/reset'), isNull);
     });
 
-    test('soongong://auth/reset (host auth · path /reset) is normalised', () {
-      expect(_go(signedOut, 'soongong://auth/reset'), AppPaths.authReset);
-      expect(_go(const AuthGateLoading(), 'soongong://auth/reset'), AppPaths.authReset);
+    test('passwordRecovery flag (SDK exchanged the link) → /auth/reset from anywhere', () {
+      String? flagged(AuthGateState g, String p) =>
+          resolveAuthRedirect(gate: g, uri: Uri.parse(p), passwordRecovery: true);
+      expect(flagged(signedOut, '/gate'), AppPaths.authReset);
+      expect(flagged(const AuthGateLoading(), '/'), AppPaths.authReset);
+      expect(flagged(ready, '/home'), AppPaths.authReset);
+      expect(flagged(onboarding, '/onboarding/1'), AppPaths.authReset);
+      expect(flagged(ready, '/auth/reset'), isNull);
+    });
+
+    test('the raw link is not parsed by the guard (the SDK owns it)', () {
+      // No host/path normalisation any more: an unknown location simply
+      // follows the gate state.
+      expect(_go(signedOut, 'soongong://auth/reset'), AppPaths.gate);
     });
 
     test('reset stays reachable while loading and when signed in', () {

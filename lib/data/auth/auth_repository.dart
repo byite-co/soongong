@@ -43,6 +43,10 @@ class AuthRepository {
   /// Session changes (null = signed out). The S05 auth gate listens here.
   Stream<AuthSession?> get authState => _backend.sessions;
 
+  /// A password-recovery link was exchanged for a session (S05b): the
+  /// router moves to `/auth/reset`.
+  Stream<void> get passwordRecovery => _backend.passwordRecoveryEvents;
+
   // ---------------------------------------------------------------------
   // Email
 

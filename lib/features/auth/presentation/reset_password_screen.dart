@@ -1,7 +1,8 @@
-// ResetPasswordScreen (`/auth/reset`, S05): target of the password-reset
-// deep link `soongong://auth/reset`. supabase_flutter exchanges the link for
-// a session; this screen waits for the auth gate, then takes the new
-// password. Reachable while signed out (router exception).
+// ResetPasswordScreen (`/auth/reset`, S05 · S05b): where the router lands
+// after the Supabase SDK exchanged a `soongong://auth/reset` link for a
+// session (`passwordRecoveryProvider`). Waits for the auth gate, then takes
+// the new password; clears the recovery flag when done or when the user asks
+// for a new mail. Reachable while signed out (router exception).
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,7 @@ import '../../../core/theme/tokens.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../../data/auth/auth_gate.dart';
 import '../../../data/auth/auth_providers.dart';
+import '../../../data/auth/password_recovery.dart';
 import '../domain/auth_redirect.dart';
 
 class ResetPasswordScreen extends ConsumerStatefulWidget {
@@ -53,6 +55,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       return;
     }
     setState(() => _busy = false);
+    ref.read(passwordRecoveryProvider.notifier).clear();
     showAppToast(context, message: AuthStrings.resetDone);
     context.go(AppPaths.launch);
   }
@@ -77,7 +80,10 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             title: AuthStrings.resetLinkInvalid,
             body: null,
             actionLabel: AuthStrings.resetRequestAgain,
-            onAction: () => context.go(AppPaths.loginEmail),
+            onAction: () {
+              ref.read(passwordRecoveryProvider.notifier).clear();
+              context.go(AppPaths.loginEmail);
+            },
           ),
         );
       case AuthGateSignedIn():

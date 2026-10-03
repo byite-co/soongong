@@ -54,7 +54,13 @@ class OnboardingScreen extends ConsumerWidget {
     };
     final (String secondaryLabel, Future<void> Function() onSecondary) = switch (step) {
       1 => (OnboardingStrings.skip, () async => _go(context, 2)),
-      2 => (OnboardingStrings.consentSkip, () async => _go(context, 3)),
+      2 => (
+          OnboardingStrings.consentSkip,
+          () async {
+            final ok = await ctl.skipReadingConsent();
+            if (ok && context.mounted) _go(context, 3);
+          },
+        ),
       _ => (OnboardingStrings.manualStart, () => _finish(context, ref, camera: false)),
     };
 

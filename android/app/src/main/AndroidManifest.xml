@@ -24,9 +24,11 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- S05: password-reset deep link `soongong://auth/reset`
-                 (Supabase Auth → URL Configuration must allow it). -->
-            <meta-data android:name="flutter_deeplinking_enabled" android:value="true" />
+            <!-- S05/S05b: password-reset deep link `soongong://auth/reset`
+                 (Supabase Auth → URL Configuration must allow it). The Supabase
+                 SDK (app_links) exchanges the link for a session; Flutter's own
+                 deep-link routing stays OFF so the link is handled once. -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>

@@ -1,10 +1,12 @@
-// resolveAuthRedirect (S05, pure Dart): the router guard as a function of the
-// auth gate state and the requested location, so the five redirect cases are
-// unit-testable without a widget tree (docs/routes.md §2).
+// resolveAuthRedirect (S05 · S05b, pure Dart): the router guard as a function
+// of the auth gate state, the requested location and the password-recovery
+// flag, so the redirect cases are unit-testable without a widget tree
+// (docs/routes.md §2).
 //
-// Public while signed out: `/gate/*`, `/login/*`, `/auth/reset` (password
-// reset deep link `soongong://auth/reset`, which the platform delivers as
-// host `auth` + path `/reset` and is normalised here).
+// Public while signed out: `/gate/*`, `/login/*`, `/auth/reset`. The reset
+// deep link itself (`soongong://auth/reset`) is consumed by the Supabase SDK;
+// the guard only reacts to [passwordRecovery] (the SDK's exchange event) and
+// never parses the link.
 
 import '../../../data/auth/auth_gate.dart';
 
@@ -30,13 +32,16 @@ abstract final class AppPaths {
 }
 
 /// Returns the location to go to instead, or null to allow [uri].
-String? resolveAuthRedirect({required AuthGateState gate, required Uri uri}) {
-  // Deep link normalisation: `soongong://auth/reset` → `/auth/reset`.
-  if (uri.host == 'auth' && (uri.path == '/reset' || uri.path == 'reset')) {
-    return AppPaths.authReset;
-  }
+/// [passwordRecovery] is true while a recovery link's session awaits its new
+/// password (S05b): every location then resolves to `/auth/reset`.
+String? resolveAuthRedirect({
+  required AuthGateState gate,
+  required Uri uri,
+  bool passwordRecovery = false,
+}) {
   final path = uri.path;
   final isReset = path == AppPaths.authReset;
+  if (passwordRecovery && !isReset) return AppPaths.authReset;
   final isGate = path == AppPaths.gate || path.startsWith('${AppPaths.gate}/');
   final isLogin = path == AppPaths.login || path.startsWith('${AppPaths.login}/');
   final isPublic = isReset || isGate || isLogin;

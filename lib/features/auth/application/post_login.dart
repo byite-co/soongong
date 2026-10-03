@@ -1,16 +1,19 @@
-// PostLoginRoutine (S05, PRD 4.3c): after an existing account signs in and
-// its onboarding is done — pull the account's records (`SyncEngine.pull(0)`,
-// Fake until S13), refresh the entitlement (`BillingGateway.refresh`, Fake
-// until S12), run the deferred startup writes, and queue ONE factual toast
-// line for the home screen. Failures are logged, never shown as errors here.
+// PostLoginRoutine (S05 · S05b, PRD 4.3c): after an existing account signs
+// in and its onboarding is done — pull the account's records
+// (`SyncEngine.pull(0)`, Fake until S13), refresh the entitlement
+// (`BillingGateway.refresh`, Fake until S12), run the per-user startup tasks
+// through the same `UserStartupTasks.ensureRunFor` the restored-session
+// listener uses (no-op when the listener already ran them), and queue ONE
+// factual toast line for the home screen. Failures are logged only.
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/contracts/providers.dart';
-import '../../../core/domain/local_date.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/strings/auth_strings.dart';
+import '../../../data/auth/auth_gate.dart';
 import '../../../data/repositories/repositories.dart';
+import '../../../data/startup/startup_tasks.dart';
 
 part 'post_login.g.dart';
 
@@ -52,12 +55,9 @@ class PostLoginRoutine {
     } on Object catch (e, st) {
       appLog.w('post-login: billing refresh failed', error: e, stackTrace: st);
     }
-    try {
-      await _ref.read(deleteSettlerProvider).settle();
-      final today = LocalDate.of(_ref.read(appClockProvider).now());
-      await _ref.read(activityRepositoryProvider).touch(today);
-    } on Object catch (e, st) {
-      appLog.w('post-login: startup writes failed', error: e, stackTrace: st);
+    final userId = _ref.read(authGateProvider).userId;
+    if (userId != null) {
+      await _ref.read(userStartupTasksProvider).ensureRunFor(userId);
     }
     var sessions = 0;
     var wrongs = 0;

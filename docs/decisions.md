@@ -369,3 +369,11 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **[S05] 새 패키지 5개**: `sign_in_with_apple` · `google_sign_in` · `kakao_flutter_sdk_user`(네이티브 제공자 토큰) · `permission_handler`(카메라 권한) · `crypto`(Apple nonce 해시; 이미 간접 의존).
 - **[S05] 딥링크 플랫폼 등록**: AndroidManifest `soongong://auth/reset` intent-filter + `flutter_deeplinking_enabled`, Info.plist `CFBundleURLTypes(soongong)` + `FlutterDeepLinkingEnabled`. Supabase Auth → URL Configuration 에 `soongong://auth/reset` 허용은 사람이 콘솔에서(handoff).
 
+## [S05b] 후속 수정 결정 (2026-10-03)
+
+- **[S05b] 오프라인 재시작 = 캐시된 프로필로 진입**: 서버가 확인해 준 프로필(user_id · onboarding_done · 동의 ①② 버전 · 동의 ② 유효 여부 · verified_at)을 `sync_meta.profile_cache` 에 계정별로 보관한다(`ProfileCache`, 생년월일 없음). 저장된 세션으로 재시작했는데 `profiles` 조회가 실패하면 **같은 uid 의 캐시가 있을 때만** `signedIn(fromCache)` 로 판정하고 30초 뒤·포그라운드 복귀 시 재조회해 교체한다. 캐시가 없거나 uid 가 다르면 기존 가드(`profileError` → `/` 재시도) 그대로. 다른 uid 는 `AccountBinding` 이 먼저 DB 를 비우므로 캐시도 함께 사라진다(다른 계정 캐시로 로그인되는 경로 없음).
+- **[S05b] 사용자별 초기화는 게이트 리스너 한 곳**: `UserStartupTasks.ensureRunFor(userId)`(D22 정산 · D15 activity_days · D23 미완료 세션 감지)가 앱 실행당 사용자별 1회 돈다. 부팅 시 `runStartupTasks` 가 dev 시드 뒤 `attachStartupListener` 로 `authGateProvider` 를 구독하고(`fireImmediately`), 저장 세션 복원(Loading→signedIn)·로컬 전용·수동 로그인 모두 같은 함수에 도달한다. `PostLoginRoutine` 은 pull·refresh·토스트만 더하고 초기화는 같은 `ensureRunFor` 를 호출(이미 돌았으면 no-op). bootstrap 이 첫 프레임 전에 사용자 쓰기를 기다리던 것은 폐기.
+- **[S05b] 온보딩 2단계 건너뛰기 = 서버 동의 ② 철회**: 사용자가 동의 → 3단계 → 뒤로 → 건너뛰기 하면 서버에는 granted 가 남으므로, 현재 프로필의 `consent_reading_active` 가 true 일 때만 `update-consent(granted:false)` 를 성공시킨 뒤 이동한다(실패 시 2단계 유지·재시도). 신규 건너뛰기는 호출 없음.
+- **[S05b] 동의 ② 문구 = D14 표 3줄**(`core/strings/consent_strings.dart`): ① 기기 보관 30일 · 즉시 삭제·로그아웃 삭제 ② 자사 서버 처리 종료 직후 삭제 · 잔여분 업로드 +24시간 이내 ③ 외부 AI 벤더 전송 사실 + "벤더의 보관 조건은 확정 전". 약속 문구 없음. 온보딩(S05)·페이월 동의(S12)·설정 저장 데이터 표(S09)는 이 상수만 참조한다(복사 금지).
+- **[S05b] 재설정 딥링크 처리 경로 단일화**: `soongong://auth/reset` 은 Supabase SDK(`detectSessionInUri`, app_links)가 PKCE 코드 교환까지 전담하고, 앱은 `AuthChangeEvent.passwordRecovery`(`AuthBackend.passwordRecoveryEvents`) 만 받아 `passwordRecoveryProvider` 를 켜고 가드가 `/auth/reset` 로 보낸다. Flutter 자체 딥링크(`flutter_deeplinking_enabled`·`FlutterDeepLinkingEnabled`)는 **false** 로 두어 중복 교환·중복 라우팅을 없앴고, 가드의 host 정규화는 제거. 플래그는 새 비밀번호 저장·"재설정 메일 다시 요청"·로그아웃에서 꺼진다. 실제 링크(앱 종료 상태·실행 중)는 dev 프로젝트 Redirect URL 등록 후 실기기에서 검증해야 한다(미실행, handoff).
+

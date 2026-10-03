@@ -24,7 +24,8 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
-	<!-- S05: password-reset deep link soongong://auth/reset -->
+	<!-- S05/S05b: password-reset deep link soongong://auth/reset — URL type registered for the OS;
+	     the Supabase SDK exchanges the link, Flutter deep-link routing stays off. -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -39,7 +40,7 @@
 		</dict>
 	</array>
 	<key>FlutterDeepLinkingEnabled</key>
-	<true/>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

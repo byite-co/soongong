@@ -1,7 +1,9 @@
-// OnboardingController (S05 · PRD 4.4 · D6 ②): consent ② → `update-consent`
-// (skip = reading stays off, no call), camera permission (denial never
-// blocks), finish → `profile_set_onboarding_done()` RPC (D24). A failed RPC
-// keeps the user on step 3 with a retry; nothing is written locally.
+// OnboardingController (S05 · S05b · PRD 4.4 · D6 ②): consent ② →
+// `update-consent`; skip = reading stays off — and when the server currently
+// holds a granted consent ② (user went back after granting) the skip revokes
+// it first (`granted:false`, S05b). Camera permission (denial never blocks),
+// finish → `profile_set_onboarding_done()` RPC (D24). A failed call keeps
+// the user on the step with a retry; nothing is written locally.
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -63,6 +65,33 @@ class OnboardingController extends _$OnboardingController {
     } on Object catch (e) {
       final reason = AuthRejectionMapper.fromError(e);
       appLog.w('onboarding: update-consent failed (${reason.name})');
+      state = state.copyWith(busy: false, error: OnboardingStrings.consentSaveFailed);
+      return false;
+    }
+  }
+
+  /// Step 2 "지금은 건너뛰기": reading stays off. If the server currently
+  /// holds a granted consent ② (the user granted, went to step 3 and came
+  /// back), it is revoked first; a failed revoke keeps step 2 with a retry.
+  /// true = move on to step 3.
+  Future<bool> skipReadingConsent() async {
+    if (state.busy) return false;
+    final gate = ref.read(authGateProvider);
+    final profile = gate is AuthGateSignedIn ? gate.profile : null;
+    if (profile == null || !profile.readingConsentActive) {
+      state = state.copyWith(consentChecked: false, clearError: true);
+      return true;
+    }
+    state = state.copyWith(busy: true, clearError: true);
+    try {
+      final updated = await ref.read(authRepositoryProvider).updateReadingConsent(granted: false);
+      ref.read(authGateProvider.notifier).applyProfile(updated);
+      state = state.copyWith(busy: false, consentChecked: false);
+      appLog.i('onboarding: consent ② revoked on skip');
+      return true;
+    } on Object catch (e) {
+      final reason = AuthRejectionMapper.fromError(e);
+      appLog.w('onboarding: consent revoke failed (${reason.name})');
       state = state.copyWith(busy: false, error: OnboardingStrings.consentSaveFailed);
       return false;
     }

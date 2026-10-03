@@ -149,6 +149,11 @@ class SupabaseAuthBackend implements AuthBackend {
         return s == null ? null : AuthSession(userId: s.user.id, email: s.user.email);
       });
 
+  @override
+  Stream<void> get passwordRecoveryEvents => _auth.onAuthStateChange
+      .where((state) => state.event == AuthChangeEvent.passwordRecovery)
+      .map((_) {});
+
   // ---------------------------------------------------------------------
 
   static AuthSession _sessionOf(AuthResponse res) {

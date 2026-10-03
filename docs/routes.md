@@ -29,14 +29,15 @@ StatefulShellRoute (탭 4개 · 태블릿 ≥600dp 는 좌측 레일)
 
 | `AuthGate` 상태 | 규칙 |
 |---|---|
-| `loading` · `profileError` | `/` 에 머문다(`/auth/reset` 예외). 프로필 읽기 실패는 `/` 에서 재시도 |
+| `loading` · `profileError` | `/` 에 머문다(`/auth/reset` 예외). 프로필 읽기 실패는 `/` 에서 재시도 — 단, 같은 계정의 **캐시된 프로필**(S05b `ProfileCache`)이 있으면 `signedIn(fromCache)` 로 진입하고 백그라운드 재조회 |
 | `signedOut` | `/gate/*` `/login/*` `/auth/reset`(+dev `/_gallery`)만 허용, 나머지 → `/gate` |
 | `signedIn` · `profiles` 없음 | 모두 → `/signup/complete` |
 | `signedIn` · `onboarding_done == false` | 모두 → `/onboarding/1`(온보딩 단계 안에서는 이동 허용) |
 | `signedIn` · 완료 | 요청 경로 유지. `/` `/gate/*` `/login/*` `/signup/complete` `/onboarding/*` 는 → `/home` |
+| (어느 상태든) `passwordRecovery` 플래그 | 모두 → `/auth/reset` (S05b) |
 | `localOnly`(dev · 백엔드 env 없음) | 인증 없음 · `/` 와 인증 경로 → `/home` |
 
-딥링크 `soongong://auth/reset` 은 플랫폼이 host `auth` + path `/reset` 로 전달하므로 가드가 `/auth/reset` 로 정규화한다. 가드는 `authGateProvider` 변화마다 재평가된다(`refreshListenable`).
+딥링크 `soongong://auth/reset` 은 **Supabase SDK 가 단독으로 처리**한다(S05b): `detectSessionInUri` 의 app_links 관찰자가 PKCE 코드를 세션으로 교환하고 `passwordRecovery` 이벤트를 낸다 → `passwordRecoveryProvider = true` → 가드가 모든 경로를 `/auth/reset` 로 보낸다(새 비밀번호 저장 또는 "재설정 메일 다시 요청" 에서 해제). Flutter 자체 딥링크 라우팅(`flutter_deeplinking_enabled` / `FlutterDeepLinkingEnabled`)은 **꺼져 있어** go_router 는 원문 링크를 받지 않는다(가드에 host 정규화 없음). 가드는 `authGateProvider`·`passwordRecoveryProvider` 변화마다 재평가된다(`refreshListenable`).
 
 ## 3. 레인이 라우트를 추가하는 절차
 

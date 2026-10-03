@@ -45,4 +45,9 @@ abstract class AuthBackend {
 
   /// Emits the current session on every auth change (null when signed out).
   Stream<AuthSession?> get sessions;
+
+  /// Fires once per password-recovery link the SDK exchanged for a session
+  /// (`AuthChangeEvent.passwordRecovery`). S05b: the SDK's deep-link observer
+  /// owns `soongong://auth/reset`; the router only reacts to this event.
+  Stream<void> get passwordRecoveryEvents;
 }

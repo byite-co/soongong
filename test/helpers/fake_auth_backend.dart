@@ -136,6 +136,18 @@ class FakeAuthBackend implements AuthBackend {
     _ctrl.add(s);
   }
 
+  final StreamController<void> _recovery = StreamController<void>.broadcast();
+
+  /// Simulates the SDK exchanging a `soongong://auth/reset` link: the session
+  /// arrives, then the `passwordRecovery` event fires (S05b).
+  void emitPasswordRecovery({AuthSession? session}) {
+    if (session != null) emitSession(session);
+    _recovery.add(null);
+  }
+
+  @override
+  Stream<void> get passwordRecoveryEvents => _recovery.stream;
+
   @override
   AuthSession? get currentSession => session;
 

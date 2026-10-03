@@ -1,6 +1,7 @@
-// ForegroundActivityHook (S02, D15): when the app returns to the foreground
-// the local day is upserted into `activity_days`. The launch itself is
-// counted by the startup tasks. Errors are logged, never surfaced.
+// ForegroundActivityHook (S02 · S05b, D15): when the app returns to the
+// foreground the local day is upserted into `activity_days`, and a sign-in
+// that is still running on the cached profile re-reads it from the server.
+// The launch itself is counted by the startup tasks. Errors are logged only.
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,7 +37,13 @@ class _ForegroundActivityHookState extends ConsumerState<ForegroundActivityHook>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
-    if (!ref.read(authGateProvider).hasUser) return;
+    final gate = ref.read(authGateProvider);
+    if (!gate.hasUser) return;
+    if (gate is AuthGateSignedIn && gate.fromCache) {
+      ref.read(authGateProvider.notifier).refreshProfile().catchError((Object e, StackTrace st) {
+        appLog.w('profile refresh failed', error: e, stackTrace: st);
+      });
+    }
     final today = LocalDate.of(ref.read(appClockProvider).now());
     ref.read(activityRepositoryProvider).touch(today).catchError((Object e, StackTrace st) {
       appLog.w('activity_days touch failed', error: e, stackTrace: st);
