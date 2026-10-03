@@ -23,6 +23,7 @@ StatefulShellRoute (탭 4개 · 태블릿 ≥600dp 는 좌측 레일)
 /settings             (S09 placeholder · 홈 헤더 기어 · 탭 밖, root navigator push)
 /measure/setup        setupOn (S06 placeholder · 홈 CTA · 복구 "이어서" = ?resume=<sessionId>)
 /_gallery             dev 전용(DEV_MENU)
+/_seat_lab            dev 전용(S04 착석 엔진 실험실 · `measure_routes.dart` 에 등록)
 ```
 
 ## 2. 가드 (`features/auth/domain/auth_redirect.dart` · 순수 함수, 유닛 테스트 `test/unit/domain/auth_redirect_test.dart`)
@@ -30,7 +31,7 @@ StatefulShellRoute (탭 4개 · 태블릿 ≥600dp 는 좌측 레일)
 | `AuthGate` 상태 | 규칙 |
 |---|---|
 | `loading` · `profileError` | `/` 에 머문다(`/auth/reset` 예외). 프로필 읽기 실패는 `/` 에서 재시도 — 단, 같은 계정의 **캐시된 프로필**(S05b `ProfileCache`)이 있으면 `signedIn(fromCache)` 로 진입하고 백그라운드 재조회 |
-| `signedOut` | `/gate/*` `/login/*` `/auth/reset`(+dev `/_gallery`)만 허용, 나머지 → `/gate` |
+| `signedOut` | `/gate/*` `/login/*` `/auth/reset`(+dev `/_gallery` `/_seat_lab`)만 허용, 나머지 → `/gate` |
 | `signedIn` · `profiles` 없음 | 모두 → `/signup/complete` |
 | `signedIn` · `onboarding_done == false` | 모두 → `/onboarding/1`(온보딩 단계 안에서는 이동 허용) |
 | `signedIn` · 완료 | 요청 경로 유지. `/` `/gate/*` `/login/*` `/signup/complete` `/onboarding/*` 는 → `/home` |

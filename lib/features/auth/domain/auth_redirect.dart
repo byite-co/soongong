@@ -29,6 +29,7 @@ abstract final class AppPaths {
   static const String settings = '/settings';
   static const String measureSetup = '/measure/setup';
   static const String gallery = '/_gallery';
+  static const String seatLab = '/_seat_lab'; // S04 harness (dev only)
 }
 
 /// Returns the location to go to instead, or null to allow [uri].
@@ -46,7 +47,7 @@ String? resolveAuthRedirect({
   final isLogin = path == AppPaths.login || path.startsWith('${AppPaths.login}/');
   final isPublic = isReset || isGate || isLogin;
   final isLaunch = path == AppPaths.launch || path.isEmpty;
-  final isDevTool = path == AppPaths.gallery;
+  final isDevTool = path == AppPaths.gallery || path == AppPaths.seatLab;
   final isConsent = path == AppPaths.signupComplete;
   final isOnboarding = path == AppPaths.onboarding || path.startsWith('${AppPaths.onboarding}/');
 

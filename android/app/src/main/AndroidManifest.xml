@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- S04 seat detection: front camera, on-device seated boolean only.
+         Frames are never stored or transmitted (CLAUDE.md §1 · §9). No audio. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"

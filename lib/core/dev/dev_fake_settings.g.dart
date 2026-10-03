@@ -12,6 +12,7 @@ _DevFakeSettings _$DevFakeSettingsFromJson(Map<String, dynamic> json) =>
           $enumDecodeNullable(_$FakeSeatScenarioEnumMap, json['seat']) ??
           FakeSeatScenario.alwaysSeated,
       seatAfterSeconds: (json['seatAfterSeconds'] as num?)?.toInt() ?? 10,
+      seatReal: json['seatReal'] as bool? ?? false,
       reading:
           $enumDecodeNullable(_$FakeReadingScenarioEnumMap, json['reading']) ??
           FakeReadingScenario.success,
@@ -26,6 +27,7 @@ Map<String, dynamic> _$DevFakeSettingsToJson(_DevFakeSettings instance) =>
     <String, dynamic>{
       'seat': _$FakeSeatScenarioEnumMap[instance.seat]!,
       'seatAfterSeconds': instance.seatAfterSeconds,
+      'seatReal': instance.seatReal,
       'reading': _$FakeReadingScenarioEnumMap[instance.reading]!,
       'delayMs': instance.delayMs,
       'billing': _$EntitlementStatusEnumMap[instance.billing]!,
@@ -100,7 +102,7 @@ final class DevFakeSettingsControllerProvider
 }
 
 String _$devFakeSettingsControllerHash() =>
-    r'2abe4f789a31242598eb8a5529671ed3d043109f';
+    r'bba5494bc88374cc4bf3948048df905350ac82dd';
 
 abstract class _$DevFakeSettingsController extends $Notifier<DevFakeSettings> {
   DevFakeSettings build();

@@ -15,6 +15,12 @@ abstract final class DevStrings {
   static const String backendPresent = '있음';
   static const String backendMissing = '없음 (Fake만 동작)';
 
+  // S04 · engine implementation switch + harness link
+  static const String seatImplLabel = '구현';
+  static const String seatImplFake = 'Fake';
+  static const String seatImplReal = '실제 카메라 (SeatEngineImpl)';
+  static const String openSeatLab = '착석 감지 실험실 열기 (/_seat_lab)';
+
   static const String seatAlwaysSeated = '계속 착석';
   static const String seatAwayAfter = '이탈 (N초 후)';
   static const String seatLostAfter = '카메라 끊김 (N초 후)';
