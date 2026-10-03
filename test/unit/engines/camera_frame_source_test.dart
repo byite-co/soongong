@@ -32,8 +32,8 @@ class _FakeController extends CameraController {
 
   // The platform release is what this fake stands in for; ChangeNotifier's
   // own dispose is irrelevant to the boundary under test.
-  // ignore: must_call_super
   @override
+  // ignore: must_call_super
   Future<void> dispose() {
     disposeCalls++;
     return onDispose?.call() ?? Future<void>.value();
