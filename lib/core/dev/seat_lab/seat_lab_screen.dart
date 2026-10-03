@@ -1,4 +1,4 @@
-// `/_seat_lab` (S04 · S04b, dev flavor only): measurement harness for
+// `/_seat_lab` (S04 · S04b · S04c · S04d, dev flavor only): measurement harness for
 // SeatEngineImpl. Shows the live seated boolean, per-frame latency, the
 // detection rate over the last 60 s, elapsed time, battery drop, engine
 // events, and lets the tester mark the real state (ground truth) and the
@@ -12,6 +12,11 @@
 // itself, camera lost at the stop, error, detection outliving the stop
 // bound) is marked excluded from the summary. No preview is shown — the
 // status icon is the only camera feedback, as on the real measurement screen.
+//
+// Battery (S04d): the start and the end of a run are separate measurements.
+// At the stop the end time is taken and the end value read FIRST, then the
+// segment is closed with both; a failed end reading leaves the run without a
+// valid battery verdict. Periodic readings are logged for the CSV only.
 
 import 'dart:async';
 
@@ -48,6 +53,7 @@ class SeatLabScreen extends StatefulWidget {
     this.batteryReader,
     this.share,
     this.monotonic,
+    this.recorder,
     this.batteryPollInterval = const Duration(seconds: 60),
   });
 
@@ -64,6 +70,9 @@ class SeatLabScreen extends StatefulWidget {
   /// Lab time base, shared with the engine (test seam; default: a stopwatch).
   final MonotonicClock? monotonic;
 
+  /// Test seam: the log the screen writes to (default: a fresh recorder).
+  final SeatLabRecorder? recorder;
+
   final Duration batteryPollInterval;
 
   @override
@@ -73,7 +82,7 @@ class SeatLabScreen extends StatefulWidget {
 class _SeatLabScreenState extends State<SeatLabScreen> {
   static const List<double> _minFaceSizes = <double>[0.1, 0.15, 0.2];
 
-  final SeatLabRecorder _recorder = SeatLabRecorder();
+  late final SeatLabRecorder _recorder = widget.recorder ?? SeatLabRecorder();
   final List<String> _eventLog = <String>[];
   late final MonotonicClock _mono = widget.monotonic ?? StopwatchMonotonicClock();
   late final Duration _t0 = _mono.elapsed;
@@ -153,8 +162,11 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
   }
 
   void _onEvent(SeatEngineEvent e) {
+    final lostReason = _engine?.lastLostReason;
     final name = switch (e) {
-      SeatCameraLost() => SeatLabStrings.eventCameraLost,
+      SeatCameraLost() => lostReason == null
+          ? SeatLabStrings.eventCameraLost
+          : '${SeatLabStrings.eventCameraLost} · $lostReason',
       SeatCameraRecovered() => SeatLabStrings.eventCameraRecovered,
       SeatPaused(:final reason) => '${SeatLabStrings.eventPaused} · ${reason.name}',
       SeatError(:final message) => '${SeatLabStrings.eventError}: $message',
@@ -199,7 +211,8 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
   }
 
   /// The engine stopped on its own (background → auto stop): close the
-  /// segment as abnormal so its samples leave the summary.
+  /// segment as abnormal so its samples leave the summary. The end time is
+  /// taken now; the end battery value is read before the segment is closed.
   void _checkSelfStop() {
     final engine = _engine;
     if (!_running || _busy || engine == null || engine.isRunning) return;
@@ -207,15 +220,43 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
       SeatEngineStopReason.background => SeatLabStrings.reasonBackground,
       _ => SeatLabStrings.reasonSelfStop,
     };
-    _finishSegment(end: SeatLabSegmentEnd.abnormal, reason: reason);
-    _logLine(SeatLabStrings.eventSelfStopped);
     _stopTimers();
-    if (mounted) setState(() => _state = _LabState.idle);
+    final endedAt = _now;
+    setState(() {
+      _busy = true; // no start until the segment is closed
+      _state = _LabState.idle;
+    });
+    unawaited(_finishSelfStop(endedAt, reason));
   }
 
-  void _finishSegment({required SeatLabSegmentEnd end, String reason = ''}) {
+  Future<void> _finishSelfStop(Duration endedAt, String reason) async {
+    final level = await _readBatteryLevel();
+    _finishSegment(
+      endedAt,
+      end: SeatLabSegmentEnd.abnormal,
+      reason: reason,
+      batteryEnd: level,
+    );
+    _logLine(SeatLabStrings.eventSelfStopped);
+    if (mounted) setState(() => _busy = false);
+  }
+
+  /// Closes the run at [endedAt]. Called after the end battery value was read
+  /// (S04d: end value and end time first, then the segment).
+  void _finishSegment(
+    Duration endedAt, {
+    required SeatLabSegmentEnd end,
+    String reason = '',
+    int? batteryEnd,
+  }) {
     if (_recorder.currentSegment == null) return;
-    _recorder.endSegment(_now, end: end, reason: reason);
+    _recorder.endSegment(
+      endedAt,
+      end: end,
+      reason: reason,
+      batteryEnd: batteryEnd,
+      cameraReleaseTimedOut: _engine?.lastStopReport?.cameraReleaseTimedOut ?? false,
+    );
   }
 
   void _stopTimers() {
@@ -236,9 +277,12 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     final engine = _ensureEngine();
     _lostNow = false;
     _segmentHadError = false;
-    _recorder.beginSegment(_now);
+    // Start measurement first, then the segment (its start time), then the
+    // engine — the segment's clock runs from before the camera opens, like
+    // the engine's own `sinceStart` (S04d §3).
+    final startLevel = await _readBatteryLevel();
+    _recorder.beginSegment(_now, batteryStart: startLevel);
     _logLine(SeatLabStrings.eventStarted);
-    await _readBattery();
     try {
       await engine.start(SeatEngineConfig(lowPower: _lowPower));
     } catch (e, st) {
@@ -255,12 +299,14 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
         setState(() {});
         _checkSelfStop();
       });
-      _batteryTimer ??= Timer.periodic(widget.batteryPollInterval, (_) => _readBattery());
+      _batteryTimer ??= Timer.periodic(widget.batteryPollInterval, (_) => _pollBattery());
     } else {
-      // start failed: the segment never ran
+      // start failed (or the engine paused itself while opening): the
+      // segment never ran
       _finishSegment(
+        _now,
         end: SeatLabSegmentEnd.abnormal,
-        reason: SeatLabStrings.reasonError,
+        reason: _lostNow ? SeatLabStrings.reasonBackground : SeatLabStrings.reasonError,
       );
     }
   }
@@ -273,6 +319,9 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
       await engine?.stop();
     } finally {
       _stopTimers();
+      // S04d: end time and end measurement first, then the segment.
+      final endedAt = _now;
+      final endLevel = await _readBatteryLevel();
       final report = engine?.lastStopReport;
       final String? abnormal = report != null && report.inferenceTimedOut
           ? SeatLabStrings.reasonInferenceTimeout
@@ -282,11 +331,12 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
                   ? SeatLabStrings.reasonError
                   : null;
       _finishSegment(
+        endedAt,
         end: abnormal == null ? SeatLabSegmentEnd.normal : SeatLabSegmentEnd.abnormal,
         reason: abnormal ?? '',
+        batteryEnd: endLevel,
       );
       _logLine(SeatLabStrings.eventStopped);
-      await _readBattery();
       if (mounted) {
         setState(() {
           _busy = false;
@@ -296,13 +346,19 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     }
   }
 
-  Future<void> _readBattery() async {
-    int? level;
+  /// One battery measurement; `null` when the platform cannot report one.
+  Future<int?> _readBatteryLevel() async {
     try {
-      level = await (widget.batteryReader ?? _platformBattery)();
+      return await (widget.batteryReader ?? _platformBattery)();
     } catch (e) {
       appLog.d('seat lab: battery unavailable ($e)');
+      return null;
     }
+  }
+
+  /// Periodic reading during a run (CSV + "latest" display only).
+  Future<void> _pollBattery() async {
+    final level = await _readBatteryLevel();
     if (level != null) _recorder.battery(_now, level);
     if (mounted) setState(() {});
   }
@@ -448,10 +504,16 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     final agreement = _recorder.agreement();
     final last = _recorder.lastSegment;
     final bStart = last?.batteryStart;
-    final bLast = last?.batteryEnd;
-    final battery = bStart == null || bLast == null
-        ? SeatLabStrings.batteryUnknown
-        : '$bStart% → $bLast% (−${bStart - bLast}%p)';
+    // Open run: start → latest reading. Closed run: start → end measurement.
+    final bEnd = last == null ? null : (last.isOpen ? last.batteryLatest : last.batteryEnd);
+    final String battery;
+    if (bStart == null) {
+      battery = SeatLabStrings.batteryUnknown;
+    } else if (bEnd == null) {
+      battery = '$bStart% → ${SeatLabStrings.batteryUnknown}';
+    } else {
+      battery = '$bStart% → $bEnd% (−${bStart - bEnd}%p)';
+    }
     final verdict = last == null ? null : _recorder.batteryVerdict(last, now);
     final String batteryValid;
     if (verdict == null) {
@@ -462,6 +524,8 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
       final why = switch (verdict.reason) {
         'open' => SeatLabStrings.batteryReasonOpen,
         'interrupted' => SeatLabStrings.batteryReasonInterrupted,
+        'abnormal' => SeatLabStrings.batteryReasonAbnormal,
+        'release_timeout' => SeatLabStrings.batteryReasonReleaseTimeout,
         'short' => SeatLabStrings.batteryReasonShort,
         _ => SeatLabStrings.batteryReasonNoReading,
       };
@@ -531,6 +595,16 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
         _Kv(
           SeatLabStrings.suppressedResults,
           e == null ? SeatLabStrings.noData : '${e.suppressedResults}',
+          c,
+        ),
+        _Kv(
+          SeatLabStrings.detectorReplacements,
+          e == null ? SeatLabStrings.noData : '${e.detectorReplacements}',
+          c,
+        ),
+        _Kv(
+          SeatLabStrings.stalledDetections,
+          e == null ? SeatLabStrings.noData : '${e.stalledDetections}',
           c,
         ),
         _Kv(SeatLabStrings.lastStop, lastStop, c),

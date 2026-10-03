@@ -1,6 +1,7 @@
-// Test doubles for the seat engine (S04): a scripted frame source, a
-// detector that reads the scripted answer, a permission gateway and a
-// lifecycle feed. Frames carry a `present` flag instead of pixels.
+// Test doubles for the seat engine (S04 · S04d): a scripted frame source that
+// hands out one handle per open, a detector that reads the scripted answer,
+// a permission gateway and a lifecycle feed. Frames carry a `present` flag
+// instead of pixels.
 
 import 'dart:async';
 
@@ -11,6 +12,43 @@ class FakeSeatFrame extends SeatFrame {
   const FakeSeatFrame({required this.present});
 
   final bool present;
+}
+
+/// One camera session of [FakeSeatFrameSource]. Frames and faults can be
+/// delivered through a specific handle, open or closed (a platform callback
+/// that arrives late).
+class FakeCameraHandle implements SeatCameraHandle {
+  FakeCameraHandle(this._source, this.index, this.config, this._onFrame, this._onFault);
+
+  final FakeSeatFrameSource _source;
+
+  /// 1-based, in order of completed opens.
+  final int index;
+  final SeatFrameSourceConfig config;
+  final SeatFrameCallback _onFrame;
+  final SeatFaultCallback _onFault;
+  bool _open = true;
+  int closeCalls = 0;
+
+  @override
+  bool get isOpen => _open;
+
+  bool get closed => !_open;
+
+  @override
+  Future<void> close() async {
+    closeCalls++;
+    if (!_open) return;
+    _open = false;
+    _source.closeCount++;
+    _source._lastClosed = this;
+    if (_source.hangClose) await Completer<void>().future;
+  }
+
+  void emit({required bool present}) => _onFrame(FakeSeatFrame(present: present));
+
+  void fault(CameraFault fault, [String description = 'fault']) =>
+      _onFault(fault, description);
 }
 
 class FakeSeatFrameSource implements SeatFrameSource {
@@ -30,24 +68,28 @@ class FakeSeatFrameSource implements SeatFrameSource {
   /// [probe] never completes.
   bool hangProbe = false;
 
-  /// [close] never completes (the callbacks are still detached at once).
+  /// A handle's [FakeCameraHandle.close] never completes (the session is
+  /// still marked closed at once).
   bool hangClose = false;
 
-  SeatFrameCallback? _onFrame;
-  SeatFaultCallback? _onFault;
-
-  /// Callbacks of the most recently closed session, so a test can replay a
-  /// platform callback that arrives late (after the camera was released,
-  /// possibly after the next session opened) with [emitLate] / [faultLate].
-  SeatFrameCallback? _lateOnFrame;
-  SeatFaultCallback? _lateOnFault;
+  /// Every session opened so far, in order of completed opens.
+  final List<FakeCameraHandle> handles = <FakeCameraHandle>[];
+  FakeCameraHandle? _lastClosed;
   SeatFrameSourceConfig? lastConfig;
   int openCount = 0;
   int closeCount = 0;
   int probeCount = 0;
 
-  @override
-  bool get isOpen => _onFrame != null;
+  /// The most recently opened session that is still open (`null` when none).
+  FakeCameraHandle? get current {
+    for (var i = handles.length - 1; i >= 0; i--) {
+      if (handles[i].isOpen) return handles[i];
+    }
+    return null;
+  }
+
+  /// Any session still open.
+  bool get isOpen => current != null;
 
   @override
   Future<CameraProbeResult> probe() async {
@@ -57,7 +99,7 @@ class FakeSeatFrameSource implements SeatFrameSource {
   }
 
   @override
-  Future<void> open(
+  Future<SeatCameraHandle> open(
     SeatFrameSourceConfig config, {
     required SeatFrameCallback onFrame,
     required SeatFaultCallback onFault,
@@ -68,39 +110,28 @@ class FakeSeatFrameSource implements SeatFrameSource {
     if (openDelay > Duration.zero) await Future<void>.delayed(openDelay);
     openCount++;
     lastConfig = config;
-    _onFrame = onFrame;
-    _onFault = onFault;
+    final h = FakeCameraHandle(this, handles.length + 1, config, onFrame, onFault);
+    handles.add(h);
+    return h;
   }
 
-  @override
-  Future<void> close() async {
-    if (_onFrame == null) return;
-    closeCount++;
-    _lateOnFrame = _onFrame;
-    _lateOnFault = _onFault;
-    _onFrame = null;
-    _onFault = null;
-    if (hangClose) await Completer<void>().future;
-  }
-
-  /// Delivers one frame (no-op when closed, like a real camera).
-  void emit({required bool present}) =>
-      _onFrame?.call(FakeSeatFrame(present: present));
+  /// Delivers one frame to the current session (no-op when none is open,
+  /// like a real camera).
+  void emit({required bool present}) => current?.emit(present: present);
 
   void fault(CameraFault fault, [String description = 'fault']) =>
-      _onFault?.call(fault, description);
+      current?.fault(fault, description);
 
-  /// A frame from the previous camera session arriving after [close].
-  void emitLate({required bool present}) =>
-      _lateOnFrame?.call(FakeSeatFrame(present: present));
+  /// A frame from the most recently closed session arriving after its close.
+  void emitLate({required bool present}) => _lastClosed?.emit(present: present);
 
-  /// A fault from the previous camera session arriving after [close].
+  /// A fault from the most recently closed session arriving after its close.
   void faultLate(CameraFault fault, [String description = 'late fault']) =>
-      _lateOnFault?.call(fault, description);
+      _lastClosed?.fault(fault, description);
 }
 
 class FakePresenceDetector implements PresenceDetector {
-  FakePresenceDetector({this.latency = Duration.zero});
+  FakePresenceDetector({this.latency = Duration.zero, this.hang = false});
 
   /// Simulated detector round-trip (realised with a Timer so fake_async can
   /// advance it).
@@ -109,17 +140,32 @@ class FakePresenceDetector implements PresenceDetector {
   /// When set, every call throws it.
   Object? error;
 
-  /// [detect] never returns (an unresponsive detector).
-  bool hang = false;
+  /// [detect] does not return until [releaseHung] (an unresponsive detector).
+  bool hang;
 
+  final List<Completer<void>> _hung = <Completer<void>>[];
   int calls = 0;
   int closeCalls = 0;
   bool closed = false;
 
+  /// Calls that have not returned yet.
+  int get pendingCalls => _hung.where((c) => !c.isCompleted).length;
+
+  /// Lets every hung call continue (it then answers normally).
+  void releaseHung() {
+    for (final c in _hung) {
+      if (!c.isCompleted) c.complete();
+    }
+  }
+
   @override
   Future<bool> detect(SeatFrame frame) async {
     calls++;
-    if (hang) await Completer<void>().future;
+    if (hang) {
+      final c = Completer<void>();
+      _hung.add(c);
+      await c.future;
+    }
     if (latency > Duration.zero) {
       await Future<void>.delayed(latency);
     }

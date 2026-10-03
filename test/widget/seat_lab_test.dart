@@ -22,28 +22,44 @@ class LabRig {
   final FakeCameraPermissionGateway gateway = FakeCameraPermissionGateway();
   final FakeLifecycleSource lifecycle = FakeLifecycleSource();
   final FakeMonotonicClock mono = FakeMonotonicClock();
+  final SeatLabRecorder recorder = SeatLabRecorder();
   final List<ExportFile> shared = <ExportFile>[];
   SeatEngineImpl? engine;
   double minFaceSizeUsed = 0;
   MonotonicClock? monotonicUsed;
 
-  Widget screen({int? battery = 80}) => SeatLabScreen(
+  /// Battery readings handed out in order; the last one repeats.
+  List<int?> _batteries = <int?>[80];
+  int _batteryReads = 0;
+
+  Future<int?> _readBattery() async {
+    final i = _batteryReads < _batteries.length ? _batteryReads : _batteries.length - 1;
+    _batteryReads++;
+    return _batteries[i];
+  }
+
+  Widget screen({int? battery = 80, List<int?>? batteries}) {
+    _batteries = batteries ?? <int?>[battery];
+    _batteryReads = 0;
+    return SeatLabScreen(
         monotonic: mono,
+        recorder: recorder,
         engineBuilder: ({required double minFaceSize, required MonotonicClock monotonic}) {
           minFaceSizeUsed = minFaceSize;
           monotonicUsed = monotonic;
           return engine = SeatEngineImpl(
             source: source,
-            detector: detector,
+            detectorFactory: () => detector,
             permission: gateway,
             lifecycle: lifecycle,
             monotonic: monotonic,
             clock: FixedClock(DateTime.utc(2026, 10, 1)),
           );
         },
-        batteryReader: () async => battery,
+        batteryReader: _readBattery,
         share: (f) async => shared.add(f),
       );
+  }
 
   String get csv => utf8.decode(shared.last.bytes);
 }
@@ -110,6 +126,8 @@ void main() {
     await tester.pump();
     expect(find.text(SeatLabStrings.stateLost), findsOneWidget);
     expect(find.textContaining(SeatLabStrings.eventCameraLost), findsOneWidget);
+    expect(find.textContaining('${SeatLabStrings.eventCameraLost} · inUse'), findsOneWidget,
+        reason: 'S04d: the lab log carries the engine\'s lost reason');
     expect(find.text(SeatLabStrings.eventNone), findsNothing);
 
     await tester.tap(find.byTooltip(SeatLabStrings.exportCsv));
@@ -201,6 +219,7 @@ void main() {
     r.lifecycle.add(AppLifecycleState.hidden);
     await tester.pump();
     await tester.pump();
+    await tester.pump(); // end battery measurement, then the segment closes
     expect(r.engine!.isRunning, isFalse);
     expect(r.engine!.lastStopReason, SeatEngineStopReason.background);
     expect(find.text(SeatLabStrings.stateIdle), findsOneWidget);
@@ -223,6 +242,55 @@ void main() {
     await tester.pump();
     expect(r.csv, contains('stop · abnormal · ${SeatLabStrings.reasonBackground}'));
     expect(r.csv, contains(',sample,1,1,1,1,0,'));
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpWidget(const SizedBox());
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('seat lab: battery start and end are separate measurements; a failed end reading invalidates the run',
+      (tester) async {
+    final r = LabRig();
+    await pumpThemed(tester, r.screen(batteries: <int?>[80, 73, null]), surfaceSize: const Size(390, 2800));
+    await _tapStart(tester); // start measurement: 80
+    expect(r.recorder.segments.first.batteryStart, 80);
+    r.mono.advance(const Duration(minutes: 61));
+    r.source.emit(present: true);
+    await tester.pump();
+    // The lab's periodic poll timer never fires under the fake pump (no pumps
+    // of 60 s), so the end measurement is the second reading: 73 — a clean
+    // 61-minute run with both ends.
+    await _tapStop(tester);
+    expect(find.text('80% → 73% (−7%p)'), findsOneWidget);
+    expect(find.text('${SeatLabStrings.batteryValidYes} (−7%p / 61:00)'), findsOneWidget);
+    final seg1 = r.recorder.segments.first;
+    expect(seg1.batteryStart, 80);
+    expect(seg1.batteryEnd, 73);
+
+    // Run 2: start measurement fails (null) → the run can never be a valid measurement.
+    await _tapStart(tester);
+    r.mono.advance(const Duration(minutes: 61));
+    r.source.emit(present: true);
+    await tester.pump();
+    await _tapStop(tester); // end reading: null again
+    expect(find.text(SeatLabStrings.batteryUnknown), findsOneWidget);
+    expect(
+      find.text('${SeatLabStrings.batteryValidNo} · ${SeatLabStrings.batteryReasonNoReading}'),
+      findsOneWidget,
+    );
+    final seg2 = r.recorder.segments[1];
+    expect(seg2.batteryStart, isNull);
+    expect(seg2.batteryEnd, isNull);
+    expect(seg2.isExcluded, isFalse, reason: 'the samples are fine');
+
+    await tester.tap(find.byTooltip(SeatLabStrings.exportCsv));
+    await tester.pump();
+    final lines = r.csv.trimRight().split('\n');
+    final seg1Rows = lines.where((l) => l.split(',')[2] == '1').toList();
+    expect(seg1Rows.first, endsWith(',start'));
+    expect(seg1Rows[1].split(',')[1], 'battery');
+    expect(seg1Rows[1].split(',')[10], '80');
+    expect(seg1Rows[seg1Rows.length - 2].split(',')[10], '73', reason: 'end measurement row before the stop row');
+    expect(seg1Rows.last, contains('stop · normal'));
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpWidget(const SizedBox());
     expect(tester.takeException(), isNull);

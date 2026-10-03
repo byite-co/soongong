@@ -1,9 +1,15 @@
-// CameraFrameSource (S04): `camera` plugin → [SeatFrameSource].
+// CameraFrameSource (S04 · S04d): `camera` plugin → [SeatFrameSource].
 //
 // Front camera, lowest resolution preset (320×240 on Android, 352×288 on
 // iOS), no audio, single-plane stream format (NV21 on Android, BGRA on iOS)
 // so the detector gets the bytes without conversion. Frames are forwarded
 // synchronously from the plugin callback and never retained here.
+//
+// S04d: every `open()` returns its own [SeatCameraHandle] wrapping the
+// controller it created. Closing a handle stops and disposes that controller
+// only, so a controller that finished initialising after its run was
+// abandoned can be released without touching the controller of the run that
+// replaced it.
 
 import 'dart:async';
 
@@ -43,12 +49,10 @@ class CameraFrameSource implements SeatFrameSource {
   /// stop sequence.
   final Duration disposeTimeout;
 
-  CameraController? _controller;
-  VoidCallback? _listener;
-  String? _lastFault;
+  final Set<_CameraSession> _sessions = <_CameraSession>{};
 
-  @override
-  bool get isOpen => _controller != null;
+  /// At least one session opened by this source is still open.
+  bool get hasOpenSession => _sessions.isNotEmpty;
 
   static bool get _isIOS => defaultTargetPlatform == TargetPlatform.iOS;
   static bool get _isAndroid => defaultTargetPlatform == TargetPlatform.android;
@@ -81,7 +85,7 @@ class CameraFrameSource implements SeatFrameSource {
 
   @override
   Future<CameraProbeResult> probe() async {
-    if (isOpen) return CameraProbeResult.ok;
+    if (hasOpenSession) return CameraProbeResult.ok;
     final List<CameraDescription> cameras;
     try {
       cameras = await _listCameras();
@@ -118,12 +122,11 @@ class CameraFrameSource implements SeatFrameSource {
   }
 
   @override
-  Future<void> open(
+  Future<SeatCameraHandle> open(
     SeatFrameSourceConfig config, {
     required SeatFrameCallback onFrame,
     required SeatFaultCallback onFault,
   }) async {
-    if (isOpen) return;
     final List<CameraDescription> cameras;
     try {
       cameras = await _listCameras();
@@ -149,22 +152,13 @@ class CameraFrameSource implements SeatFrameSource {
       throw SeatFrameSourceException('camera_init_failed', '$e');
     }
 
-    _lastFault = null;
-    void listener() {
-      final d = controller.value.errorDescription;
-      if (d == null || d == _lastFault) return;
-      _lastFault = d;
-      onFault(classifyCameraFault(d), d);
-    }
-
-    controller.addListener(listener);
-    _listener = listener;
-
+    final session = _CameraSession(this, controller, onFault);
     final sensorOrientation = camera.sensorOrientation;
     final frontFacing = camera.lensDirection == CameraLensDirection.front;
     final isIOS = _isIOS;
     try {
       await controller.startImageStream((CameraImage image) {
+        if (!session.isOpen) return; // a frame queued before the close landed
         onFrame(
           CameraSeatFrame(
             image: image,
@@ -178,30 +172,14 @@ class CameraFrameSource implements SeatFrameSource {
         );
       });
     } on CameraException catch (e) {
-      controller.removeListener(listener);
-      _listener = null;
+      session._abandon();
       await _disposeQuietly(controller);
       throw SeatFrameSourceException('camera_init_failed', e.description);
     }
-    _controller = controller;
+    _sessions.add(session);
     // An error that arrived during start-up is reported once, too.
-    listener();
-  }
-
-  @override
-  Future<void> close() async {
-    final controller = _controller;
-    if (controller == null) return;
-    _controller = null;
-    final listener = _listener;
-    if (listener != null) controller.removeListener(listener);
-    _listener = null;
-    try {
-      if (controller.value.isStreamingImages) await controller.stopImageStream();
-    } catch (_) {
-      // Already stopped or the camera is gone — dispose below releases it.
-    }
-    await _disposeQuietly(controller);
+    session._reportFault();
+    return session;
   }
 
   /// Dispose bounded by [disposeTimeout]; a late or failing dispose is only
@@ -234,4 +212,48 @@ class CameraFrameSource implements SeatFrameSource {
         CameraProbeResult.noCamera => 'no_camera',
         CameraProbeResult.ok || CameraProbeResult.failed => 'camera_init_failed',
       };
+}
+
+/// One controller, owned by one engine run (S04d §1).
+class _CameraSession implements SeatCameraHandle {
+  _CameraSession(this._owner, this._controller, this._onFault) {
+    _controller.addListener(_reportFault);
+  }
+
+  final CameraFrameSource _owner;
+  final CameraController _controller;
+  final SeatFaultCallback _onFault;
+  String? _lastFault;
+  bool _open = true;
+
+  @override
+  bool get isOpen => _open;
+
+  void _reportFault() {
+    if (!_open) return;
+    final d = _controller.value.errorDescription;
+    if (d == null || d == _lastFault) return;
+    _lastFault = d;
+    _onFault(classifyCameraFault(d), d);
+  }
+
+  /// Start-up failed before the session was handed out.
+  void _abandon() {
+    _open = false;
+    _controller.removeListener(_reportFault);
+  }
+
+  @override
+  Future<void> close() async {
+    if (!_open) return;
+    _open = false;
+    _owner._sessions.remove(this);
+    _controller.removeListener(_reportFault);
+    try {
+      if (_controller.value.isStreamingImages) await _controller.stopImageStream();
+    } catch (_) {
+      // Already stopped or the camera is gone — dispose below releases it.
+    }
+    await _owner._disposeQuietly(_controller);
+  }
 }

@@ -7,21 +7,26 @@ import 'fake_seat_sources.dart';
 
 /// Engine + doubles. Time is driven by [tick]: fake_async timers and the
 /// engine's monotonic clock advance together.
+///
+/// Detectors come from a factory (S04d): [detector] is the first one (the
+/// engine creates it at construction); every replacement the engine asks for
+/// is appended to [detectors] and inherits [detectorLatency] /
+/// [hangNewDetectors] at creation time.
 class Rig {
   Rig(
     this.async, {
     CameraPermissionResult permission = CameraPermissionResult.granted,
-    Duration detectorLatency = Duration.zero,
+    this.detectorLatency = Duration.zero,
     CameraProbeResult probe = CameraProbeResult.ok,
+    this.hangNewDetectors = false,
   })  : source = FakeSeatFrameSource(probeResult: probe),
-        detector = FakePresenceDetector(latency: detectorLatency),
         gateway = FakeCameraPermissionGateway(current: permission),
         lifecycle = FakeLifecycleSource(),
         mono = FakeMonotonicClock(),
         wall = FixedClock(DateTime.utc(2026, 10, 1, 9)) {
     engine = SeatEngineImpl(
       source: source,
-      detector: detector,
+      detectorFactory: _newDetector,
       permission: gateway,
       lifecycle: lifecycle,
       clock: wall,
@@ -34,15 +39,31 @@ class Rig {
 
   final FakeAsync async;
   final FakeSeatFrameSource source;
-  final FakePresenceDetector detector;
   final FakeCameraPermissionGateway gateway;
   final FakeLifecycleSource lifecycle;
   final FakeMonotonicClock mono;
   final FixedClock wall;
+  final Duration detectorLatency;
+
+  /// Detectors created from now on start hung.
+  bool hangNewDetectors;
+  final List<FakePresenceDetector> detectors = <FakePresenceDetector>[];
   late final SeatEngineImpl engine;
   final List<SeatSample> samples = <SeatSample>[];
   final List<SeatEngineEvent> events = <SeatEngineEvent>[];
   final List<SeatDiagnostic> diagnostics = <SeatDiagnostic>[];
+
+  FakePresenceDetector _newDetector() {
+    final d = FakePresenceDetector(latency: detectorLatency, hang: hangNewDetectors);
+    detectors.add(d);
+    return d;
+  }
+
+  /// The first detector (the one in use until the engine replaces it).
+  FakePresenceDetector get detector => detectors.first;
+
+  /// `detect` calls across every detector.
+  int get detectCalls => detectors.fold(0, (n, d) => n + d.calls);
 
   void tick(Duration d) {
     mono.advance(d);
@@ -82,4 +103,3 @@ class Rig {
     async.flushMicrotasks();
   }
 }
-

@@ -56,4 +56,27 @@ void main() {
       e.stop();
     });
   });
+
+  test('[S04d] lostAfter: sinceStart stays monotonic across Lost → Recovered', () {
+    fakeAsync((async) {
+      final e = FakeSeatEngine(
+        scenario: FakeSeatScenario.lostAfter,
+        afterSeconds: 2,
+      );
+      final sinceStart = <Duration>[];
+      final events = <SeatEngineEvent>[];
+      e.events.listen(events.add);
+      e.samples.listen((s) => sinceStart.add(s.sinceStart));
+      e.start(const SeatEngineConfig());
+      async.elapse(const Duration(seconds: 13)); // the scenario would loop into a second loss at 14 s
+      expect(events.map((x) => x.runtimeType).toList(), <Type>[SeatCameraLost, SeatCameraRecovered]);
+      // 1 sample before the loss (t=1 s), then from the recovery tick on (t=12 s …).
+      expect(sinceStart.first, const Duration(seconds: 1));
+      expect(sinceStart[1], const Duration(seconds: 12), reason: 'the run\'s elapsed time, not the scenario counter');
+      for (var i = 1; i < sinceStart.length; i++) {
+        expect(sinceStart[i], greaterThan(sinceStart[i - 1]), reason: 'index $i');
+      }
+      e.stop();
+    });
+  });
 }

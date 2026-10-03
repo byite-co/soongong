@@ -113,18 +113,23 @@ void main() {
       });
     });
 
-    test('stop() while the camera is opening: the open completes, then the stop releases it', () {
+    test('stop() while the camera is opening returns at once (S04d §6a); the open releases itself when it lands', () {
       fakeAsync((async) {
         final r = Rig(async);
         r.source.openDelay = s(1);
-        r.engine.start(const SeatEngineConfig());
+        var started = false;
+        r.engine.start(const SeatEngineConfig()).then((_) => started = true);
         r.idle(ms(300));
         var stopped = false;
         r.engine.stop().then((_) => stopped = true);
-        r.idle(ms(900));
-        expect(stopped, isTrue);
+        async.flushMicrotasks();
+        expect(stopped, isTrue, reason: 'no wait for the open');
+        expect(started, isFalse);
+        expect(r.source.openCount, 0);
+        r.idle(ms(800)); // the open lands at t=1
+        expect(started, isTrue);
         expect(r.source.openCount, 1);
-        expect(r.source.closeCount, 1);
+        expect(r.source.closeCount, 1, reason: 'the cancelled run released its own camera');
         expect(r.engine.isRunning, isFalse);
         expect(r.events, isEmpty);
       });
@@ -189,7 +194,7 @@ void main() {
   });
 
   group('§3b inference deadline', () {
-    test('a detector that never returns: the watchdog gives up after 2 s and the next frame runs', () {
+    test('a detector that never returns: the watchdog gives up after 2 s, retires it and the next frame runs on a new one', () {
       fakeAsync((async) {
         final r = Rig(async);
         r.detector.hang = true;
@@ -198,37 +203,42 @@ void main() {
         r.idle(ms(2100)); // watchdog at 1 s (too early) and 2 s (expired)
         expect(r.engine.inferenceTimeouts, 1);
         expect(r.engine.inferenceInFlight, isTrue, reason: 'physically still hanging');
+        expect(r.engine.stalledDetections, 1);
+        expect(r.engine.detectorReplacements, 1, reason: 'S04d: replaced at once');
+        expect(r.detectors, hasLength(2));
         expect(r.samples, isEmpty);
-        expect(r.events, isEmpty, reason: 'one timeout is not yet detector_failed');
+        expect(r.events, isEmpty, reason: 'one stall is below the limit');
 
-        r.detector.hang = false;
-        r.source.emit(present: true); // the slot is free again
+        r.source.emit(present: true); // goes to the new detector
         async.flushMicrotasks();
         expect(r.samples, hasLength(1));
         expect(r.engine.framesProcessed, 2);
+        expect(r.detectors[1].calls, 1);
+        expect(r.detector.calls, 1, reason: 'nothing more is submitted to the retired one');
       });
     });
 
-    test('three stalled detections in a row → SeatError(detector_failed) once; dispose never closes a running detector', () {
+    test('stalled detections up to the limit (2) → SeatError(detector_failed) + Lost; dispose never closes a running detector', () {
       fakeAsync((async) {
-        final r = Rig(async);
-        r.detector.hang = true;
+        final r = Rig(async, hangNewDetectors: true);
         r.start();
         for (var i = 0; i < 3; i++) {
           r.source.emit(present: true);
           async.flushMicrotasks();
           r.idle(s(3)); // deadline 2 s + watchdog granularity 1 s
         }
-        expect(r.engine.inferenceTimeouts, 3);
-        expect(r.events.whereType<SeatError>().map((e) => e.message).toList(), <String>[
-          SeatErrorCode.detectorFailed,
-        ]);
+        expect(r.engine.inferenceTimeouts, 2, reason: 'the third frame was never submitted');
+        expect(r.detectCalls, 2);
+        expect(r.events.map((e) => e.runtimeType).toList(), <Type>[SeatError, SeatCameraLost]);
+        expect((r.events.first as SeatError).message, SeatErrorCode.detectorFailed);
         var disposed = false;
         r.engine.dispose().then((_) => disposed = true);
         r.idle(s(3));
         expect(disposed, isTrue, reason: 'dispose is bounded');
         expect(r.engine.lastStopReport!.inferenceTimedOut, isTrue);
-        expect(r.detector.closeCalls, 0, reason: 'never closed during an inference, even a stuck one');
+        expect(r.engine.lastStopReport!.stalledDetections, 2);
+        expect(r.detectors.every((d) => d.closeCalls == 0), isTrue,
+            reason: 'never closed during an inference, even a stuck one');
       });
     });
   });

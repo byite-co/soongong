@@ -6,6 +6,11 @@
 // A frame is valid only inside the callback and the detection it starts.
 // Nothing may keep a reference to it afterwards (CLAUDE.md §9: frames are
 // never stored, copied to disk or transmitted).
+//
+// S04d: `open()` returns a [SeatCameraHandle] that owns exactly the camera
+// session it opened. The engine keeps one handle per run, so a camera that
+// finishes opening late (after its run timed out or was stopped) is released
+// through its own handle and never touches the run that replaced it.
 
 import 'package:flutter/widgets.dart' show AppLifecycleState;
 
@@ -49,23 +54,29 @@ typedef SeatFrameCallback = void Function(SeatFrame frame);
 /// camera plugin, already free of frame data).
 typedef SeatFaultCallback = void Function(CameraFault fault, String description);
 
+/// One opened camera session (S04d). Closing it releases the resources of
+/// this session only; a session opened later is unaffected.
+abstract class SeatCameraHandle {
+  /// Stops the stream and releases this session's camera. Idempotent.
+  Future<void> close();
+
+  /// `false` once [close] was called.
+  bool get isOpen;
+}
+
 abstract class SeatFrameSource {
   /// Opens the camera briefly without streaming to classify hardware / busy
   /// state, then releases it. Never prompts for permission.
   Future<CameraProbeResult> probe();
 
-  /// Opens the camera and starts delivering frames to [onFrame]. Throws
-  /// [SeatFrameSourceException] when the camera cannot be opened.
-  Future<void> open(
+  /// Opens the camera and starts delivering frames to [onFrame]. Returns the
+  /// handle that owns this session. Throws [SeatFrameSourceException] when
+  /// the camera cannot be opened.
+  Future<SeatCameraHandle> open(
     SeatFrameSourceConfig config, {
     required SeatFrameCallback onFrame,
     required SeatFaultCallback onFault,
   });
-
-  /// Stops the stream and releases the camera. Safe to call when closed.
-  Future<void> close();
-
-  bool get isOpen;
 }
 
 abstract class PresenceDetector {
@@ -75,6 +86,10 @@ abstract class PresenceDetector {
 
   Future<void> close();
 }
+
+/// Builds a fresh detector. The engine replaces a detector that stopped
+/// answering (S04d §2), so it needs a factory rather than one instance.
+typedef PresenceDetectorFactory = PresenceDetector Function();
 
 /// Permission gateway (production: `permission_handler`).
 abstract class CameraPermissionGateway {

@@ -15,8 +15,7 @@ void _samples(SeatLabRecorder r, {required int from, required int count, require
 void main() {
   test('window statistics and agreement', () {
     final r = SeatLabRecorder(window: const Duration(seconds: 10));
-    r.beginSegment(s(0));
-    r.battery(s(0), 80);
+    r.beginSegment(s(0), batteryStart: 80);
     r.mark(s(0), SeatLabTruth.seated);
     for (var t = 1; t <= 5; t++) {
       r.sample(s(t), detected: true, seated: true, held: false, completed: s(t) + ms(20));
@@ -32,7 +31,8 @@ void main() {
     expect(r.detectedCount, 6);
     expect(r.eventCount, 2, reason: 'start + cameraLost');
     expect(r.lastSegment!.batteryStart, 80);
-    expect(r.lastSegment!.batteryEnd, 79);
+    expect(r.lastSegment!.batteryLatest, 79, reason: 'periodic reading: latest only');
+    expect(r.lastSegment!.batteryEnd, isNull, reason: 'the end is its own measurement');
     expect(r.detectionRate(s(10)), closeTo(6 / 8, 1e-9));
     expect(r.seatedRate(s(10)), closeTo(7 / 8, 1e-9));
     expect(r.meanLatency(s(10)), const Duration(milliseconds: 20));
@@ -135,13 +135,12 @@ void main() {
     test('an uninterrupted 60-minute run with readings at both ends is valid; readings belong to the run', () {
       final r = SeatLabRecorder();
       r.battery(Duration.zero, 100); // before any run: logged, attributed to no run
-      final seg = r.beginSegment(m(1));
-      r.battery(m(1), 90);
+      final seg = r.beginSegment(m(1), batteryStart: 90);
       r.battery(m(31), 86);
-      r.battery(m(66), 82);
-      r.endSegment(m(66), end: SeatLabSegmentEnd.normal);
+      r.endSegment(m(66), end: SeatLabSegmentEnd.normal, batteryEnd: 82);
       expect(seg.batteryStart, 90, reason: 'the pre-run reading does not count');
       expect(seg.batteryEnd, 82);
+      expect(seg.batteryLatest, 82);
       final v = r.batteryVerdict(seg, m(70));
       expect(v.valid, isTrue);
       expect(v.reason, 'ok');
@@ -153,11 +152,9 @@ void main() {
     test('an interruption invalidates the run; short runs are never summed into a valid one', () {
       final r = SeatLabRecorder();
       // Run 1: 65 minutes but a camera loss in the middle.
-      final s1 = r.beginSegment(m(0));
-      r.battery(m(0), 90);
+      final s1 = r.beginSegment(m(0), batteryStart: 90);
       r.interrupt(m(20), 'cameraLost');
-      r.battery(m(65), 82);
-      r.endSegment(m(65), end: SeatLabSegmentEnd.normal);
+      r.endSegment(m(65), end: SeatLabSegmentEnd.normal, batteryEnd: 82);
       final v1 = r.batteryVerdict(s1, m(66));
       expect(v1.valid, isFalse);
       expect(v1.reason, 'interrupted');
@@ -165,14 +162,10 @@ void main() {
       expect(s1.interruptReason, 'cameraLost');
 
       // Runs 2 + 3: 30 minutes each, clean. Neither is a measurement.
-      final s2 = r.beginSegment(m(70));
-      r.battery(m(70), 80);
-      r.battery(m(100), 76);
-      r.endSegment(m(100), end: SeatLabSegmentEnd.normal);
-      final s3 = r.beginSegment(m(101));
-      r.battery(m(101), 76);
-      r.battery(m(131), 72);
-      r.endSegment(m(131), end: SeatLabSegmentEnd.normal);
+      final s2 = r.beginSegment(m(70), batteryStart: 80);
+      r.endSegment(m(100), end: SeatLabSegmentEnd.normal, batteryEnd: 76);
+      final s3 = r.beginSegment(m(101), batteryStart: 76);
+      r.endSegment(m(131), end: SeatLabSegmentEnd.normal, batteryEnd: 72);
       expect(r.batteryVerdict(s2, m(140)).reason, 'short');
       expect(r.batteryVerdict(s3, m(140)).reason, 'short');
       expect(r.batteryVerdict(s3, m(140)).valid, isFalse);
@@ -187,6 +180,64 @@ void main() {
       final s5 = r.beginSegment(m(160));
       r.endSegment(m(230), end: SeatLabSegmentEnd.normal);
       expect(r.batteryVerdict(s5, m(231)).reason, 'no_reading');
+    });
+  });
+
+  group('S04d battery: start and end are separate measurements', () {
+    test('a failed end measurement makes the run invalid; periodic readings never stand in for it', () {
+      final r = SeatLabRecorder();
+      final seg = r.beginSegment(m(0), batteryStart: 90);
+      r.battery(m(30), 86);
+      r.battery(m(60), 83);
+      // End value read first (and failed), then the segment is closed at the end time.
+      r.endSegment(m(65), end: SeatLabSegmentEnd.normal, batteryEnd: null);
+      expect(seg.batteryStart, 90);
+      expect(seg.batteryLatest, 83, reason: 'display value only');
+      expect(seg.batteryEnd, isNull);
+      final v = r.batteryVerdict(seg, m(66));
+      expect(v.valid, isFalse);
+      expect(v.reason, 'no_reading');
+      expect(v.dropPct, isNull);
+    });
+
+    test('a clean 60-minute run with both measurements is valid; one reading never fills both ends', () {
+      final r = SeatLabRecorder();
+      final ok = r.beginSegment(m(0), batteryStart: 90);
+      r.endSegment(m(65), end: SeatLabSegmentEnd.normal, batteryEnd: 82);
+      expect(r.batteryVerdict(ok, m(66)).valid, isTrue);
+      expect(r.batteryVerdict(ok, m(66)).dropPct, 8);
+
+      final noStart = r.beginSegment(m(70));
+      r.battery(m(70), 82); // a periodic reading at the very start is not the start measurement
+      r.endSegment(m(135), end: SeatLabSegmentEnd.normal, batteryEnd: 74);
+      expect(noStart.batteryStart, isNull);
+      expect(r.batteryVerdict(noStart, m(136)).reason, 'no_reading');
+    });
+
+    test('an abnormal end or a camera release that outlived its bound invalidates the run', () {
+      final r = SeatLabRecorder();
+      final abnormal = r.beginSegment(m(0), batteryStart: 90);
+      r.endSegment(m(65), end: SeatLabSegmentEnd.abnormal, reason: 'error', batteryEnd: 82);
+      final va = r.batteryVerdict(abnormal, m(66));
+      expect(va.valid, isFalse);
+      expect(va.reason, 'abnormal');
+      expect(va.dropPct, 8, reason: 'the numbers are still reported');
+
+      final late = r.beginSegment(m(70), batteryStart: 82);
+      r.endSegment(m(135), end: SeatLabSegmentEnd.normal, batteryEnd: 74, cameraReleaseTimedOut: true);
+      expect(r.batteryVerdict(late, m(136)).reason, 'release_timeout');
+      expect(late.isExcluded, isFalse, reason: 'the samples are fine; only the battery verdict is not');
+    });
+
+    test('CSV: the end measurement row carries the end time and comes before the stop row', () {
+      final r = SeatLabRecorder();
+      r.beginSegment(s(0), batteryStart: 90);
+      r.endSegment(s(10), end: SeatLabSegmentEnd.normal, batteryEnd: 89);
+      final lines = r.toCsv().trimRight().split('\n');
+      expect(lines[1], '0,event,1,0,,,,,,none,,,start');
+      expect(lines[2], '0,battery,1,0,,,,,,none,90,,');
+      expect(lines[3], '10000,battery,1,0,,,,,,none,89,,');
+      expect(lines[4], '10000,event,1,0,,,,,,none,,,stop · normal');
     });
   });
 

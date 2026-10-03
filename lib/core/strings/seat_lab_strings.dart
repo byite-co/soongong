@@ -44,7 +44,9 @@ abstract final class SeatLabStrings {
   static const String batteryReasonOpen = '실행 중';
   static const String batteryReasonInterrupted = '실행 중 끊김/일시정지';
   static const String batteryReasonShort = '60분 미만';
-  static const String batteryReasonNoReading = '배터리 읽음 없음';
+  static const String batteryReasonNoReading = '배터리 읽음 없음 (시작 또는 종료)';
+  static const String batteryReasonAbnormal = '비정상 종료';
+  static const String batteryReasonReleaseTimeout = '카메라 해제 지연';
   static const String batteryNoSum = '실행끼리 합산하지 않음';
   static const String csvScope = 'CSV 범위';
   static const String csvScopeAll = '전체';
@@ -52,6 +54,8 @@ abstract final class SeatLabStrings {
   static const String csvScopeCase = '이 케이스';
   static const String excludedSamples = '제외된 샘플';
   static const String suppressedResults = '폐기된 늦은 결과';
+  static const String detectorReplacements = '검출기 교체';
+  static const String stalledDetections = '미완료 추론 (폐기된 검출기)';
   static const String lastStop = '마지막 종료';
   static const String summaryNote = '제외 구간은 요약 집계에서 빠집니다 (CSV 에는 남음)';
   static const String noData = '—';

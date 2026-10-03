@@ -1,4 +1,4 @@
-// SeatLabRecorder (S04 · S04b · S04c, pure Dart). Keeps the `/_seat_lab`
+// SeatLabRecorder (S04 · S04b · S04c · S04d, pure Dart). Keeps the `/_seat_lab`
 // measurement log: processed frames (detected / seated / latency, capture
 // and completion time), engine events, manual ground-truth marks, battery
 // readings, the protocol case id and the run segments (start → stop).
@@ -13,6 +13,14 @@
 //     valid "60 minutes continuous" battery measurement only when it lasted
 //     60 minutes, was never interrupted (camera lost / paused) and has a
 //     reading at both ends. Runs are never summed.
+//
+// S04d: the start and the end of a run are SEPARATE measurements, passed to
+// [beginSegment] and [endSegment] by the screen (end value and end time are
+// read before the segment is closed). One reading never fills both ends; a
+// failed end reading leaves `batteryEnd` null and the verdict invalid.
+// Periodic readings during the run are logged and shown, nothing more. A run
+// that ended abnormally or whose camera release outlived its bound is not a
+// valid measurement either.
 //
 // A segment that ended abnormally is excluded from the summary (its rows
 // stay in the CSV). Facts only — no scoring, no grading.
@@ -40,9 +48,18 @@ class SeatLabSegment {
   SeatLabSegmentEnd? endKind;
   String reason = '';
 
-  /// Battery % at the first / last reading taken during this run.
+  /// Battery % measured when the run began (passed to `beginSegment`).
   int? batteryStart;
+
+  /// Battery % measured when the run ended (passed to `endSegment`); `null`
+  /// when that measurement failed or the run is still open.
   int? batteryEnd;
+
+  /// Most recent reading during the run (display while the run is open).
+  int? batteryLatest;
+
+  /// The engine's camera release outlived its bound at the stop (S04d).
+  bool cameraReleaseTimedOut = false;
 
   /// A camera loss or a pause happened during the run.
   bool interrupted = false;
@@ -69,7 +86,8 @@ class SeatLabBatteryVerdict {
   /// with a reading at both ends.
   final bool valid;
 
-  /// `ok` · `interrupted` · `short` · `no_reading` · `open`.
+  /// `ok` · `open` · `interrupted` · `abnormal` · `release_timeout` ·
+  /// `short` · `no_reading`.
   final String reason;
   final Duration duration;
 
@@ -212,13 +230,16 @@ class SeatLabRecorder {
 
   // ── Segments ───────────────────────────────────────────────────────────
 
-  /// Engine start. Returns the new segment.
-  SeatLabSegment beginSegment(Duration t) {
+  /// Engine start. [batteryStart] is the measurement taken for this run's
+  /// start (`null` when it failed). Returns the new segment.
+  SeatLabSegment beginSegment(Duration t, {int? batteryStart}) {
     final open = currentSegment;
     if (open != null) {
       endSegment(t, end: SeatLabSegmentEnd.abnormal, reason: 'restart');
     }
-    final s = SeatLabSegment(index: _segments.length + 1, start: t);
+    final s = SeatLabSegment(index: _segments.length + 1, start: t)
+      ..batteryStart = batteryStart
+      ..batteryLatest = batteryStart;
     _segments.add(s);
     _rows.add(
       SeatLabRow(
@@ -230,17 +251,32 @@ class SeatLabRecorder {
         note: 'start',
       ),
     );
+    if (batteryStart != null) _batteryRow(t, batteryStart, s.index);
     return s;
   }
 
-  /// Engine stop. [reason] is kept on the segment and in the CSV note.
-  void endSegment(Duration t, {required SeatLabSegmentEnd end, String reason = ''}) {
+  /// Engine stop at [t]. [reason] is kept on the segment and in the CSV
+  /// note. [batteryEnd] is the measurement taken for this run's end — read
+  /// before calling this, together with [t] (`null` when it failed).
+  void endSegment(
+    Duration t, {
+    required SeatLabSegmentEnd end,
+    String reason = '',
+    int? batteryEnd,
+    bool cameraReleaseTimedOut = false,
+  }) {
     final s = currentSegment;
     if (s == null) return;
     s
       ..end = t
       ..endKind = end
-      ..reason = reason;
+      ..reason = reason
+      ..batteryEnd = batteryEnd
+      ..cameraReleaseTimedOut = cameraReleaseTimedOut;
+    if (batteryEnd != null) {
+      s.batteryLatest = batteryEnd;
+      _batteryRow(t, batteryEnd, s.index);
+    }
     _rows.add(
       SeatLabRow(
         t: t,
@@ -330,25 +366,23 @@ class SeatLabRecorder {
     );
   }
 
-  /// Battery reading. Attributed to the run in progress (first → start,
-  /// latest → end); readings outside a run are logged only.
+  /// Periodic battery reading: logged, and shown as the run's latest value.
+  /// It never becomes the run's start or end measurement (S04d).
   void battery(Duration t, int level) {
-    final s = currentSegment;
-    if (s != null) {
-      s.batteryStart ??= level;
-      s.batteryEnd = level;
-    }
-    _rows.add(
-      SeatLabRow(
-        t: t,
-        kind: SeatLabRowKind.battery,
-        truth: truth,
-        caseId: caseId,
-        segment: _segmentIndex,
-        battery: level,
-      ),
-    );
+    currentSegment?.batteryLatest = level;
+    _batteryRow(t, level, _segmentIndex);
   }
+
+  void _batteryRow(Duration t, int level, int? segment) => _rows.add(
+        SeatLabRow(
+          t: t,
+          kind: SeatLabRowKind.battery,
+          truth: truth,
+          caseId: caseId,
+          segment: segment,
+          battery: level,
+        ),
+      );
 
   /// Clears rows and runs. The current truth / case labels are kept (they
   /// describe the situation, not the log).
@@ -367,23 +401,23 @@ class SeatLabRecorder {
 
   // ── Battery (per run, never summed) ────────────────────────────────────
 
+  /// Invalid when the run is still open, was interrupted (camera lost /
+  /// paused), ended abnormally, its camera release outlived the stop bound,
+  /// is shorter than [batteryWindow], or lacks the start or the end
+  /// measurement. The numbers are still reported where they exist.
   SeatLabBatteryVerdict batteryVerdict(SeatLabSegment s, Duration now) {
     final d = s.durationAt(now);
     final int? drop = s.batteryStart == null || s.batteryEnd == null
         ? null
         : s.batteryStart! - s.batteryEnd!;
-    if (s.isOpen) {
-      return SeatLabBatteryVerdict(valid: false, reason: 'open', duration: d, dropPct: drop);
-    }
-    if (s.interrupted) {
-      return SeatLabBatteryVerdict(valid: false, reason: 'interrupted', duration: d, dropPct: drop);
-    }
-    if (d < batteryWindow) {
-      return SeatLabBatteryVerdict(valid: false, reason: 'short', duration: d, dropPct: drop);
-    }
-    if (drop == null) {
-      return SeatLabBatteryVerdict(valid: false, reason: 'no_reading', duration: d);
-    }
+    SeatLabBatteryVerdict invalid(String reason) =>
+        SeatLabBatteryVerdict(valid: false, reason: reason, duration: d, dropPct: drop);
+    if (s.isOpen) return invalid('open');
+    if (s.interrupted) return invalid('interrupted');
+    if (s.isExcluded) return invalid('abnormal');
+    if (s.cameraReleaseTimedOut) return invalid('release_timeout');
+    if (d < batteryWindow) return invalid('short');
+    if (drop == null) return invalid('no_reading');
     return SeatLabBatteryVerdict(valid: true, reason: 'ok', duration: d, dropPct: drop);
   }
 
