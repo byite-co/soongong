@@ -12,6 +12,8 @@ import '../../core/contracts/providers.dart';
 import 'age_gate_repository.dart';
 import 'auth_backend.dart';
 import 'auth_repository.dart';
+import 'social/sdk_social_sign_in.dart';
+import 'social/social_sign_in.dart';
 import 'supabase_auth_backend.dart';
 
 part 'auth_providers.g.dart';
@@ -33,3 +35,7 @@ AuthRepository authRepository(Ref ref) => AuthRepository(
       ref.watch(ageGateRepositoryProvider),
       checkEmailAppKey: AppConfig.checkEmailAppKey,
     );
+
+/// Native provider tokens (S05). Tests override with [FakeSocialSignIn].
+@Riverpod(keepAlive: true)
+SocialSignIn socialSignIn(Ref ref) => SdkSocialSignIn();

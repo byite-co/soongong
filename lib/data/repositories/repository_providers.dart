@@ -1,15 +1,15 @@
-// Repository providers (S02). Feature sessions read these; they never touch
-// the database directly. `appDatabaseProvider` is overridden with an
-// in-memory database in tests; `currentUserIdProvider` is overridden by the
-// auth session (S05) once login exists — until then a placeholder user id
-// keeps the offline-first app working (the DB is wiped on account switch,
-// D27).
+// Repository providers (S02 · S05). Feature sessions read these; they never
+// touch the database directly. `appDatabaseProvider` is overridden with an
+// in-memory database in tests. `currentUserIdProvider` follows the auth gate
+// (S05): the signed-in `auth.uid`, or `kLocalUserId` in a dev build without
+// backend config (the DB is bound to one account and wiped on switch, D27).
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/contracts/providers.dart';
 import '../../core/domain/clock.dart';
+import '../auth/auth_gate.dart';
 import '../db/app_database.dart';
 import 'activity_repository.dart';
 import 'delete_settler.dart';
@@ -27,8 +27,9 @@ import 'wrongs_repository.dart';
 
 part 'repository_providers.g.dart';
 
-/// Placeholder until S05 wires auth (`auth.uid()` replaces it).
-const String kLocalUserId = 'local';
+/// User id of a dev build without backend config (no auth). Equals
+/// [kLocalOnlyUserId]; kept for S02 callers.
+const String kLocalUserId = kLocalOnlyUserId;
 
 @Riverpod(keepAlive: true)
 AppDatabase appDatabase(Ref ref) {
@@ -37,8 +38,11 @@ AppDatabase appDatabase(Ref ref) {
   return db;
 }
 
+/// The user every repository writes under. Signed out → [kLocalUserId] as a
+/// placeholder; nothing user-facing runs then (the router guard holds the
+/// app on the gate), and the startup/foreground tasks skip their writes.
 @Riverpod(keepAlive: true)
-String currentUserId(Ref ref) => kLocalUserId;
+String currentUserId(Ref ref) => ref.watch(authGateProvider).userId ?? kLocalUserId;
 
 @Riverpod(keepAlive: true)
 Clock appClock(Ref ref) => const SystemClock();

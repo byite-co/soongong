@@ -137,3 +137,49 @@ final class AuthRepositoryProvider
 }
 
 String _$authRepositoryHash() => r'a3359559ee4dc5d0ec002de71f9de05cb6124a1c';
+
+/// Native provider tokens (S05). Tests override with [FakeSocialSignIn].
+
+@ProviderFor(socialSignIn)
+final socialSignInProvider = SocialSignInProvider._();
+
+/// Native provider tokens (S05). Tests override with [FakeSocialSignIn].
+
+final class SocialSignInProvider
+    extends $FunctionalProvider<SocialSignIn, SocialSignIn, SocialSignIn>
+    with $Provider<SocialSignIn> {
+  /// Native provider tokens (S05). Tests override with [FakeSocialSignIn].
+  SocialSignInProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'socialSignInProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$socialSignInHash();
+
+  @$internal
+  @override
+  $ProviderElement<SocialSignIn> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  SocialSignIn create(Ref ref) {
+    return socialSignIn(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SocialSignIn value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SocialSignIn>(value),
+    );
+  }
+}
+
+String _$socialSignInHash() => r'0c8ce90c11452eb07054d3c9176fb10dcd70aaec';

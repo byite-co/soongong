@@ -45,6 +45,17 @@ abstract final class CommonStrings {
   static const String minuteUnit = '분';
   static const String hourUnit = '시간';
 
-  // Temporary splash (S01; replaced by S05 router + S02 onboarding)
+  // Launch screen (`/`, S05) while the session / profile is being read
   static const String splashPreparing = '준비 중…';
+
+  // Tabs (S05 shell: 홈 · 플래너 · 타임테이블 · 통계; 설정은 홈 헤더 기어)
+  static const String tabHome = '홈';
+  static const String tabPlanner = '플래너';
+  static const String tabTimetable = '타임테이블';
+  static const String tabStats = '통계';
+  static const String settingsTitle = '설정';
+  static const String measureSetupTitle = '집중 시작 준비';
+
+  // Placeholder for routes other lanes fill in (docs/routes.md)
+  static const String placeholderPreparing = '이 화면은 준비 중입니다';
 }

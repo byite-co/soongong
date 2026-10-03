@@ -16,8 +16,10 @@ signInWithIdToken / signUp ─▶ Auth before_user_created 훅(패스 존재 확
 complete-signup(consent_version) ─▶ signup_approvals.age_verified 확인 → profiles 생성(멱등) + 동의 ①
 ```
 
-- **기존 계정**: 티켓 없이 `signInWithIdToken`/`signInWithPassword` → `complete-signup`(멱등). 소셜은 신규 여부를 미리 알 수 없으므로 **먼저 로그인 시도 → `signupPassRequired` 면 신규** → ageGate → 같은 메서드를 `ticket` 과 함께 재호출(`AuthRepository.signInWithProvider`). 이메일은 `check-email` 로 신규/기존 분기.
-- `complete-signup` 이 `not_approved`(403) 면 앱은 세션을 끊고 `AuthRejection.notApproved`(profiles 없는 토큰은 RLS 로 전면 차단).
+- **S05 수정**: 로그인(`signInWithIdToken`/`signInWithPassword`/`signUp`) 뒤 앱은 `complete-signup` 을 자동으로 부르지 않고 **자기 `profiles` 행을 select** 한다(RLS `has_profile()` — 없으면 0행). 행이 없으면 `/signup/complete` 에서 사용자가 동의 ① 을 확인한 뒤에만 `complete-signup` 을 호출한다(`AuthRepository.confirmAccountConsent`). 이유: `complete_signup` 은 `ON CONFLICT … DO UPDATE set consent_account_version` 이라 로그인마다 부르면 동의 버전이 사용자 확인 없이 갱신된다(`docs/decisions.md` `[S05]`).
+- **기존 계정**: 티켓 없이 `signInWithIdToken`/`signInWithPassword` → 프로필 select(있으면 바로 홈, `onboarding_done` 기준 온보딩). 소셜은 신규 여부를 미리 알 수 없으므로 **먼저 로그인 시도 → `signupPassRequired` 면 신규** → ageGate → 같은 메서드를 `ticket` 과 함께 재호출(`AuthRepository.signInWithProvider`). 이메일은 `check-email` 로 신규/기존 분기.
+- `complete-signup` 이 `not_approved`(403) 면 앱은 세션을 끊고 `AuthRejection.notApproved`(profiles 없는 토큰은 RLS 로 전면 차단) → `/gate` 로 돌아가 한 문장 표시.
+- 비밀번호 재설정 메일은 `redirectTo = soongong://auth/reset`(앱 `/auth/reset`). Supabase Auth → URL Configuration → Redirect URLs 에 이 값을 허용해야 한다(S05 handoff).
 - 계정 연결(같은 이메일 OAuth 자동 연결): 트리거 ① 분기 — `signup_approvals` 가 이미 있으면 패스 조회·소비 없이 통과.
 
 ## 2. Edge 계약

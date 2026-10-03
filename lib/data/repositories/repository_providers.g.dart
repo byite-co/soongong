@@ -50,12 +50,23 @@ final class AppDatabaseProvider
 
 String _$appDatabaseHash() => r'9f3be49e3b43a89a323badf0e3359f660f50a15f';
 
+/// The user every repository writes under. Signed out → [kLocalUserId] as a
+/// placeholder; nothing user-facing runs then (the router guard holds the
+/// app on the gate), and the startup/foreground tasks skip their writes.
+
 @ProviderFor(currentUserId)
 final currentUserIdProvider = CurrentUserIdProvider._();
+
+/// The user every repository writes under. Signed out → [kLocalUserId] as a
+/// placeholder; nothing user-facing runs then (the router guard holds the
+/// app on the gate), and the startup/foreground tasks skip their writes.
 
 final class CurrentUserIdProvider
     extends $FunctionalProvider<String, String, String>
     with $Provider<String> {
+  /// The user every repository writes under. Signed out → [kLocalUserId] as a
+  /// placeholder; nothing user-facing runs then (the router guard holds the
+  /// app on the gate), and the startup/foreground tasks skip their writes.
   CurrentUserIdProvider._()
     : super(
         from: null,
@@ -89,7 +100,7 @@ final class CurrentUserIdProvider
   }
 }
 
-String _$currentUserIdHash() => r'bb84a3f94186f13d895db8269ad78bf21281e13b';
+String _$currentUserIdHash() => r'0591875f78f3526b1c5fa7b56952efcf7b7a424b';
 
 @ProviderFor(appClock)
 final appClockProvider = AppClockProvider._();

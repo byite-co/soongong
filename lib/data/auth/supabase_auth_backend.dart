@@ -106,8 +106,32 @@ class SupabaseAuthBackend implements AuthBackend {
           _sessionOf(await _auth.signInWithPassword(email: email, password: password)));
 
   @override
-  Future<void> resetPasswordForEmail(String email) =>
-      _guard(() => _auth.resetPasswordForEmail(email));
+  Future<void> resetPasswordForEmail(String email) => _guard(
+        () => _auth.resetPasswordForEmail(email, redirectTo: AuthDeepLinks.passwordReset),
+      );
+
+  @override
+  Future<void> updatePassword(String newPassword) => _guard(() async {
+        await _auth.updateUser(UserAttributes(password: newPassword));
+      });
+
+  @override
+  Future<Map<String, dynamic>?> fetchOwnProfile() async {
+    final uid = _auth.currentUser?.id;
+    if (uid == null) return null;
+    try {
+      final row = await _client.from('profiles').select().eq('user_id', uid).maybeSingle();
+      return row == null ? null : Map<String, dynamic>.from(row);
+    } on PostgrestException catch (e) {
+      throw AuthBackendException(e.message, statusCode: e.code, code: e.code);
+    } on SocketException {
+      throw const NetworkUnavailableException();
+    } on ClientException {
+      throw const NetworkUnavailableException();
+    } on TimeoutException {
+      throw const NetworkUnavailableException();
+    }
+  }
 
   @override
   Future<void> signOut() => _guard(() => _auth.signOut());

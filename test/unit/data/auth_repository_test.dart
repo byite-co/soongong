@@ -1,110 +1,16 @@
-// AuthRepository · AgeGateRepository (S03) against a fake backend: call order
-// of the D6 signup flow, rejection mapping, and "birth date never logged".
-
-import 'dart:async';
+// AuthRepository · AgeGateRepository (S03 · S05) against a fake backend: call
+// order of the D6 signup flow (sign-in → own profile read; `complete-signup`
+// only from consent ①), rejection mapping, and "birth date never logged".
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 import 'package:soongong/core/logging/app_logger.dart';
 import 'package:soongong/core/strings/auth_strings.dart';
 import 'package:soongong/data/auth/age_gate_repository.dart';
-import 'package:soongong/data/auth/auth_backend.dart';
 import 'package:soongong/data/auth/auth_models.dart';
 import 'package:soongong/data/auth/auth_repository.dart';
 
-class RecordedCall {
-  RecordedCall(this.name, this.body, this.headers, this.withUser);
-
-  final String name;
-  final Map<String, dynamic> body;
-  final Map<String, String> headers;
-  final bool withUser;
-
-  @override
-  String toString() => '$name $body';
-}
-
-class FakeAuthBackend implements AuthBackend {
-  final List<RecordedCall> calls = <RecordedCall>[];
-  final Map<String, Object> responses = <String, Object>{};
-  Object? signInError;
-  Object? signUpError;
-  AuthSession? session;
-  final StreamController<AuthSession?> _ctrl = StreamController<AuthSession?>.broadcast();
-
-  @override
-  Future<Map<String, dynamic>> invoke(
-    String function, {
-    Map<String, dynamic> body = const <String, dynamic>{},
-    Map<String, String> headers = const <String, String>{},
-    bool withUser = true,
-  }) async {
-    calls.add(RecordedCall(function, body, headers, withUser));
-    final r = responses[function];
-    if (r is Exception) throw r;
-    if (r is Map<String, dynamic>) return r;
-    return <String, dynamic>{};
-  }
-
-  @override
-  Future<dynamic> rpc(String name, Map<String, dynamic> params) async {
-    calls.add(RecordedCall('rpc:$name', params, const {}, true));
-    return responses['rpc:$name'];
-  }
-
-  AuthSession _signIn(String name, Map<String, dynamic> body, Object? error) {
-    calls.add(RecordedCall(name, body, const {}, true));
-    if (error != null) throw error;
-    session = const AuthSession(userId: 'u-1', email: 'a@x.io');
-    _ctrl.add(session);
-    return session!;
-  }
-
-  @override
-  Future<AuthSession> signInWithIdToken({
-    required SignupProvider provider,
-    required String idToken,
-    String? accessToken,
-    String? nonce,
-  }) async =>
-      _signIn('signInWithIdToken', {'provider': provider.wire, 'nonce': nonce}, signInError);
-
-  @override
-  Future<AuthSession> signUpWithEmail({required String email, required String password}) async =>
-      _signIn('signUp', {'email': email}, signUpError);
-
-  @override
-  Future<AuthSession> signInWithPassword({required String email, required String password}) async =>
-      _signIn('signInWithPassword', {'email': email}, signInError);
-
-  @override
-  Future<void> resetPasswordForEmail(String email) async => calls.add(RecordedCall('reset', {'email': email}, const {}, false));
-
-  @override
-  Future<void> signOut() async {
-    calls.add(RecordedCall('signOut', const {}, const {}, true));
-    session = null;
-    _ctrl.add(null);
-  }
-
-  @override
-  AuthSession? get currentSession => session;
-
-  @override
-  Stream<AuthSession?> get sessions => _ctrl.stream;
-}
-
-const _profileJson = <String, dynamic>{
-  'user_id': 'u-1',
-  'onboarding_done': false,
-  'purge_epoch': 0,
-  'consent_account_version': '2026-10-01',
-  'consent_account_at': '2026-10-01T00:00:00.000Z',
-  'consent_reading_version': null,
-  'consent_reading_at': null,
-  'consent_reading_revoked_at': null,
-  'created_at': '2026-10-01T00:00:00.000Z',
-};
+import '../../helpers/fake_auth_backend.dart';
 
 void main() {
   late FakeAuthBackend backend;
@@ -117,7 +23,7 @@ void main() {
     auth = AuthRepository(backend, ageGate, checkEmailAppKey: 'app-key');
     backend.responses['age-check'] = <String, dynamic>{'allowed': true, 'ticket': 't.t.t', 'expires_in': 600};
     backend.responses['issue-pass'] = <String, dynamic>{'issued': true, 'provider': 'email', 'expires_at': '2026-10-01T00:10:00.000Z'};
-    backend.responses['complete-signup'] = <String, dynamic>{'profile': _profileJson};
+    backend.responses['complete-signup'] = <String, dynamic>{'profile': kProfileRowOnboardingPending};
   });
 
   group('AgeGateRepository', () {
@@ -181,14 +87,24 @@ void main() {
   });
 
   group('AuthRepository · email', () {
-    test('sign-up order: issue-pass → signUp → complete-signup, new user', () async {
+    test('sign-up order: issue-pass → signUp → profile read (none yet), no complete-signup', () async {
       final out = await auth.signUpWithEmail(ticket: 't', email: ' new@x.io ', password: 'pw-123456');
       expect(out, isA<SignedIn>());
       expect((out as SignedIn).isNewUser, isTrue);
-      expect(out.profile?.consentAccountVersion, '2026-10-01');
-      expect(backend.calls.map((c) => c.name).toList(), ['issue-pass', 'signUp', 'complete-signup']);
+      expect(out.profile, isNull);
+      expect(out.needsSignupCompletion, isTrue);
+      expect(backend.callNames, ['issue-pass', 'signUp', 'fetchProfile']);
       expect(backend.calls[1].body['email'], 'new@x.io');
-      expect(backend.calls[2].body, {'consent_version': ConsentVersions.account});
+    });
+
+    test('consent ① → complete-signup records the version and returns the profile', () async {
+      await auth.signUpWithEmail(ticket: 't', email: 'new@x.io', password: 'pw-123456');
+      backend.calls.clear();
+      final out = await auth.confirmAccountConsent();
+      expect((out as SignedIn).profile?.consentAccountVersion, '2026-10-01');
+      expect(out.needsSignupCompletion, isFalse);
+      expect(backend.callNames, ['complete-signup']);
+      expect(backend.calls.single.body, {'consent_version': ConsentVersions.account});
     });
 
     test('pass failure stops before signUp', () async {
@@ -202,13 +118,24 @@ void main() {
       backend.signUpError = const AuthBackendException(AuthRejectionMapper.hookRejectMessage, statusCode: '400');
       final out = await auth.signUpWithEmail(ticket: 't', email: 'a@x.io', password: 'pw-123456');
       expect((out as SignInRejected).reason, AuthRejection.signupPassRequired);
-      expect(backend.calls.map((c) => c.name).toList(), ['issue-pass', 'signUp']);
+      expect(backend.callNames, ['issue-pass', 'signUp']);
     });
 
-    test('sign-in: signInWithPassword → complete-signup (idempotent), existing user', () async {
+    test('sign-in: signInWithPassword → profile read, existing user, no complete-signup', () async {
+      backend.profileRow = kProfileRowOnboardingDone;
       final out = await auth.signInWithEmail(email: 'a@x.io', password: 'pw');
       expect((out as SignedIn).isNewUser, isFalse);
-      expect(backend.calls.map((c) => c.name).toList(), ['signInWithPassword', 'complete-signup']);
+      expect(out.profile?.onboardingDone, isTrue);
+      expect(out.needsSignupCompletion, isFalse);
+      expect(backend.callNames, ['signInWithPassword', 'fetchProfile']);
+    });
+
+    test('sign-in with the profile unreadable → SignedIn(profileLoaded: false), not a rejection', () async {
+      backend.profileError = const NetworkUnavailableException();
+      final out = await auth.signInWithEmail(email: 'a@x.io', password: 'pw');
+      expect((out as SignedIn).profileLoaded, isFalse);
+      expect(out.needsSignupCompletion, isFalse);
+      expect(backend.currentSession, isNotNull);
     });
 
     test('invalid credentials / email taken / weak password mapping', () async {
@@ -221,11 +148,27 @@ void main() {
     });
 
     test('not_approved from complete-signup → sign out + notApproved', () async {
+      await auth.signInWithEmail(email: 'a@x.io', password: 'pw');
+      backend.calls.clear();
       backend.responses['complete-signup'] = const EdgeFunctionException(403, 'not_approved');
-      final out = await auth.signInWithEmail(email: 'a@x.io', password: 'pw');
+      final out = await auth.confirmAccountConsent();
       expect((out as SignInRejected).reason, AuthRejection.notApproved);
-      expect(backend.calls.map((c) => c.name).toList(), ['signInWithPassword', 'complete-signup', 'signOut']);
+      expect(backend.callNames, ['complete-signup', 'signOut']);
       expect(backend.currentSession, isNull);
+    });
+
+    test('complete-signup offline → network rejection, session kept for retry', () async {
+      await auth.signInWithEmail(email: 'a@x.io', password: 'pw');
+      backend.responses['complete-signup'] = const NetworkUnavailableException();
+      final out = await auth.confirmAccountConsent();
+      expect((out as SignInRejected).reason, AuthRejection.network);
+      expect(backend.currentSession, isNotNull);
+    });
+
+    test('updatePassword: null on success, mapped reason on failure', () async {
+      expect(await auth.updatePassword('new-pass-123'), isNull);
+      backend.updatePasswordError = const AuthBackendException('weak', code: 'weak_password');
+      expect(await auth.updatePassword('short'), AuthRejection.weakPassword);
     });
 
     test('checkEmailExists uses the app key without a session', () async {
@@ -239,10 +182,12 @@ void main() {
   });
 
   group('AuthRepository · social', () {
-    test('existing account: no ticket → signInWithIdToken → complete-signup', () async {
+    test('existing account: no ticket → signInWithIdToken → profile read', () async {
+      backend.profileRow = kProfileRowOnboardingDone;
       final out = await auth.signInWithProvider(provider: SignupProvider.google, idToken: 'id');
       expect((out as SignedIn).isNewUser, isFalse);
-      expect(backend.calls.map((c) => c.name).toList(), ['signInWithIdToken', 'complete-signup']);
+      expect(out.profile?.onboardingDone, isTrue);
+      expect(backend.callNames, ['signInWithIdToken', 'fetchProfile']);
     });
 
     test('new account: hook rejects → signupPassRequired; with ticket → issue-pass first', () async {
@@ -254,7 +199,8 @@ void main() {
         ..calls.clear();
       final second = await auth.signInWithProvider(provider: SignupProvider.apple, idToken: 'id', nonce: 'n', ticket: 't');
       expect((second as SignedIn).isNewUser, isTrue);
-      expect(backend.calls.map((c) => c.name).toList(), ['issue-pass', 'signInWithIdToken', 'complete-signup']);
+      expect(second.needsSignupCompletion, isTrue);
+      expect(backend.callNames, ['issue-pass', 'signInWithIdToken', 'fetchProfile']);
       expect(backend.calls.first.body, {'ticket': 't', 'provider': 'apple', 'id_token': 'id', 'nonce': 'n'});
     });
 
@@ -262,7 +208,7 @@ void main() {
       backend.responses['issue-pass'] = const EdgeFunctionException(400, 'id_token_invalid');
       final out = await auth.signInWithProvider(provider: SignupProvider.kakao, idToken: 'bad', ticket: 't');
       expect((out as SignInRejected).reason, AuthRejection.idTokenInvalid);
-      expect(backend.calls.map((c) => c.name).toList(), ['issue-pass']);
+      expect(backend.callNames, ['issue-pass']);
     });
   });
 
@@ -274,7 +220,7 @@ void main() {
 
     test('updateReadingConsent grant / revoke payloads', () async {
       backend.responses['update-consent'] = <String, dynamic>{
-        'profile': <String, dynamic>{..._profileJson, 'consent_reading_version': '2026-10-01', 'consent_reading_at': '2026-10-01T00:00:00.000Z'},
+        'profile': <String, dynamic>{...kProfileRowOnboardingPending, 'consent_reading_version': '2026-10-01', 'consent_reading_at': '2026-10-01T00:00:00.000Z'},
       };
       final p = await auth.updateReadingConsent(granted: true);
       expect(p.readingConsentActive, isTrue);
@@ -286,7 +232,7 @@ void main() {
     test('deleteAccount: delete-account then signOut', () async {
       backend.session = const AuthSession(userId: 'u-1', email: 'a@x.io');
       await auth.deleteAccount();
-      expect(backend.calls.map((c) => c.name).toList(), ['delete-account', 'signOut']);
+      expect(backend.callNames, ['delete-account', 'signOut']);
       expect(auth.currentUserId, isNull);
     });
 

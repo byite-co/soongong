@@ -1,8 +1,15 @@
 import 'package:go_router/go_router.dart';
 
-/// Routes owned by the `home` feature.
-///
-/// Exported to `core/router/app_router.dart` (S05 owns the router). Route
-/// paths follow userflow node IDs (CLAUDE.md §4). Sheets and modals are not
-/// routes — use `showAppSheet` / `showAppModal`.
-final List<RouteBase> homeRoutes = <RouteBase>[];
+import '../auth/domain/auth_redirect.dart';
+import 'presentation/home_screen.dart';
+
+/// Routes owned by the `home` feature (S05): `/home` is the first tab of the
+/// shell (`core/router/app_router.dart`). Sub-routes added here stay inside
+/// the tab (the tab bar remains visible).
+final List<RouteBase> homeRoutes = <RouteBase>[
+  GoRoute(
+    path: AppPaths.home,
+    name: 'home',
+    builder: (_, _) => const HomeScreen(),
+  ),
+];
