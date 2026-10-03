@@ -1,0 +1,80 @@
+# Server-side tests: every migration + dev migrations + pgTAP on a plain
+# PostgreSQL 16 (pgTAP · pg_cron, same recipe as supabase/tests/local/run.sh),
+# and the Edge Functions' Deno tests + type check.
+#
+# A GitHub service container cannot have pgTAP/pg_cron installed from the job,
+# so PostgreSQL 16 runs on the runner itself (PGDG packages) with a dedicated
+# cluster that preloads pg_cron for the test database.
+name: server-tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: server-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pgtap:
+    name: pgTAP (PostgreSQL 16 · pgTAP · pg_cron)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PGDATA_DIR: /tmp/pgdata
+      PGHOST: /tmp
+      PGPORT: "54329"
+      PGUSER: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 16, pgTAP, pg_cron, pg_prove
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-16 postgresql-16-pgtap postgresql-16-cron libtap-parser-sourcehandler-pgtap-perl
+          /usr/lib/postgresql/16/bin/postgres --version
+          pg_prove --version
+
+      - name: Start a dedicated cluster (pg_cron preloaded, socket in /tmp)
+        run: |
+          sudo systemctl stop postgresql || true
+          sudo mkdir -p "$PGDATA_DIR" && sudo chown postgres:postgres "$PGDATA_DIR"
+          sudo -u postgres /usr/lib/postgresql/16/bin/initdb -D "$PGDATA_DIR" --auth=trust -U postgres >/dev/null
+          printf '%s\n' \
+            "port = ${PGPORT}" \
+            "unix_socket_directories = '/tmp'" \
+            "listen_addresses = ''" \
+            "shared_preload_libraries = 'pg_cron'" \
+            "cron.database_name = 'soongong_test'" \
+            | sudo tee -a "$PGDATA_DIR/postgresql.conf" >/dev/null
+          sudo -u postgres /usr/lib/postgresql/16/bin/pg_ctl -D "$PGDATA_DIR" -l "$PGDATA_DIR/pg.log" -w start
+          psql -d postgres -c "select version()"
+
+      - name: Apply migrations and run pgTAP
+        run: supabase/tests/local/run.sh
+
+      - name: Server log (on failure)
+        if: failure()
+        run: sudo tail -n 200 "$PGDATA_DIR/pg.log" || true
+
+  deno:
+    name: Edge Functions (deno test · deno check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: supabase/functions
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: deno test
+        run: deno test -A _tests/
+
+      - name: deno check (18 functions + dev e2e-runner)
+        run: deno check */index.ts ../dev/functions/e2e-runner/index.ts

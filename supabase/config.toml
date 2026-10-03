@@ -1,0 +1,64 @@
+# Supabase CLI project config (S03). Only the parts that matter for S03 are set;
+# the project ref is linked with `supabase link --project-ref <ref>` (not committed).
+#
+# verify_jwt: the API gateway requires a Supabase JWT when true. Functions that
+# are called BEFORE login (age-check · issue-pass · check-email) or by machines
+# (RevenueCat · pg_net/cron jobs) run with verify_jwt = false and authenticate
+# themselves (app key / ticket / webhook header / x-job-secret). Every
+# user-facing function verifies the user JWT in code (`requireUser`).
+project_id = "soongong"
+
+[api]
+enabled = true
+schemas = ["public"]
+extra_search_path = ["public"]
+max_rows = 1000
+
+[db]
+major_version = 17
+
+[auth]
+enable_signup = true
+enable_anonymous_sign_ins = false
+minimum_password_length = 8
+
+[auth.hook.before_user_created]
+enabled = true
+uri = "pg-functions://postgres/public/before_user_created_hook"
+
+[functions.age-check]
+verify_jwt = false
+[functions.issue-pass]
+verify_jwt = false
+[functions.check-email]
+verify_jwt = false
+[functions.revenuecat-webhook]
+verify_jwt = false
+[functions.reading-worker]
+verify_jwt = false
+[functions.reading-reaper]
+verify_jwt = false
+[functions.photo-delete-runner]
+verify_jwt = false
+[functions.complete-signup]
+verify_jwt = true
+[functions.update-consent]
+verify_jwt = true
+[functions.submit-inquiry]
+verify_jwt = true
+[functions.purge-all]
+verify_jwt = true
+[functions.delete-account]
+verify_jwt = true
+[functions.reading-submit]
+verify_jwt = true
+[functions.reading-status]
+verify_jwt = true
+[functions.reading-cancel]
+verify_jwt = true
+[functions.reading-save]
+verify_jwt = true
+[functions.reading-discard]
+verify_jwt = true
+[functions.reading-update-marks]
+verify_jwt = true

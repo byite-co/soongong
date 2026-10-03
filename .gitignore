@@ -55,6 +55,8 @@ app.*.map.json
 /supabase/.env
 /supabase/.env.*
 !/supabase/.env.example
+/supabase/.temp/
+/supabase/.branches/
 
 # Gradle / Android local
 /android/local.properties
