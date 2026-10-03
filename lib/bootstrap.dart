@@ -11,6 +11,7 @@ import 'core/config/app_config.dart';
 import 'core/contracts/providers.dart';
 import 'core/logging/app_logger.dart';
 import 'core/utils/device_id.dart';
+import 'data/auth/supabase_init.dart';
 import 'data/startup/startup_tasks.dart';
 
 Future<void> bootstrap() async {
@@ -30,6 +31,8 @@ Future<void> bootstrap() async {
   };
 
   final deviceId = await DeviceIdStore().getOrCreate();
+  // S03: Supabase client (auth · functions) when the flavor env has the public keys.
+  await initSupabaseIfConfigured();
 
   appLog.i(
     'bootstrap · flavor=${AppConfig.flavor.name} '

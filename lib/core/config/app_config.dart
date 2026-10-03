@@ -22,6 +22,10 @@ abstract final class AppConfig {
   static const String supabaseAnonKey =
       String.fromEnvironment('SUPABASE_ANON_KEY');
 
+  /// App key sent as `x-app-key` to the pre-login `check-email` function
+  /// (abuse deterrent, not a secret — it ships in the binary).
+  static const String checkEmailAppKey = String.fromEnvironment('CHECK_EMAIL_APP_KEY');
+
   /// RevenueCat public SDK keys (public).
   static const String revenueCatPublicKeyAndroid =
       String.fromEnvironment('REVENUECAT_PUBLIC_KEY_ANDROID');
