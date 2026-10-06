@@ -17,6 +17,7 @@ void main() {
   late FakeMonotonicClock mono;
   late TestMeasureEngine engine;
   late TestMeasureDevice device;
+  late FakeSleepAwareClock sleepAware;
   late MeasureController controller;
   MeasureController makeController() => MeasureController(
     engine: engine,
@@ -26,6 +27,7 @@ void main() {
     wall: h.clock,
     monotonic: mono,
     device: device,
+    sleepAware: sleepAware,
     automaticTicks: false,
   );
   Future<void> flush() async {
@@ -39,6 +41,7 @@ void main() {
     mono = FakeMonotonicClock();
     engine = TestMeasureEngine();
     device = TestMeasureDevice();
+    sleepAware = FakeSleepAwareClock();
     controller = makeController();
   });
   tearDown(() async {
@@ -265,14 +268,15 @@ void main() {
     expect(await h.sessions.get(id), isNull);
   });
 
-  test('foreground after background realigns the clock: the sleep gap is paused, later segments keep wall time', () async {
+  test('device sleep in background: the sleep-aware clock extends the paused gap, later segments keep their true time', () async {
     await controller.start(mode: SessionMode.manual);
     mono.advance(const Duration(seconds: 10));
     await controller.background();
     expect(controller.paused, isTrue);
-    // The device slept: the wall clock moved 30 minutes, the monotonic clock
-    // (frozen during sleep) only 60 seconds.
-    h.clock.advance(const Duration(minutes: 30));
+    // The device slept 29 minutes: the sleep-aware clock counted 30 minutes,
+    // the Stopwatch (frozen during sleep) only 60 seconds. The wall clock is
+    // left untouched on purpose — it plays no part (D23).
+    sleepAware.advance(const Duration(minutes: 30));
     mono.advance(const Duration(seconds: 60));
     await controller.foreground();
     expect(controller.paused, isFalse);
@@ -284,26 +288,81 @@ void main() {
       SegmentKind.manual,
     ]);
     expect(segments[1].startAt, kT0.add(const Duration(seconds: 10)));
-    expect(segments[1].endAt, kT0.add(const Duration(minutes: 30)));
-    expect(segments[2].startAt, kT0.add(const Duration(minutes: 30)));
+    expect(segments[1].endAt, kT0.add(const Duration(minutes: 30, seconds: 10)));
+    expect(segments[2].startAt, kT0.add(const Duration(minutes: 30, seconds: 10)));
     expect(controller.seated.inSeconds, 30);
     await controller.finish();
     expect(await controller.save(), isTrue);
     final row = await h.sessions.get(controller.sessionId!);
-    expect(row!.endedAt, kT0.add(const Duration(minutes: 30, seconds: 20)));
+    expect(row!.endedAt, kT0.add(const Duration(minutes: 30, seconds: 30)));
   });
 
-  test('a wall clock set back while in background is ignored (D23: never backwards)', () async {
+  test('a device time change in background does not move anything (D23: wall clock ignored both ways)', () async {
     await controller.start(mode: SessionMode.manual);
     mono.advance(const Duration(seconds: 10));
     await controller.background();
-    h.clock.jumpTo(kT0.subtract(const Duration(hours: 1)));
+    // User sets the clock +1 h, then −3 h; no sleep happened.
+    h.clock.jumpTo(kT0.add(const Duration(hours: 1)));
+    sleepAware.advance(const Duration(seconds: 5));
     mono.advance(const Duration(seconds: 5));
     await controller.foreground();
     mono.advance(const Duration(seconds: 5));
-    final last = controller.segments.last;
-    expect(last.kind, SegmentKind.manual);
-    expect(last.startAt, kT0.add(const Duration(seconds: 15)));
+    expect(controller.segments.last.kind, SegmentKind.manual);
+    expect(controller.segments.last.startAt, kT0.add(const Duration(seconds: 15)));
+    await controller.background();
+    h.clock.jumpTo(kT0.subtract(const Duration(hours: 2)));
+    sleepAware.advance(const Duration(seconds: 5));
+    mono.advance(const Duration(seconds: 5));
+    await controller.foreground();
+    mono.advance(const Duration(seconds: 5));
+    expect(controller.segments.last.startAt, kT0.add(const Duration(seconds: 25)));
+  });
+
+  test('without a platform answer the session clock is left alone', () async {
+    sleepAware.elapsed = null;
+    await controller.start(mode: SessionMode.manual);
+    mono.advance(const Duration(seconds: 10));
+    await controller.background();
+    mono.advance(const Duration(seconds: 60));
+    await controller.foreground();
+    mono.advance(const Duration(seconds: 5));
+    expect(controller.segments.last.startAt, kT0.add(const Duration(seconds: 70)));
+  });
+
+  test('dispose (account switch) during a pending save: nothing is written, the save reports failure', () async {
+    await controller.start(mode: SessionMode.manual);
+    final id = controller.sessionId!;
+    mono.advance(const Duration(minutes: 5));
+    await controller.finish();
+    final entered = Completer<void>();
+    final release = Completer<void>();
+    final blocker = h.writer.runInTransaction(() async {
+      entered.complete();
+      await release.future;
+    });
+    await entered.future;
+    final saving = controller.save();
+    controller.dispose(); // Riverpod rebuilt the provider for another account
+    release.complete();
+    await blocker;
+    expect(await saving, isFalse);
+    final row = await h.sessions.get(id);
+    expect(row!.status, SessionStatus.interrupted);
+    expect(row.endedAt, isNull, reason: 'the final save never ran');
+    expect(await h.sessions.getSegments(id), isEmpty);
+    expect(await h.sessions.readSnapshot(), isNotNull, reason: 'the snapshot stays for recovery');
+  });
+
+  test('dispose before finish / discard / corrections: late calls do not write', () async {
+    await controller.start(mode: SessionMode.manual);
+    final id = controller.sessionId!;
+    mono.advance(const Duration(minutes: 1));
+    controller.dispose();
+    await controller.finish();
+    expect((await h.sessions.get(id))!.status, SessionStatus.active, reason: 'finish wrote nothing');
+    expect(() => controller.discard(id), throwsStateError);
+    expect(await h.sessions.get(id), isNotNull);
+    expect(() => controller.persistCorrections(id, ['x']), throwsStateError);
   });
 
   test('resume interrupted by background is honoured on foreground', () async {

@@ -13,6 +13,7 @@ import '../../../core/domain/enums.dart';
 import '../../../core/domain/ids.dart';
 import '../../../core/domain/local_date.dart';
 import '../../../core/logging/app_logger.dart';
+import '../../../core/platform/sleep_aware_clock.dart';
 import '../../../data/repositories/planner_repository.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../data/repositories/session_repository.dart';
@@ -48,6 +49,9 @@ class SystemMeasureDevice implements MeasureDevice {
 @Riverpod(keepAlive: true)
 MeasureDevice measureDevice(Ref ref) => SystemMeasureDevice();
 
+@Riverpod(keepAlive: true)
+SleepAwareClock sleepAwareClock(Ref ref) => const PlatformSleepAwareClock();
+
 /// Riverpod owns the lifetime; screens observe changes with ListenableBuilder.
 /// Raw explicitly keeps the ChangeNotifier from being treated as provider state.
 @Riverpod(keepAlive: true)
@@ -60,6 +64,7 @@ Raw<MeasureController> measureController(Ref ref) {
     wall: ref.watch(appClockProvider),
     monotonic: StopwatchMonotonicClock(),
     device: ref.watch(measureDeviceProvider),
+    sleepAware: ref.watch(sleepAwareClockProvider),
   );
   WidgetsBinding.instance.addObserver(controller);
   final lifecycle = WidgetsBinding.instance.lifecycleState;
@@ -104,6 +109,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     required this.wall,
     required this.monotonic,
     required this.device,
+    this.sleepAware = const NoSleepAwareClock(),
     this.automaticTicks = true,
   });
 
@@ -114,6 +120,9 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
   final Clock wall;
   final MonotonicClock monotonic;
   final MeasureDevice device;
+
+  /// Sleep-inclusive elapsed time ([S06c]); never a wall clock.
+  final SleepAwareClock sleepAware;
   final bool automaticTicks;
   MeasurePhase phase = MeasurePhase.setup;
   MeasureSaveState saveState = const MeasureUnsaved();
@@ -141,6 +150,18 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
   DateTime? _runAnchor;
   Duration? _lastSample;
   int _todayBaseSeconds = 0;
+  Duration? _sleepAnchorReal, _sleepAnchorMono;
+
+  /// True once Riverpod disposed this controller (account switch, D27).
+  /// Every write that follows an `await` checks it: a late write of the old
+  /// account's session must never reach the database the new account now
+  /// owns (the DB was wiped in between, and sync would push it as the new
+  /// user).
+  bool get isDisposed => _disposed;
+
+  void _checkAlive() {
+    if (_disposed) throw StateError('MeasureController disposed');
+  }
 
   String? get sessionId => _draft?.sessionId ?? _timeline?.sessionId;
   SessionMode get mode => _draft?.mode ?? _timeline?.mode ?? SessionMode.manual;
@@ -265,6 +286,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
         subjectId: subjectId,
         plannerItemId: task?.id,
       );
+      _checkAlive();
       await sessions.startActive(_timeline!.snapshot(at));
       _todayBaseSeconds = await _todaySeatedBefore(_timeline!.sessionId);
       if (_disposed) return false;
@@ -494,17 +516,41 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     await _stopEngine();
     await _wake(false);
     await checkpoint();
+    await _markSleepAnchor();
+  }
+
+  Future<void> _markSleepAnchor() async {
+    final real = await sleepAware.elapsedRealtime();
+    _sleepAnchorMono = monotonic.elapsed;
+    _sleepAnchorReal = real;
+  }
+
+  /// Time the device slept since [_markSleepAnchor]: what the sleep-aware
+  /// clock counted beyond the Stopwatch. Zero without a platform answer.
+  Future<Duration> _sleepShift() async {
+    final anchorReal = _sleepAnchorReal;
+    final anchorMono = _sleepAnchorMono;
+    _sleepAnchorReal = null;
+    _sleepAnchorMono = null;
+    if (anchorReal == null || anchorMono == null) return Duration.zero;
+    final realNow = await sleepAware.elapsedRealtime();
+    if (realNow == null) return Duration.zero;
+    final shift = (realNow - anchorReal) - (monotonic.elapsed - anchorMono);
+    return shift > Duration.zero ? shift : Duration.zero;
   }
 
   Future<void> foreground() async {
     _background = false;
     if (!isLive) return;
-    if (paused) {
-      // The monotonic clock stood still while the device slept; the paused
-      // gap absorbs the difference so later segments keep their true time.
-      final shift = _clock?.realign(wall.now()) ?? Duration.zero;
+    final shift = await _sleepShift();
+    if (_disposed || !isLive) return;
+    if (shift > Duration.zero && paused && !_background) {
+      // The Stopwatch stood still while the device slept; the paused gap
+      // absorbs the difference so later segments keep their true time. The
+      // wall clock is never consulted (D23: device time changes are ignored).
+      _clock?.advance(shift);
       if (shift > const Duration(seconds: 1)) {
-        appLog.i('measure · clock realigned after background +${shift.inSeconds}s');
+        appLog.i('measure · session clock advanced by sleep ${shift.inSeconds}s');
       }
     }
     await _wake(true);
@@ -536,6 +582,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       await _stopEngine();
       await _wake(false);
       await _writes;
+      if (_disposed) return;
       try {
         await sessions.writeSnapshot(_draft!);
         await sessions.markInterrupted(s.sessionId);
@@ -589,6 +636,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
         subjectId: snapshot?.subjectId ?? row?.subjectId,
         plannerItemId: snapshot?.plannerItemId ?? row?.plannerItemId,
       );
+      _checkAlive();
       if (row == null) await sessions.startActive(_draft!);
       await sessions.markInterrupted(id);
       phase = MeasurePhase.summary;
@@ -636,7 +684,9 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     final draft = _draft!;
     try {
       await _writes;
+      _checkAlive();
       await sessions.writer.runInTransaction(() async {
+        _checkAlive();
         await sessions.saveFinished(
           id: draft.sessionId,
           kind: draft.kind,
@@ -655,8 +705,10 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
         if (completeTask &&
             draft.plannerItemId != null &&
             await planner.getItem(draft.plannerItemId!) != null) {
+          _checkAlive();
           await planner.setDone(draft.plannerItemId!, done: true);
         }
+        _checkAlive(); // nothing commits for a disposed controller
       });
       saveState = const MeasureSaved();
       phase = MeasurePhase.saved;
@@ -664,10 +716,12 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       return true;
     } on Object {
       saveState = const MeasureSaveFailed();
-      try {
-        await sessions.markInterrupted(draft.sessionId);
-      } on Object {
-        /* snapshot remains */
+      if (!_disposed) {
+        try {
+          await sessions.markInterrupted(draft.sessionId);
+        } on Object {
+          /* snapshot remains */
+        }
       }
       return false;
     } finally {
@@ -677,6 +731,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> persistCorrections(String id, Iterable<String> ids) async {
+    _checkAlive();
     var prefs = await settings.get();
     sensitivityChanged = false;
     final at = wall.now();
@@ -690,6 +745,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
         now: at,
         auto: prefs.sensitivityAuto,
       );
+      _checkAlive();
       final applied = await sessions.applyCorrection(
         sessionId: id,
         segmentId: segmentId,
@@ -700,6 +756,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       if (applied == null) continue;
       history.add(at);
       if (adjustment.changed) {
+        _checkAlive();
         await settings.setSensitivityLevel(adjustment.level);
         prefs = prefs.copyWith(sensitivityLevel: adjustment.level);
         sensitivityChanged = true;
@@ -717,6 +774,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       await _stopEngine();
       await _wake(false);
       await _writes;
+      _checkAlive();
       if (target != null) await sessions.discard(target);
       _draft = null;
       _timeline = null;
@@ -743,6 +801,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    if (_disposed) return;
     _disposed = true;
     _ticker?.cancel();
     unawaited(_stopEngine());

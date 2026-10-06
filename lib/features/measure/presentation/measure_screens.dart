@@ -805,7 +805,15 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
     if (!ok || !mounted) return;
     setState(() => deleted = true);
     final id = widget.id;
+    // The 5-second commit and the undo outlive this screen. They belong to
+    // the account that deleted: if the user switched meanwhile (D27 wipe),
+    // the old repository must not write into the new account's database —
+    // the restart settlement (D22) owns whatever is left then.
+    final container = ProviderScope.containerOf(context, listen: false);
+    final owner = repo.ctx.userId;
+    bool sameAccount() => container.read(currentUserIdProvider) == owner;
     Timer(const Duration(seconds: 5), () async {
+      if (!sameAccount()) return;
       try {
         final row = await repo.get(id);
         final until = row?.stamp.pendingDeleteUntil;
@@ -820,6 +828,7 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
       context,
       message: MeasureStrings.deleted,
       onUndo: () async {
+        if (!sameAccount()) return;
         try {
           await repo.undoDelete(id);
           if (mounted) setState(() => deleted = false);

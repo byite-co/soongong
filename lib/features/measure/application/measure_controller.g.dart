@@ -50,6 +50,48 @@ final class MeasureDeviceProvider
 
 String _$measureDeviceHash() => r'e15c6d5038a9910952cc60fc8d5f0e8d1610206c';
 
+@ProviderFor(sleepAwareClock)
+final sleepAwareClockProvider = SleepAwareClockProvider._();
+
+final class SleepAwareClockProvider
+    extends
+        $FunctionalProvider<SleepAwareClock, SleepAwareClock, SleepAwareClock>
+    with $Provider<SleepAwareClock> {
+  SleepAwareClockProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'sleepAwareClockProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$sleepAwareClockHash();
+
+  @$internal
+  @override
+  $ProviderElement<SleepAwareClock> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  SleepAwareClock create(Ref ref) {
+    return sleepAwareClock(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SleepAwareClock value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SleepAwareClock>(value),
+    );
+  }
+}
+
+String _$sleepAwareClockHash() => r'd6878c472126ea395e8a5c37c6a1880ef875d32f';
+
 /// Riverpod owns the lifetime; screens observe changes with ListenableBuilder.
 /// Raw explicitly keeps the ChangeNotifier from being treated as provider state.
 
@@ -103,4 +145,4 @@ final class MeasureControllerProvider
   }
 }
 
-String _$measureControllerHash() => r'671e2b0cfa57bd8501f664b644b8f1564aea2ab8';
+String _$measureControllerHash() => r'626ccc7d663ca0771a49966a01d51febd89db59c';

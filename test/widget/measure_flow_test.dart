@@ -22,10 +22,20 @@ import 'package:soongong/data/auth/auth_mode.dart';
 import 'package:soongong/data/repositories/repository_providers.dart';
 import 'package:soongong/features/home/application/session_recovery.dart';
 import 'package:soongong/features/measure/application/measure_controller.dart';
+import 'package:soongong/features/measure/domain/segment.dart';
 import 'package:soongong/features/measure/domain/session_snapshot.dart';
 
 import '../helpers/measure_fakes.dart';
 import '../unit/data/db_test_helpers.dart';
+
+/// Switchable signed-in user for the account-switch test.
+class _User extends Notifier<String> {
+  @override
+  String build() => kLocalUserId;
+  void switchTo(String id) => state = id;
+}
+
+final _userProvider = NotifierProvider<_User, String>(_User.new);
 
 void main() {
   late TestHarness h;
@@ -407,6 +417,61 @@ void main() {
       expect((await h.sessions.get(id))!.stamp.pendingDeleteUntil, isNull);
       await tester.pump(const Duration(seconds: 6));
       expect(await h.sessions.get(id), isNotNull);
+      await unmount(tester);
+    },
+  );
+
+  testWidgets(
+    'account switch during the 5-second delete window: the old account\'s commit and undo are blocked',
+    (tester) async {
+      controller.dispose();
+      container.dispose();
+      container = ProviderContainer(
+        overrides: [
+          deviceIdProvider.overrideWithValue('dev-a'),
+          appDatabaseProvider.overrideWithValue(h.db),
+          appClockProvider.overrideWithValue(h.clock),
+          authModeProvider.overrideWithValue(AuthMode.localOnly),
+          currentUserIdProvider.overrideWith((ref) => ref.watch(_userProvider)),
+          seatEngineProvider.overrideWithValue(engine),
+          measureDeviceProvider.overrideWithValue(TestMeasureDevice()),
+          sleepAwareClockProvider.overrideWithValue(FakeSleepAwareClock()),
+        ],
+      );
+      controller = container.read(measureControllerProvider);
+      await h.sessions.saveFinished(
+        id: 'old-account',
+        kind: SessionKind.self,
+        mode: SessionMode.manual,
+        startedAt: kT0.subtract(const Duration(hours: 1)),
+        endedAt: kT0,
+        status: SessionStatus.finished,
+        segments: [
+          Segment(
+            id: 'seg',
+            kind: SegmentKind.manual,
+            startAt: kT0.subtract(const Duration(hours: 1)),
+            endAt: kT0,
+          ),
+        ],
+        sensitivityLevel: 0,
+      );
+      await mount(tester);
+      container.read(appRouterProvider).go('/session/old-account');
+      await tester.pumpAndSettle();
+      await tap(tester, MeasureStrings.delete);
+      await tap(tester, MeasureStrings.delete);
+      expect((await h.sessions.get('old-account'))!.stamp.pendingDeleteUntil, isNotNull);
+      // Another account signs in while the undo toast is still showing.
+      container.read(_userProvider.notifier).switchTo('u2');
+      await tester.pump();
+      h.clock.advance(const Duration(seconds: 6));
+      await tester.pump(const Duration(seconds: 6));
+      final row = await h.sessions.get('old-account');
+      expect(row, isNotNull, reason: 'no commitDelete from the old account');
+      expect((await h.raw('sessions', 'old-account'))!['deleted_at'], isNull);
+      expect(row!.stamp.pendingDeleteUntil, isNotNull,
+          reason: 'left for the restart settlement (D22)');
       await unmount(tester);
     },
   );

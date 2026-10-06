@@ -30,25 +30,18 @@ class SessionClock {
     return w.add(_monotonic.elapsed - m);
   }
 
-  /// Re-anchors the clock so that [now] reads [wallNow] when the wall clock
-  /// is ahead of the monotonic-derived time, and returns the applied shift.
-  ///
-  /// The monotonic clock does not advance while the device sleeps (Android
-  /// `CLOCK_MONOTONIC`, iOS `mach_absolute_time`), so after a background /
-  /// screen-off interval `now()` would lag the real time by the sleep
-  /// duration and every later segment would be placed too early. The caller
-  /// applies this on foreground return while the timeline is paused: the
+  /// Moves the anchor forward by [by] (ignored when not positive): the time
+  /// the monotonic clock did not count while the device slept, measured by
+  /// a sleep-aware monotonic source — never by the wall clock, so a device
+  /// time change still cannot move any segment (D23 · [S06c]). The caller
+  /// applies it on foreground return while the timeline is paused: the
   /// unobserved interval becomes a longer `paused` segment (never 순공) and
-  /// the following segments sit at their true wall-clock position. Time is
-  /// never moved backwards (a wall clock set back stays ignored — D23).
-  Duration realign(DateTime wallNow) {
+  /// the following segments keep their true position.
+  Duration advance(Duration by) {
     final w = _wallAnchor;
-    if (w == null) return Duration.zero;
-    final current = now();
-    if (!wallNow.isAfter(current)) return Duration.zero;
-    final shift = wallNow.difference(current);
-    _wallAnchor = w.add(shift);
-    return shift;
+    if (w == null || by <= Duration.zero) return Duration.zero;
+    _wallAnchor = w.add(by);
+    return by;
   }
 
   /// Elapsed since [start] (monotonic).
