@@ -102,7 +102,7 @@ class AwayPolicy {
   List<AwayEvent> _onNotSeated(DateTime at) {
     final start = _awayStartAt;
     if (start != null) {
-      if (!_longNotified && at.difference(start) >= longAway) {
+      if (!_longNotified && at.difference(start) > longAway) {
         _longNotified = true;
         return <AwayEvent>[AwayLong(awayStartAt: start, at: at)];
       }

@@ -133,6 +133,47 @@ final class HomeAllSessionsProvider
 
 String _$homeAllSessionsHash() => r'6bd56b8fc1fd014595024974301ff1c2d31d0d9d';
 
+@ProviderFor(homeSegments)
+final homeSegmentsProvider = HomeSegmentsProvider._();
+
+final class HomeSegmentsProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<List<SessionSegment>>,
+          List<SessionSegment>,
+          Stream<List<SessionSegment>>
+        >
+    with
+        $FutureModifier<List<SessionSegment>>,
+        $StreamProvider<List<SessionSegment>> {
+  HomeSegmentsProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'homeSegmentsProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$homeSegmentsHash();
+
+  @$internal
+  @override
+  $StreamProviderElement<List<SessionSegment>> $createElement(
+    $ProviderPointer pointer,
+  ) => $StreamProviderElement(pointer);
+
+  @override
+  Stream<List<SessionSegment>> create(Ref ref) {
+    return homeSegments(ref);
+  }
+}
+
+String _$homeSegmentsHash() => r'fc793d128c881dc63f00c18862331a9296bcd1ec';
+
 @ProviderFor(homeTodayItems)
 final homeTodayItemsProvider = HomeTodayItemsProvider._();
 
@@ -330,7 +371,7 @@ final class HomeViewProvider
   }
 }
 
-String _$homeViewHash() => r'23848061553c163fa586d1584f3dfa6121352cd8';
+String _$homeViewHash() => r'25506ebdbf00938457430ddd25ccf5c0a5c70058';
 
 /// null while loading or when nothing is unfinished.
 

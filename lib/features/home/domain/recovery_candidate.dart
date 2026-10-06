@@ -62,7 +62,8 @@ class RecoveryCandidate {
     }
     StudySession? open;
     for (final s in sessions) {
-      final unfinished = s.status == SessionStatus.active ||
+      final unfinished =
+          s.status == SessionStatus.active ||
           s.status == SessionStatus.paused ||
           (s.status == SessionStatus.interrupted && s.endedAt == null);
       if (!unfinished) continue;
@@ -72,8 +73,8 @@ class RecoveryCandidate {
     return RecoveryCandidate(
       sessionId: open.id,
       startedAt: open.startedAt,
-      recordedSeconds: open.seatedSeconds,
-      endedAt: open.endedAt ?? open.startedAt,
+      recordedSeconds: 0,
+      endedAt: open.startedAt,
       session: open,
     );
   }

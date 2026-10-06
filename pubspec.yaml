@@ -79,6 +79,7 @@ dependencies:
   kakao_flutter_sdk_user: ^1.10.0
   # sha256 of the Apple nonce (already a transitive dependency).
   crypto: ^3.0.7
+  wakelock_plus: ^1.8.0
 
 dev_dependencies:
   flutter_test:

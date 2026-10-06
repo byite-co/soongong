@@ -425,3 +425,10 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **[S05b] 동의 ② 문구 = D14 표 3줄**(`core/strings/consent_strings.dart`): ① 기기 보관 30일 · 즉시 삭제·로그아웃 삭제 ② 자사 서버 처리 종료 직후 삭제 · 잔여분 업로드 +24시간 이내 ③ 외부 AI 벤더 전송 사실 + "벤더의 보관 조건은 확정 전". 약속 문구 없음. 온보딩(S05)·페이월 동의(S12)·설정 저장 데이터 표(S09)는 이 상수만 참조한다(복사 금지).
 - **[S05b] 재설정 딥링크 처리 경로 단일화**: `soongong://auth/reset` 은 Supabase SDK(`detectSessionInUri`, app_links)가 PKCE 코드 교환까지 전담하고, 앱은 `AuthChangeEvent.passwordRecovery`(`AuthBackend.passwordRecoveryEvents`) 만 받아 `passwordRecoveryProvider` 를 켜고 가드가 `/auth/reset` 로 보낸다. Flutter 자체 딥링크(`flutter_deeplinking_enabled`·`FlutterDeepLinkingEnabled`)는 **false** 로 두어 중복 교환·중복 라우팅을 없앴고, 가드의 host 정규화는 제거. 플래그는 새 비밀번호 저장·"재설정 메일 다시 요청"·로그아웃에서 꺼진다. 실제 링크(앱 종료 상태·실행 중)는 dev 프로젝트 Redirect URL 등록 후 실기기에서 검증해야 한다(미실행, handoff).
 
+## [S06] 측정 연결 결정 (2026-10-06)
+
+- **[S06] 시작·종료 전 영속 상태**: 시작 전에 active 행과 첫 스냅샷을 같은 트랜잭션에 쓴다. 측정 종료 후 사용자가 저장하기 전에는 ended_at 없는 interrupted 행과 스냅샷으로 남긴다. 최종 저장은 같은 ID를 갱신하고 구간·정정·감도 설정·할 일 완료를 한 트랜잭션에 묶는다. 복구 후 이어서 측정한 세션도 최종 상태는 interrupted다(D23).
+- **[S06] 복구 마무리 확인**: S05 복구 핸들러의 finish는 즉시 저장 대신 summary로 이동한다. 사용자에게 정정·할 일 완료·저장/버리기 결정을 제공한다. finishLocation getter와 홈 이동 분기만 추가했고 루트 app_router는 수정하지 않았다. 기존 S05 공용 홈 코드에 필요한 연결이므로 공용 파일 변경을 PR에 명시한다.
+- **[S06] 홈 링 = 착석 구간**: S05의 세션 시작~종료 링을 saved seated/manual 구간으로 교체한다. away/paused는 빈 구간, 자정 경계는 로컬 날짜별로 자른다. ended_at 없는 active/interrupted는 홈 합계·연속일수에서 제외한다. S08도 같은 구간 규칙을 쓴다.
+- **[S06] 측정 수명 주기 소유권**: 화면 대신 keepAlive MeasureController가 WidgetsBindingObserver를 소유한다. 화면 전환으로 백그라운드 stop을 놓치지 않으며 중복 paused/hidden 알림은 자동 재개 여부를 유지한다. 사용자 일시정지는 복귀 시에도 유지한다. 기존 SeatEngine 계약은 변경하지 않는다.
+- **[S06] 목표 링·배터리·화면 유지**: 링의 목표는 사용자 하루 목표 시간 설정을 사용한다. 배터리는 시작·60초마다 확인하고 ≤20% 전환 시 한 번 lowPower 재시작한다. 새 wakelock_plus ^1.8.0은 포그라운드 측정 중 화면 유지, battery_plus는 기존 S04 패키지를 재사용한다. 실기기 카메라·화면 유지·배터리 검증은 S14/S16 인계다.

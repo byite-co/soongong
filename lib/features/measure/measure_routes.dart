@@ -2,9 +2,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/dev/seat_lab/seat_lab_screen.dart';
-import '../../core/router/placeholder_screen.dart';
-import '../../core/strings/common_strings.dart';
 import '../auth/domain/auth_redirect.dart';
+import 'presentation/measure_screens.dart';
 
 /// Routes owned by the `measure` feature (S06).
 ///
@@ -20,7 +19,24 @@ final List<RouteBase> measureRoutes = <RouteBase>[
   GoRoute(
     path: AppPaths.measureSetup,
     name: 'setupOn',
-    builder: (_, _) => const PlaceholderScreen(title: CommonStrings.measureSetupTitle),
+    builder: (_, state) =>
+        MeasureSetupScreen(resumeId: state.uri.queryParameters['resume']),
+  ),
+  GoRoute(
+    path: '/measure/focus',
+    builder: (_, _) => const MeasureFocusScreen(),
+  ),
+  GoRoute(
+    path: '/measure/summary',
+    builder: (_, _) => const MeasureSummaryScreen(),
+  ),
+  GoRoute(
+    path: '/measure/corrections',
+    builder: (_, _) => const CorrectionHistoryScreen(),
+  ),
+  GoRoute(
+    path: '/session/:id',
+    builder: (_, state) => SessionDetailScreen(id: state.pathParameters['id']!),
   ),
   // S04 · `/_seat_lab`: seat engine measurement harness. Dev tools only —
   // compiled out of prod together with the dev menu. Listed here (not in

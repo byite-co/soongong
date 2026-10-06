@@ -22,7 +22,9 @@ LocalDate homeToday(Ref ref) => LocalDate.of(ref.watch(appClockProvider).now());
 @riverpod
 Stream<List<StudySession>> homeRecentSessions(Ref ref) {
   final today = ref.watch(homeTodayProvider);
-  return ref.watch(sessionRepositoryProvider).watchBetween(today.addDays(-1), today);
+  return ref
+      .watch(sessionRepositoryProvider)
+      .watchBetween(today.addDays(-1), today);
 }
 
 @riverpod
@@ -30,18 +32,25 @@ Stream<List<StudySession>> homeAllSessions(Ref ref) =>
     ref.watch(sessionRepositoryProvider).watchAll();
 
 @riverpod
-Stream<List<PlannerItem>> homeTodayItems(Ref ref) =>
-    ref.watch(plannerRepositoryProvider).watchItemsOn(ref.watch(homeTodayProvider));
+Stream<List<SessionSegment>> homeSegments(Ref ref) =>
+    ref.watch(sessionRepositoryProvider).watchAllSegments();
+
+@riverpod
+Stream<List<PlannerItem>> homeTodayItems(Ref ref) => ref
+    .watch(plannerRepositoryProvider)
+    .watchItemsOn(ref.watch(homeTodayProvider));
 
 @riverpod
 Stream<List<Recurrence>> homeRecurrences(Ref ref) =>
     ref.watch(plannerRepositoryProvider).watchRecurrences();
 
 @riverpod
-Stream<List<Subject>> homeSubjects(Ref ref) => ref.watch(subjectRepositoryProvider).watchAll();
+Stream<List<Subject>> homeSubjects(Ref ref) =>
+    ref.watch(subjectRepositoryProvider).watchAll();
 
 @riverpod
-Stream<SessionSnapshot?> homeSnapshot(Ref ref) => ref.watch(sessionRepositoryProvider).watchSnapshot();
+Stream<SessionSnapshot?> homeSnapshot(Ref ref) =>
+    ref.watch(sessionRepositoryProvider).watchSnapshot();
 
 sealed class HomeViewState {
   const HomeViewState();
@@ -71,17 +80,27 @@ HomeViewState homeView(Ref ref) {
   final items = ref.watch(homeTodayItemsProvider);
   final recs = ref.watch(homeRecurrencesProvider);
   final subjects = ref.watch(homeSubjectsProvider);
-  for (final a in [recent, all, items, recs, subjects]) {
+  final segments = ref.watch(homeSegmentsProvider);
+  for (final a in [recent, all, items, recs, subjects, segments]) {
     if (a.hasError) return HomeError(a.error!);
   }
-  if (!recent.hasValue || !all.hasValue || !items.hasValue || !recs.hasValue || !subjects.hasValue) {
+  if (!recent.hasValue ||
+      !all.hasValue ||
+      !items.hasValue ||
+      !recs.hasValue ||
+      !subjects.hasValue ||
+      !segments.hasValue) {
     return const HomeLoading();
   }
-  final streak = const StreakCalculator().compute(HomeSummary.savedDays(all.value!), today);
+  final streak = const StreakCalculator().compute(
+    HomeSummary.savedDays(all.value!),
+    today,
+  );
   return HomeReady(
     HomeSummary.build(
       today: today,
-      sessions: recent.value!,
+      sessions: all.value!,
+      segments: segments.value!,
       items: items.value!,
       recurrences: recs.value!,
       subjects: <String, Subject>{for (final s in subjects.value!) s.id: s},

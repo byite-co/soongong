@@ -21,7 +21,11 @@ StatefulShellRoute (탭 4개 · 태블릿 ≥600dp 는 좌측 레일)
   /timetable          (S07 placeholder)
   /stats              (S08 placeholder)
 /settings             (S09 placeholder · 홈 헤더 기어 · 탭 밖, root navigator push)
-/measure/setup        setupOn (S06 placeholder · 홈 CTA · 복구 "이어서" = ?resume=<sessionId>)
+/measure/setup        setupOn setupDen errCam camBusyN s5 (홈 CTA · 복구 "이어서" = ?resume=<sessionId>)
+/measure/focus        focus away awayLong lost lostFail s6 s7
+/measure/summary      summary s8 s9 sumDiscard toast (새 기록 저장·정정 시트)
+/session/:id          session sumEdit sumEditCancel sessDel
+/measure/corrections  정정 이력 (감도 조정 토스트·S09 연결용)
 /_gallery             dev 전용(DEV_MENU)
 /_seat_lab            dev 전용(S04 착석 엔진 실험실 · `measure_routes.dart` 에 등록)
 ```
@@ -59,4 +63,4 @@ StatefulShellRoute (탭 4개 · 태블릿 ≥600dp 는 좌측 레일)
 
 ## 5. 세션 복구 콜백 (`features/home/application/session_recovery.dart`)
 
-`sessionRecoveryHandlerProvider` → `SessionRecoveryHandler { resume · finish · discard }`. 홈은 `session_snapshot` 행(또는 `active`/`paused` 세션 행)이 있으면 앱 실행당 1회 시트를 띄우고 세 버튼을 이 핸들러로 보낸다. 기본 구현(S05): `finish` = `SessionTimeline.recover` + `saveFinished(status: interrupted)`(D23), `discard` = 스냅샷 삭제(+행이 있으면 commitDelete), `resume` = `/measure/setup?resume=<sessionId>` 로 이동. **S06 이 이 provider 를 교체**해 측정 화면으로 이어가고 정산을 소유한다.
+`sessionRecoveryHandlerProvider` → `SessionRecoveryHandler { resume · finish · discard · finishLocation }`. 홈은 `session_snapshot` 행(또는 `active`/`paused`/미저장 `interrupted` 세션 행)이 있으면 앱 실행당 1회 시트를 띄운다. S06 기본 구현(`MeasureSessionRecoveryHandler`): `resume` = `/measure/setup?resume=<sessionId>`에서 카메라 확인 후 같은 세션에 이어서, `finish` = 마지막 스냅샷을 정산해 `/measure/summary`로 이동 후 사용자가 저장/버리기, `discard` = 세션·구간·정정 기록과 해당 스냅샷 삭제. 열린 구간은 `saved_at` 이후 시간을 더하지 않으며 저장한 복구 기록은 `interrupted`다(D23). 실행 중인 새 측정의 스냅샷으로 숨겨진 홈의 복구 시트가 열리지 않도록 시작 직전에 `RecoveryPrompted.mark()`한다.
