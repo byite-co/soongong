@@ -46,8 +46,10 @@ class SystemMeasureDevice implements MeasureDevice {
 @Riverpod(keepAlive: true)
 MeasureDevice measureDevice(Ref ref) => SystemMeasureDevice();
 
+/// Riverpod owns the lifetime; screens observe changes with ListenableBuilder.
+/// Raw explicitly keeps the ChangeNotifier from being treated as provider state.
 @Riverpod(keepAlive: true)
-MeasureController measureController(Ref ref) {
+Raw<MeasureController> measureController(Ref ref) {
   final controller = MeasureController(
     engine: ref.watch(seatEngineProvider),
     sessions: ref.watch(sessionRepositoryProvider),

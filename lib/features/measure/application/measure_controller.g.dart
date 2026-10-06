@@ -50,17 +50,25 @@ final class MeasureDeviceProvider
 
 String _$measureDeviceHash() => r'e15c6d5038a9910952cc60fc8d5f0e8d1610206c';
 
+/// Riverpod owns the lifetime; screens observe changes with ListenableBuilder.
+/// Raw explicitly keeps the ChangeNotifier from being treated as provider state.
+
 @ProviderFor(measureController)
 final measureControllerProvider = MeasureControllerProvider._();
+
+/// Riverpod owns the lifetime; screens observe changes with ListenableBuilder.
+/// Raw explicitly keeps the ChangeNotifier from being treated as provider state.
 
 final class MeasureControllerProvider
     extends
         $FunctionalProvider<
-          MeasureController,
-          MeasureController,
-          MeasureController
+          Raw<MeasureController>,
+          Raw<MeasureController>,
+          Raw<MeasureController>
         >
-    with $Provider<MeasureController> {
+    with $Provider<Raw<MeasureController>> {
+  /// Riverpod owns the lifetime; screens observe changes with ListenableBuilder.
+  /// Raw explicitly keeps the ChangeNotifier from being treated as provider state.
   MeasureControllerProvider._()
     : super(
         from: null,
@@ -77,22 +85,22 @@ final class MeasureControllerProvider
 
   @$internal
   @override
-  $ProviderElement<MeasureController> $createElement(
+  $ProviderElement<Raw<MeasureController>> $createElement(
     $ProviderPointer pointer,
   ) => $ProviderElement(pointer);
 
   @override
-  MeasureController create(Ref ref) {
+  Raw<MeasureController> create(Ref ref) {
     return measureController(ref);
   }
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(MeasureController value) {
+  Override overrideWithValue(Raw<MeasureController> value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<MeasureController>(value),
+      providerOverride: $SyncValueProvider<Raw<MeasureController>>(value),
     );
   }
 }
 
-String _$measureControllerHash() => r'c056c9cb6521a8d58b0abdfc5c9dfb5597b2fa52';
+String _$measureControllerHash() => r'671e2b0cfa57bd8501f664b644b8f1564aea2ab8';
