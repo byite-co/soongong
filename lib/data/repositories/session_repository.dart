@@ -110,20 +110,32 @@ class SessionRepository {
   Stream<List<SessionSegment>> watchSegmentsOverlapping(
     LocalDate from,
     LocalDate to,
+  ) =>
+      _overlapping(from, to)
+          .watch()
+          .map((rows) => liveOnly(rows.map(segmentOf)));
+
+  Future<List<SessionSegment>> getSegmentsOverlapping(
+    LocalDate from,
+    LocalDate to,
+  ) async =>
+      liveOnly((await _overlapping(from, to).get()).map(segmentOf));
+
+  SimpleSelectStatement<$SessionSegmentsTable, SessionSegmentRow> _overlapping(
+    LocalDate from,
+    LocalDate to,
   ) {
     final start = utcIso(from.toDateTime().toUtc());
     final end = utcIso(to.addDays(1).toDateTime().toUtc());
-    return (db.select(db.sessionSegments)
-          ..where(
-            (s) =>
-                s.userId.equals(ctx.userId) &
-                s.deletedAt.isNull() &
-                s.endAt.isBiggerThanValue(start) &
-                s.startAt.isSmallerThanValue(end),
-          )
-          ..orderBy([(s) => OrderingTerm.asc(s.startAt)]))
-        .watch()
-        .map((rows) => liveOnly(rows.map(segmentOf)));
+    return db.select(db.sessionSegments)
+      ..where(
+        (s) =>
+            s.userId.equals(ctx.userId) &
+            s.deletedAt.isNull() &
+            s.endAt.isBiggerThanValue(start) &
+            s.startAt.isSmallerThanValue(end),
+      )
+      ..orderBy([(s) => OrderingTerm.asc(s.startAt)]);
   }
 
   SimpleSelectStatement<$SessionSegmentsTable, SessionSegmentRow>

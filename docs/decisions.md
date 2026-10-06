@@ -452,3 +452,9 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **[S06c] 계정 전환 뒤 지연 쓰기 차단**: `measureControllerProvider`는 저장소 체인(`currentUserIdProvider`)을 watch 하므로 사용자가 바뀌면 재생성되고 이전 컨트롤러는 dispose 된다(D27 wipe 뒤). 이전 컨트롤러에 남은 비동기 작업(저장·종료·복구·버리기·정정·체크포인트)은 **모든 await 뒤에 `_checkAlive()`** 를 거쳐 dispose 뒤에는 어떤 DB 쓰기도 하지 않는다(저장 트랜잭션 안에서도 검사 → 롤백, `save()`는 false). 세션 상세의 5초 삭제 커밋 타이머와 되돌리기 콜백은 `currentUserIdProvider`가 삭제한 계정과 같을 때만 실행한다(남은 건 D22 재시작 정산). `dispose()`는 멱등.
 - **[S06c] 미결 유지**: 프로토타입 "잘못 감지예요"(측정 중 즉시 정정)와 `startActive`의 outbox 등록은 사람 결정 대기.
 
+## [S06d] GPT 재검토 후속 — 트랜잭션 안의 소유권 검사 · 수동 전환 의도 · 자정 경계 합계 (2026-10-06, CC)
+
+- **[S06d] 쓰기 소유권은 트랜잭션 안에서 검사한다**: `SyncWriter.runOwnedTransaction(action, alive:)`가 DB 잠금을 쥔 뒤 ① 호출자 생존 ② `sync_meta.account_user_id`가 writer 의 `ctx.userId`와 같은지(바인딩이 없으면 통과) 검사하고, 아니면 `StateError`로 롤백한다. 측정 컨트롤러의 모든 쓰기와 세션 상세의 지연 삭제 커밋·되돌리기가 이 경로를 쓴다. 대기열 진입 전의 검사(S06c)는 계정 전환 트랜잭션 뒤에 커밋되는 경합을 막지 못한다. 다른 레인(S07~)도 화면 수명을 넘기는 지연 쓰기에는 같은 경로를 쓴다.
+- **[S06d] "수동으로 이어서"는 모드 결정**: `resume(manual: true)`는 첫 await 전에 타임라인을 manual 로 바꾼다. 백그라운드가 끼어들어도 결정이 남고 복귀 재개는 카메라를 확인하지 않는다.
+- **[S06d] 집중 화면의 오늘 합계 = 홈 규칙**: 저장 세션의 seated/manual 구간을 로컬 자정 경계로 잘라 합산(`SeatedTimeCalculator.seatedSecondsOn`, `getSegmentsOverlapping`). 세션 시작일 기준 합산 폐기. 삭제 대기·미저장 행 제외.
+

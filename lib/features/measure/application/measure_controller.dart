@@ -163,6 +163,14 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     if (_disposed) throw StateError('MeasureController disposed');
   }
 
+  /// Every write of this controller goes through here ([S06d]): the alive
+  /// and account-ownership checks run inside the transaction, after the
+  /// database lock is acquired, so a write queued behind an account switch
+  /// (D27 wipe + rebind) is refused instead of re-creating the old
+  /// account's rows in the new account's database.
+  Future<T> _owned<T>(Future<T> Function() action) =>
+      sessions.writer.runOwnedTransaction(action, alive: () => !_disposed);
+
   String? get sessionId => _draft?.sessionId ?? _timeline?.sessionId;
   SessionMode get mode => _draft?.mode ?? _timeline?.mode ?? SessionMode.manual;
   SegmentKind get currentKind => _timeline?.openKind ?? SegmentKind.paused;
@@ -198,18 +206,25 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     return d.isNegative ? Duration.zero : d;
   }
 
+  /// Today's saved 순공 the way the home ring counts it: seated/manual
+  /// segments of saved sessions (finished/interrupted with an end, live —
+  /// not deleted, not pending delete), clipped to the local day, so a
+  /// session that crossed midnight contributes its part after 00:00.
   Future<int> _todaySeatedBefore(String excludeId) async {
     final today = LocalDate.of(wall.now());
-    var total = 0;
-    for (final s in await sessions.getBetween(today, today)) {
-      if (s.id == excludeId || s.endedAt == null) continue;
-      if (s.status != SessionStatus.finished &&
-          s.status != SessionStatus.interrupted) {
-        continue;
-      }
-      total += s.seatedSeconds;
-    }
-    return total;
+    final saved = <String>{
+      for (final s in await sessions.getAll())
+        if (s.id != excludeId &&
+            s.endedAt != null &&
+            (s.status == SessionStatus.finished ||
+                s.status == SessionStatus.interrupted))
+          s.id,
+    };
+    final segments = await sessions.getSegmentsOverlapping(today, today);
+    return const SeatedTimeCalculator().seatedSecondsOn(
+      segments.where((seg) => saved.contains(seg.sessionId)),
+      today,
+    );
   }
 
   void _emit() {
@@ -286,8 +301,8 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
         subjectId: subjectId,
         plannerItemId: task?.id,
       );
-      _checkAlive();
-      await sessions.startActive(_timeline!.snapshot(at));
+      final first = _timeline!.snapshot(at);
+      await _owned(() => sessions.startActive(first));
       _todayBaseSeconds = await _todaySeatedBefore(_timeline!.sessionId);
       if (_disposed) return false;
       phase = MeasurePhase.focus;
@@ -427,7 +442,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     if (!isLive || _timeline == null) return;
     final snapshot = _timeline!.snapshot(now);
     final write = (_writes ?? Future<void>.value()).then((_) async {
-      if (!_disposed) await sessions.writeSnapshot(snapshot);
+      if (!_disposed) await _owned(() => sessions.writeSnapshot(snapshot));
     });
     _writes = write.catchError((Object _) {});
     try {
@@ -454,6 +469,10 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     failed = false;
     _emit();
     try {
+      // "수동으로 이어서" is a mode decision, not just a resume: apply it before
+      // the first await so a background interruption keeps it ([S06d]) —
+      // the foreground resume then continues in manual mode.
+      if (manual && mode == SessionMode.camera) _switchToManual();
       await _stopEngine();
       if (_disposed) return;
       if (_background) {
@@ -461,25 +480,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
         _resumeOnForeground = true;
         return;
       }
-      if (manual) {
-        final s = _timeline!.snapshot(now);
-        _timeline = SessionTimeline.fromSnapshot(
-          SessionSnapshot(
-            sessionId: s.sessionId,
-            mode: SessionMode.manual,
-            kind: s.kind,
-            startedAt: s.startedAt,
-            segments: s.segments,
-            openKind: s.openKind,
-            openStart: s.openStart,
-            savedAt: s.savedAt,
-            sensitivity: s.sensitivity,
-            subjectId: s.subjectId,
-            plannerItemId: s.plannerItemId,
-          ),
-          newId: newUuid,
-        );
-      } else if (mode == SessionMode.camera &&
+      if (mode == SessionMode.camera &&
           await engine.checkAvailability() != SeatAvailability.ok) {
         cameraLost = true;
         reconnectFailed = true;
@@ -505,6 +506,26 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       _emit();
       _resumePending();
     }
+  }
+
+  void _switchToManual() {
+    final s = _timeline!.snapshot(now);
+    _timeline = SessionTimeline.fromSnapshot(
+      SessionSnapshot(
+        sessionId: s.sessionId,
+        mode: SessionMode.manual,
+        kind: s.kind,
+        startedAt: s.startedAt,
+        segments: s.segments,
+        openKind: s.openKind,
+        openStart: s.openStart,
+        savedAt: s.savedAt,
+        sensitivity: s.sensitivity,
+        subjectId: s.subjectId,
+        plannerItemId: s.plannerItemId,
+      ),
+      newId: newUuid,
+    );
   }
 
   Future<void> background() async {
@@ -584,8 +605,10 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       await _writes;
       if (_disposed) return;
       try {
-        await sessions.writeSnapshot(_draft!);
-        await sessions.markInterrupted(s.sessionId);
+        await _owned(() async {
+          await sessions.writeSnapshot(_draft!);
+          await sessions.markInterrupted(s.sessionId);
+        });
       } on Object {
         checkpointFailed = true;
       }
@@ -636,9 +659,11 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
         subjectId: snapshot?.subjectId ?? row?.subjectId,
         plannerItemId: snapshot?.plannerItemId ?? row?.plannerItemId,
       );
-      _checkAlive();
-      if (row == null) await sessions.startActive(_draft!);
-      await sessions.markInterrupted(id);
+      final draft = _draft!;
+      await _owned(() async {
+        if (row == null) await sessions.startActive(draft);
+        await sessions.markInterrupted(id);
+      });
       phase = MeasurePhase.summary;
       _recovered = true;
       if (continueSession) {
@@ -684,9 +709,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     final draft = _draft!;
     try {
       await _writes;
-      _checkAlive();
-      await sessions.writer.runInTransaction(() async {
-        _checkAlive();
+      await _owned(() async {
         await sessions.saveFinished(
           id: draft.sessionId,
           kind: draft.kind,
@@ -716,12 +739,10 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       return true;
     } on Object {
       saveState = const MeasureSaveFailed();
-      if (!_disposed) {
-        try {
-          await sessions.markInterrupted(draft.sessionId);
-        } on Object {
-          /* snapshot remains */
-        }
+      try {
+        await _owned(() => sessions.markInterrupted(draft.sessionId));
+      } on Object {
+        /* disposed, other account, or DB error: snapshot remains */
       }
       return false;
     } finally {
@@ -730,8 +751,12 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<void> persistCorrections(String id, Iterable<String> ids) async {
-    _checkAlive();
+  /// Records corrections (+ sensitivity). Runs in its own owned transaction;
+  /// inside [save] it joins the outer one.
+  Future<void> persistCorrections(String id, Iterable<String> ids) =>
+      _owned(() => _persistCorrections(id, ids));
+
+  Future<void> _persistCorrections(String id, Iterable<String> ids) async {
     var prefs = await settings.get();
     sensitivityChanged = false;
     final at = wall.now();
@@ -774,8 +799,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       await _stopEngine();
       await _wake(false);
       await _writes;
-      _checkAlive();
-      if (target != null) await sessions.discard(target);
+      if (target != null) await _owned(() => sessions.discard(target));
       _draft = null;
       _timeline = null;
       _original = [];

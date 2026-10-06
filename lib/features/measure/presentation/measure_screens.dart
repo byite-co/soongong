@@ -767,12 +767,8 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
     });
     final controller = ref.read(measureControllerProvider);
     try {
-      await ref
-          .read(sessionRepositoryProvider)
-          .writer
-          .runInTransaction(
-            () => controller.persistCorrections(widget.id, corrections),
-          );
+      // One owned transaction (alive + account checks inside, [S06d]).
+      await controller.persistCorrections(widget.id, corrections);
       corrections.clear();
       editing = false;
       await _load();
@@ -815,11 +811,14 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
     Timer(const Duration(seconds: 5), () async {
       if (!sameAccount()) return;
       try {
-        final row = await repo.get(id);
-        final until = row?.stamp.pendingDeleteUntil;
-        if (until != null && !repo.ctx.clock.now().isBefore(until)) {
-          await repo.commitDelete(id);
-        }
+        // Ownership is re-checked inside the transaction ([S06d]).
+        await repo.writer.runOwnedTransaction(() async {
+          final row = await repo.get(id);
+          final until = row?.stamp.pendingDeleteUntil;
+          if (until != null && !repo.ctx.clock.now().isBefore(until)) {
+            await repo.commitDelete(id);
+          }
+        });
       } on Object {
         if (mounted) setState(() => deleteFailed = true);
       }
@@ -830,7 +829,7 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
       onUndo: () async {
         if (!sameAccount()) return;
         try {
-          await repo.undoDelete(id);
+          await repo.writer.runOwnedTransaction(() => repo.undoDelete(id));
           if (mounted) setState(() => deleted = false);
         } on Object {
           if (mounted) setState(() => deleteFailed = true);

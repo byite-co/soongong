@@ -55,6 +55,40 @@ class SyncWriter {
   Future<T> runInTransaction<T>(Future<T> Function() action) =>
       db.transaction(action);
 
+  /// `sync_meta` key that binds the database to one account (D27,
+  /// `AccountBinding`). null = never bound (local-only dev build).
+  static const String accountUserIdKey = 'account_user_id';
+
+  /// The account the database is currently bound to, or null.
+  Future<String?> boundUserId() async {
+    final row = await (db.select(db.syncMeta)
+          ..where((m) => m.key.equals(accountUserIdKey)))
+        .getSingleOrNull();
+    return row?.value;
+  }
+
+  /// [runInTransaction] for a write that may be stale ([S06d]): the checks
+  /// run **inside** the transaction, i.e. only once this writer holds the
+  /// database lock, so a write queued behind an account switch can no
+  /// longer slip in after it. It refuses (nothing commits) when
+  ///   * [alive] reports the caller was disposed meanwhile, or
+  ///   * the database is bound to another account than [ctx.userId]
+  ///     (`sync_meta.account_user_id`, written by `AccountBinding.bind`).
+  Future<T> runOwnedTransaction<T>(
+    Future<T> Function() action, {
+    bool Function()? alive,
+  }) =>
+      db.transaction(() async {
+        if (alive != null && !alive()) {
+          throw StateError('stale write: caller disposed');
+        }
+        final bound = await boundUserId();
+        if (bound != null && bound != ctx.userId) {
+          throw StateError('stale write: database bound to another account');
+        }
+        return action();
+      });
+
   // ---------------------------------------------------------------------
   // User writes
 

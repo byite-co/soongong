@@ -3,14 +3,40 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/core/contracts/seat_engine.dart';
 import 'package:soongong/core/domain/clock.dart';
+import 'package:soongong/core/domain/entities/entities.dart';
 import 'package:soongong/core/domain/enums.dart';
 import 'package:soongong/core/domain/local_date.dart';
+import 'package:soongong/data/db/app_database.dart';
+import 'package:soongong/data/repositories/settings_repository.dart';
+import 'package:soongong/data/repositories/sync_writer.dart';
+import 'package:soongong/features/home/domain/home_summary.dart';
+import 'package:soongong/features/home/domain/streak_calculator.dart';
 import 'package:soongong/features/measure/application/measure_controller.dart';
 import 'package:soongong/features/measure/domain/segment.dart';
 import 'package:soongong/features/measure/domain/session_snapshot.dart';
 
 import '../../helpers/measure_fakes.dart';
 import '../data/db_test_helpers.dart';
+
+/// Lets a test park `start()` right after its reads (snapshot · settings)
+/// and before its first write, to interleave an account switch.
+class _GatedSettings extends SettingsRepository {
+  _GatedSettings(super.db, super.writer);
+  Completer<void>? gate;
+  @override
+  Future<AppSettings> get() async {
+    final v = await super.get();
+    final g = gate;
+    if (g != null) await g.future;
+    return v;
+  }
+}
+
+Future<void> _bindDatabaseTo(TestHarness h, String userId) => h.db
+    .into(h.db.syncMeta)
+    .insertOnConflictUpdate(
+      SyncMetaCompanion.insert(key: SyncWriter.accountUserIdKey, value: userId),
+    );
 
 void main() {
   late TestHarness h;
@@ -351,6 +377,156 @@ void main() {
     expect(row.endedAt, isNull, reason: 'the final save never ran');
     expect(await h.sessions.getSegments(id), isEmpty);
     expect(await h.sessions.readSnapshot(), isNotNull, reason: 'the snapshot stays for recovery');
+  });
+
+  test('P1: account switch committed while start() waits for the DB lock → nothing of u1 is written', () async {
+    final gated = _GatedSettings(h.db, h.writer)..gate = Completer<void>();
+    controller.dispose();
+    controller = MeasureController(
+      engine: engine,
+      sessions: h.sessions,
+      settings: gated,
+      planner: h.planner,
+      wall: h.clock,
+      monotonic: mono,
+      device: device,
+      sleepAware: sleepAware,
+      automaticTicks: false,
+    );
+    // 1. start(): snapshot + settings reads complete, parked before its write.
+    final starting = controller.start(mode: SessionMode.manual);
+    await flush();
+    // 2. The account switch takes the DB: wipe + rebind to u2, commit pending.
+    final entered = Completer<void>();
+    final release = Completer<void>();
+    final switching = h.writer.runInTransaction(() async {
+      await h.db.wipeAll();
+      await _bindDatabaseTo(h, 'u2');
+      entered.complete();
+      await release.future;
+    });
+    await entered.future;
+    // 3. start() continues: the pre-write alive check passes, startActive
+    //    queues behind the switch transaction.
+    gated.gate!.complete();
+    await flush();
+    // 4. The old controller is disposed, then the switch commits.
+    controller.dispose();
+    release.complete();
+    await switching;
+    expect(await starting, isFalse);
+    expect(await h.db.customSelect('SELECT id FROM sessions').get(), isEmpty,
+        reason: 'u1 active row must not be re-created in u2\'s database');
+    expect(await h.sessions.readSnapshot(), isNull);
+  });
+
+  test('P1: database already bound to another account → every write refuses even before dispose', () async {
+    await controller.start(mode: SessionMode.manual);
+    final id = controller.sessionId!;
+    mono.advance(const Duration(seconds: 20));
+    await controller.checkpoint();
+    expect(controller.checkpointFailed, isFalse);
+    final before = (await h.sessions.readSnapshot())!.savedAt;
+    await _bindDatabaseTo(h, 'u2'); // AccountBinding.bind('u2') landed; Riverpod rebuild still pending
+    mono.advance(const Duration(seconds: 20));
+    await controller.checkpoint();
+    expect(controller.checkpointFailed, isTrue);
+    expect((await h.sessions.readSnapshot())!.savedAt, before, reason: 'snapshot not overwritten');
+    await controller.finish();
+    expect((await h.sessions.get(id))!.status, SessionStatus.active, reason: 'markInterrupted refused');
+    expect(await controller.save(), isFalse);
+    expect((await h.sessions.get(id))!.endedAt, isNull);
+    await expectLater(controller.discard(id), throwsStateError);
+    expect(await h.sessions.get(id), isNotNull);
+    await _bindDatabaseTo(h, 'u1'); // back on the owner: writes work again
+    expect(await controller.save(), isTrue);
+  });
+
+  test('P2: "수동으로 이어서" interrupted by background resumes in manual mode on foreground', () async {
+    await controller.start(mode: SessionMode.camera);
+    mono.advance(const Duration(seconds: 20));
+    engine.sample(20, seated: true);
+    engine.eventBus.add(const SeatCameraLost());
+    await flush();
+    expect(controller.cameraLost, isTrue);
+    engine.availability = SeatAvailability.cameraBusy; // still held by another app
+    final resuming = controller.resume(manual: true);
+    final background = controller.background();
+    await resuming;
+    await background;
+    expect(controller.mode, SessionMode.manual, reason: 'the decision survives the interruption');
+    expect(controller.paused, isTrue);
+    await controller.foreground();
+    expect(controller.paused, isFalse);
+    expect(controller.mode, SessionMode.manual);
+    expect(controller.currentKind, SegmentKind.manual);
+    expect(controller.cameraLost, isFalse);
+    expect(controller.reconnectFailed, isFalse);
+    expect(engine.starts, 1, reason: 'no camera restart in manual mode');
+    mono.advance(const Duration(seconds: 10));
+    expect(controller.seated.inSeconds, 30);
+    expect((await h.sessions.readSnapshot())!.mode, SessionMode.manual);
+  });
+
+  test('P3: todayTotal counts the part after local midnight of a saved session, like the home ring', () async {
+    final today = LocalDate.of(h.clock.now());
+    final midnight = today.toDateTime();
+    final nightStart = midnight.subtract(const Duration(minutes: 10)).toUtc();
+    final nightEnd = midnight.add(const Duration(minutes: 10)).toUtc();
+    await h.sessions.saveFinished(
+      id: 'night',
+      kind: SessionKind.self,
+      mode: SessionMode.manual,
+      startedAt: nightStart,
+      endedAt: nightEnd,
+      status: SessionStatus.finished,
+      segments: [Segment(id: 'n', kind: SegmentKind.manual, startAt: nightStart, endAt: nightEnd)],
+      sensitivityLevel: 0,
+    );
+    // Excluded like the home: a pending-delete session and an unsaved row.
+    final goneStart = midnight.add(const Duration(hours: 1)).toUtc();
+    await h.sessions.saveFinished(
+      id: 'gone',
+      kind: SessionKind.self,
+      mode: SessionMode.manual,
+      startedAt: goneStart,
+      endedAt: goneStart.add(const Duration(hours: 1)),
+      status: SessionStatus.finished,
+      segments: [Segment(id: 'g', kind: SegmentKind.manual, startAt: goneStart, endAt: goneStart.add(const Duration(hours: 1)))],
+      sensitivityLevel: 0,
+    );
+    await h.sessions.softDelete('gone');
+    final openStart = midnight.add(const Duration(hours: 3)).toUtc();
+    await h.sessions.startActive(
+      SessionSnapshot(
+        sessionId: 'open',
+        mode: SessionMode.manual,
+        kind: SessionKind.self,
+        startedAt: openStart,
+        segments: [Segment(id: 'o', kind: SegmentKind.manual, startAt: openStart, endAt: openStart.add(const Duration(hours: 1)))],
+        openKind: SegmentKind.paused,
+        openStart: openStart.add(const Duration(hours: 1)),
+        savedAt: openStart.add(const Duration(hours: 1)),
+        sensitivity: 0,
+      ),
+    );
+    await h.sessions.markInterrupted('open');
+    await h.sessions.clearSnapshot();
+
+    expect(await controller.start(mode: SessionMode.manual), isTrue);
+    expect(controller.todayTotal, const Duration(minutes: 10));
+
+    final home = HomeSummary.build(
+      today: today,
+      sessions: await h.sessions.getAll(),
+      segments: await h.sessions.getSegmentsOverlapping(today.addDays(-1), today),
+      items: const [],
+      recurrences: const [],
+      subjects: const {},
+      streak: StreakResult.zero,
+      fallbackSubjectName: '자습',
+    );
+    expect(home.seatedToday, controller.todayTotal, reason: 'home and focus agree');
   });
 
   test('dispose before finish / discard / corrections: late calls do not write', () async {
