@@ -103,6 +103,29 @@ class SessionRepository {
           .watch()
           .map((rows) => liveOnly(rows.map(segmentOf)));
 
+  /// Segments of the user that overlap the local day range [from]..[to]
+  /// (inclusive): `end_at > from 00:00` and `start_at < to+1 00:00`. A
+  /// segment that crosses midnight is returned for both days; the caller
+  /// clips it (`HomeSummary.build`).
+  Stream<List<SessionSegment>> watchSegmentsOverlapping(
+    LocalDate from,
+    LocalDate to,
+  ) {
+    final start = utcIso(from.toDateTime().toUtc());
+    final end = utcIso(to.addDays(1).toDateTime().toUtc());
+    return (db.select(db.sessionSegments)
+          ..where(
+            (s) =>
+                s.userId.equals(ctx.userId) &
+                s.deletedAt.isNull() &
+                s.endAt.isBiggerThanValue(start) &
+                s.startAt.isSmallerThanValue(end),
+          )
+          ..orderBy([(s) => OrderingTerm.asc(s.startAt)]))
+        .watch()
+        .map((rows) => liveOnly(rows.map(segmentOf)));
+  }
+
   SimpleSelectStatement<$SessionSegmentsTable, SessionSegmentRow>
   _segmentsQuery(String sessionId) => db.select(db.sessionSegments)
     ..where((s) => s.sessionId.equals(sessionId) & s.deletedAt.isNull())

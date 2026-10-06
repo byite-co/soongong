@@ -82,6 +82,43 @@ void main() {
     expect((await h.sessions.getBetween(LocalDate.parse('2026-09-01'), LocalDate.parse('2026-10-31'))).length, 3);
   });
 
+  test('watchSegmentsOverlapping returns segments touching the day range, including midnight crossers', () async {
+    // A session the previous evening that crossed local midnight (built from
+    // the local midnight so the test holds in any time zone).
+    final eveningStart = LocalDate.of(kT0).toDateTime().subtract(const Duration(hours: 2)).toUtc();
+    await h.sessions.saveFinished(
+      id: 'night',
+      kind: SessionKind.study,
+      mode: SessionMode.manual,
+      startedAt: eveningStart,
+      endedAt: eveningStart.add(const Duration(hours: 4)),
+      status: SessionStatus.finished,
+      segments: <Segment>[
+        Segment(id: 'n1', kind: SegmentKind.manual, startAt: eveningStart, endAt: eveningStart.add(const Duration(hours: 4))),
+      ],
+      sensitivityLevel: 0,
+    );
+    await h.sessions.saveFinished(
+      id: 'old',
+      kind: SessionKind.study,
+      mode: SessionMode.manual,
+      startedAt: kT0.subtract(const Duration(days: 5)),
+      endedAt: kT0.subtract(const Duration(days: 5, hours: -1)),
+      status: SessionStatus.finished,
+      segments: <Segment>[
+        Segment(id: 'o1', kind: SegmentKind.manual, startAt: kT0.subtract(const Duration(days: 5)), endAt: kT0.subtract(const Duration(days: 5, hours: -1))),
+      ],
+      sensitivityLevel: 0,
+    );
+    final today = LocalDate.of(kT0);
+    final both = await h.sessions.watchSegmentsOverlapping(today.addDays(-1), today).first;
+    expect(both.map((s) => s.id), <String>['n1']);
+    final onlyToday = await h.sessions.watchSegmentsOverlapping(today, today).first;
+    expect(onlyToday.map((s) => s.id), <String>['n1'], reason: 'the segment crosses into today');
+    final older = await h.sessions.watchSegmentsOverlapping(today.addDays(-6), today.addDays(-5)).first;
+    expect(older.map((s) => s.id), <String>['o1']);
+  });
+
   test('applyCorrection flips the segment, records a correction and '
       'recomputes seated_seconds', () async {
     await h.sessions.saveFinished(

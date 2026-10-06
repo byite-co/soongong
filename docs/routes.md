@@ -21,9 +21,9 @@ StatefulShellRoute (탭 4개 · 태블릿 ≥600dp 는 좌측 레일)
   /timetable          (S07 placeholder)
   /stats              (S08 placeholder)
 /settings             (S09 placeholder · 홈 헤더 기어 · 탭 밖, root navigator push)
-/measure/setup        setupOn setupDen errCam camBusyN s5 (홈 CTA · 복구 "이어서" = ?resume=<sessionId>)
+/measure/setup        setupOn setupDen errCam camBusyN s5 (홈 CTA · 복구 "이어서" = ?resume=<sessionId> · 기록 유지 뒤 복구 카드)
 /measure/focus        focus away awayLong lost lostFail s6 s7
-/measure/summary      summary s8 s9 sumDiscard toast (새 기록 저장·정정 시트)
+/measure/summary      summary s8 s9 sumDiscard toast (새 기록 저장·정정 시트 · 저장 → 홈 + 토스트)
 /session/:id          session sumEdit sumEditCancel sessDel
 /measure/corrections  정정 이력 (감도 조정 토스트·S09 연결용)
 /_gallery             dev 전용(DEV_MENU)

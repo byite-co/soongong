@@ -265,6 +265,81 @@ void main() {
     expect(await h.sessions.get(id), isNull);
   });
 
+  test('foreground after background realigns the clock: the sleep gap is paused, later segments keep wall time', () async {
+    await controller.start(mode: SessionMode.manual);
+    mono.advance(const Duration(seconds: 10));
+    await controller.background();
+    expect(controller.paused, isTrue);
+    // The device slept: the wall clock moved 30 minutes, the monotonic clock
+    // (frozen during sleep) only 60 seconds.
+    h.clock.advance(const Duration(minutes: 30));
+    mono.advance(const Duration(seconds: 60));
+    await controller.foreground();
+    expect(controller.paused, isFalse);
+    mono.advance(const Duration(seconds: 20));
+    final segments = controller.segments;
+    expect(segments.map((s) => s.kind), [
+      SegmentKind.manual,
+      SegmentKind.paused,
+      SegmentKind.manual,
+    ]);
+    expect(segments[1].startAt, kT0.add(const Duration(seconds: 10)));
+    expect(segments[1].endAt, kT0.add(const Duration(minutes: 30)));
+    expect(segments[2].startAt, kT0.add(const Duration(minutes: 30)));
+    expect(controller.seated.inSeconds, 30);
+    await controller.finish();
+    expect(await controller.save(), isTrue);
+    final row = await h.sessions.get(controller.sessionId!);
+    expect(row!.endedAt, kT0.add(const Duration(minutes: 30, seconds: 20)));
+  });
+
+  test('a wall clock set back while in background is ignored (D23: never backwards)', () async {
+    await controller.start(mode: SessionMode.manual);
+    mono.advance(const Duration(seconds: 10));
+    await controller.background();
+    h.clock.jumpTo(kT0.subtract(const Duration(hours: 1)));
+    mono.advance(const Duration(seconds: 5));
+    await controller.foreground();
+    mono.advance(const Duration(seconds: 5));
+    final last = controller.segments.last;
+    expect(last.kind, SegmentKind.manual);
+    expect(last.startAt, kT0.add(const Duration(seconds: 15)));
+  });
+
+  test('resume interrupted by background is honoured on foreground', () async {
+    await controller.start(mode: SessionMode.manual);
+    await controller.pause();
+    final resume = controller.resume();
+    final background = controller.background();
+    await resume;
+    await background;
+    expect(controller.paused, isTrue);
+    await controller.foreground();
+    expect(controller.paused, isFalse, reason: 'the user asked to resume');
+  });
+
+  test('todayTotal adds today\'s saved 순공 before the session (daily goal ring)', () async {
+    await controller.start(mode: SessionMode.manual);
+    mono.advance(const Duration(minutes: 10));
+    await controller.finish();
+    expect(await controller.save(), isTrue);
+    controller.resetSaved();
+    h.clock.advance(const Duration(hours: 1));
+    await controller.start(mode: SessionMode.manual);
+    mono.advance(const Duration(minutes: 5));
+    expect(controller.seated.inMinutes, 5);
+    expect(controller.todayTotal.inMinutes, 15);
+  });
+
+  test('recover and discard refuse to run over a live measurement', () async {
+    await controller.start(mode: SessionMode.manual);
+    expect(
+      () => controller.recover('other', continueSession: false),
+      throwsStateError,
+    );
+    expect(controller.isLive, isTrue);
+  });
+
   test('save, corrections, sensitivity and linked task are one transaction; retry preserves draft', () async {
     final task = await h.planner.createItem(
       kind: PlannerKind.todo,

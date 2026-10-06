@@ -18,6 +18,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/contracts/providers.dart';
 import '../../core/domain/ids.dart';
 import '../../core/domain/local_date.dart';
 import '../../core/logging/app_logger.dart';
@@ -80,6 +81,7 @@ class UserStartupTasks {
         snapshot: await sessions.readSnapshot(),
         sessions: await sessions.getAll(),
         newId: newUuid,
+        deviceId: _ref.read(deviceIdProvider),
       );
       final report = StartupReport(
         userId: userId,

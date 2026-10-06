@@ -120,15 +120,13 @@ void main() {
     expect(find.text('01:00:00'), findsOneWidget);
     await tester.tap(find.text(MeasureStrings.save));
     await tester.pumpAndSettle();
-    expect(find.text(MeasureStrings.saved), findsOneWidget);
+    expect(find.text(MeasureStrings.saved), findsOneWidget, reason: 'toast on home');
 
     final sessions = h.container.read(sessionRepositoryProvider);
     final saved = await sessions.get('open-1');
     expect(saved?.status, SessionStatus.interrupted);
     expect(saved?.seatedSeconds, 3600);
     expect(await sessions.readSnapshot(), isNull);
-    await tester.tap(find.text(MeasureStrings.home));
-    await tester.pumpAndSettle();
     expect(find.text('1시간'), findsOneWidget, reason: 'hero now shows the recovered time');
     await h.unmount(tester);
   });

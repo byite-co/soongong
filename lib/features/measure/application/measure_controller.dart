@@ -11,6 +11,8 @@ import '../../../core/domain/clock.dart';
 import '../../../core/domain/entities/entities.dart';
 import '../../../core/domain/enums.dart';
 import '../../../core/domain/ids.dart';
+import '../../../core/domain/local_date.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../data/repositories/planner_repository.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../data/repositories/session_repository.dart';
@@ -138,6 +140,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void>? _engineWork;
   DateTime? _runAnchor;
   Duration? _lastSample;
+  int _todayBaseSeconds = 0;
 
   String? get sessionId => _draft?.sessionId ?? _timeline?.sessionId;
   SessionMode get mode => _draft?.mode ?? _timeline?.mode ?? SessionMode.manual;
@@ -160,6 +163,33 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
             )
             .toList();
   Duration get seated => const SeatedTimeCalculator().seated(segments);
+
+  /// Today's saved 순공 before this session plus this session's 순공 — what
+  /// the focus ring compares with the daily goal (D25). Read once at start;
+  /// a session that crosses midnight keeps its start day's base.
+  Duration get todayTotal => Duration(seconds: _todayBaseSeconds) + seated;
+
+  /// Length of the open segment (e.g. how long the user has been away).
+  Duration get openElapsed {
+    final t = _timeline;
+    if (t == null || !isLive) return Duration.zero;
+    final d = now.difference(t.openStart);
+    return d.isNegative ? Duration.zero : d;
+  }
+
+  Future<int> _todaySeatedBefore(String excludeId) async {
+    final today = LocalDate.of(wall.now());
+    var total = 0;
+    for (final s in await sessions.getBetween(today, today)) {
+      if (s.id == excludeId || s.endedAt == null) continue;
+      if (s.status != SessionStatus.finished &&
+          s.status != SessionStatus.interrupted) {
+        continue;
+      }
+      total += s.seatedSeconds;
+    }
+    return total;
+  }
 
   void _emit() {
     if (!_disposed) notifyListeners();
@@ -216,6 +246,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       if (await sessions.readSnapshot() != null) {
         throw StateError('Recovery pending');
       }
+      preferences = await settings.get();
       _clock = SessionClock(wall: wall, monotonic: monotonic);
       final at = _clock!.start();
       _timeline = SessionTimeline.start(
@@ -235,6 +266,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
         plannerItemId: task?.id,
       );
       await sessions.startActive(_timeline!.snapshot(at));
+      _todayBaseSeconds = await _todaySeatedBefore(_timeline!.sessionId);
       if (_disposed) return false;
       phase = MeasurePhase.focus;
       _recovered = false;
@@ -401,7 +433,12 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     _emit();
     try {
       await _stopEngine();
-      if (_disposed || _background) return;
+      if (_disposed) return;
+      if (_background) {
+        // The user asked to resume and then left; honour it on return.
+        _resumeOnForeground = true;
+        return;
+      }
       if (manual) {
         final s = _timeline!.snapshot(now);
         _timeline = SessionTimeline.fromSnapshot(
@@ -426,7 +463,11 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
         reconnectFailed = true;
         return;
       }
-      if (_disposed || _background) return;
+      if (_disposed) return;
+      if (_background) {
+        _resumeOnForeground = true;
+        return;
+      }
       cameraLost = false;
       reconnectFailed = false;
       _timeline!.resume(now);
@@ -458,6 +499,14 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> foreground() async {
     _background = false;
     if (!isLive) return;
+    if (paused) {
+      // The monotonic clock stood still while the device slept; the paused
+      // gap absorbs the difference so later segments keep their true time.
+      final shift = _clock?.realign(wall.now()) ?? Duration.zero;
+      if (shift > const Duration(seconds: 1)) {
+        appLog.i('measure · clock realigned after background +${shift.inSeconds}s');
+      }
+    }
     await _wake(true);
     if (_resumeOnForeground) {
       if (!busy) {
@@ -470,29 +519,33 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> finish() async {
     if (!isLive || busy) return;
     busy = true;
-    final at = now;
-    _original = _timeline!.end(at);
-    final s = _timeline!.snapshot(at);
-    _draft = s.copyWith(
-      segments: _original,
-      openKind: SegmentKind.paused,
-      openStart: at,
-    );
-    phase = MeasurePhase.summary;
-    _ticker?.cancel();
-    correctedIds.clear();
-    completeTask = false;
-    await _stopEngine();
-    await _wake(false);
-    await _writes;
-    try {
-      await sessions.writeSnapshot(_draft!);
-      await sessions.markInterrupted(s.sessionId);
-    } on Object {
-      checkpointFailed = true;
-    }
-    busy = false;
     _emit();
+    try {
+      final at = now;
+      _original = _timeline!.end(at);
+      final s = _timeline!.snapshot(at);
+      _draft = s.copyWith(
+        segments: _original,
+        openKind: SegmentKind.paused,
+        openStart: at,
+      );
+      phase = MeasurePhase.summary;
+      _ticker?.cancel();
+      correctedIds.clear();
+      completeTask = false;
+      await _stopEngine();
+      await _wake(false);
+      await _writes;
+      try {
+        await sessions.writeSnapshot(_draft!);
+        await sessions.markInterrupted(s.sessionId);
+      } on Object {
+        checkpointFailed = true;
+      }
+    } finally {
+      busy = false;
+      _emit();
+    }
   }
 
   Future<void> recover(
@@ -500,7 +553,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     required bool continueSession,
     bool manual = false,
   }) async {
-    if (busy || isLive) return;
+    if (busy || isLive) throw StateError('Measurement in progress');
     busy = true;
     failed = false;
     _emit();
@@ -549,6 +602,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
           ..start();
         _timeline = SessionTimeline.fromSnapshot(_draft!, newId: newUuid);
         _timeline!.resume(now);
+        _todayBaseSeconds = await _todaySeatedBefore(id);
         _draft = null;
         phase = MeasurePhase.focus;
         cameraLost = false;
@@ -654,7 +708,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> discard([String? id]) async {
-    if (busy) return;
+    if (busy) throw StateError('Measurement busy');
     busy = true;
     _emit();
     try {

@@ -203,5 +203,19 @@ void main() {
         isNull,
       );
     });
+
+    test('a row-only candidate must come from this device (synced rows of another phone are not ours)', () {
+      final live = _session(id: 'live', start: _t0.subtract(const Duration(minutes: 5)), status: SessionStatus.active);
+      expect(
+        RecoveryCandidate.detect(snapshot: null, sessions: <StudySession>[live], newId: () => 'x', deviceId: 'other-device')
+            ?.sessionId,
+        isNull,
+      );
+      expect(
+        RecoveryCandidate.detect(snapshot: null, sessions: <StudySession>[live], newId: () => 'x', deviceId: live.stamp.deviceId)
+            ?.sessionId,
+        'live',
+      );
+    });
   });
 }

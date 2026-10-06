@@ -4,10 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/contracts/providers.dart';
 import '../../../core/contracts/seat_engine.dart';
 import '../../../core/domain/entities/entities.dart';
 import '../../../core/domain/enums.dart';
+import '../../../core/domain/ids.dart';
 import '../../../core/domain/local_date.dart';
+import '../../../core/strings/common_strings.dart';
+import '../../../core/strings/home_strings.dart';
 import '../../../core/strings/measure_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tokens.dart';
@@ -15,10 +19,14 @@ import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../../data/engines/seat/camera_permission.dart';
 import '../../../data/repositories/repository_providers.dart';
+import '../../auth/domain/auth_redirect.dart';
 import '../../home/application/session_recovery.dart';
+import '../../home/domain/recovery_candidate.dart';
 import '../application/measure_controller.dart';
+import '../domain/away_policy.dart';
 import '../domain/seated_time_calculator.dart';
 import '../domain/segment.dart';
+import '../domain/sensitivity_policy.dart';
 
 class MeasureSetupScreen extends ConsumerStatefulWidget {
   const MeasureSetupScreen({super.key, this.resumeId});
@@ -34,12 +42,23 @@ class _SetupState extends ConsumerState<MeasureSetupScreen> {
   String? subjectId;
   PlannerItem? task;
   bool camera = true, loading = true, loadFailed = false;
+
+  /// An unfinished session of this device that still has to be resumed,
+  /// finished or discarded before a new one can start (the home sheet may
+  /// have been dismissed with 기록 유지).
+  RecoveryCandidate? pending;
   @override
   void initState() {
     super.initState();
     controller = ref.read(measureControllerProvider);
     controller.resetSaved();
     unawaited(_load());
+  }
+
+  @override
+  void didUpdateWidget(MeasureSetupScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.resumeId != widget.resumeId) unawaited(_load());
   }
 
   Future<void> _load() async {
@@ -54,6 +73,18 @@ class _SetupState extends ConsumerState<MeasureSetupScreen> {
       camera =
           controller.preferences.seatDetectionEnabled &&
           controller.availability == SeatAvailability.ok;
+      pending = null;
+      if (widget.resumeId == null &&
+          !controller.isLive &&
+          !controller.hasDraft) {
+        final sessions = ref.read(sessionRepositoryProvider);
+        pending = RecoveryCandidate.detect(
+          snapshot: await sessions.readSnapshot(),
+          sessions: await sessions.getAll(),
+          newId: newUuid,
+          deviceId: ref.read(deviceIdProvider),
+        );
+      }
     } on Object {
       loadFailed = true;
     }
@@ -103,7 +134,11 @@ class _SetupState extends ConsumerState<MeasureSetupScreen> {
           variant: AppButtonVariant.accent,
           busy: controller.busy,
           onPressed:
-              loading || loadFailed || controller.hasDraft || controller.isLive
+              loading ||
+                  loadFailed ||
+                  pending != null ||
+                  controller.hasDraft ||
+                  controller.isLive
               ? null
               : _start,
         ),
@@ -126,6 +161,12 @@ class _SetupState extends ConsumerState<MeasureSetupScreen> {
                   ),
                 ),
               ],
+              if (pending != null)
+                _PendingRecovery(
+                  candidate: pending!,
+                  today: today,
+                  onChanged: _load,
+                ),
               if (widget.resumeId == null) ...[
                 const Text(MeasureStrings.subject),
                 const SizedBox(height: 12),
@@ -341,11 +382,18 @@ class _FocusState extends ConsumerState<MeasureFocusScreen> {
       final goal = controller.preferences.dailyGoalMinutes * 60;
       final progress = goal <= 0
           ? 0.0
-          : (controller.seated.inSeconds / goal).clamp(0.0, 1.0);
+          : (controller.todayTotal.inSeconds / goal).clamp(0.0, 1.0);
       return PopScope(
         canPop: false,
+        // System back never ends a measurement (ending is irreversible): it
+        // pauses a running one. 종료 is the explicit button.
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) unawaited(_finish());
+          if (!didPop &&
+              !controller.paused &&
+              !controller.busy &&
+              !controller.cameraLost) {
+            unawaited(controller.pause());
+          }
         },
         child: FlowScaffold(
           title: MeasureStrings.focus,
@@ -408,7 +456,10 @@ class _FocusState extends ConsumerState<MeasureFocusScreen> {
                             ),
                           ),
                           Text(
-                            '${MeasureStrings.target} ${MeasureStrings.minutes(controller.preferences.dailyGoalMinutes)}',
+                            MeasureStrings.todayTotal(
+                              formatDuration(controller.todayTotal),
+                              controller.preferences.dailyGoalMinutes,
+                            ),
                           ),
                         ],
                       ),
@@ -418,7 +469,7 @@ class _FocusState extends ConsumerState<MeasureFocusScreen> {
               ),
               const SizedBox(height: 24),
               if (progress >= 1)
-                const Center(child: Text(MeasureStrings.targetReached)),
+                const Center(child: Text(MeasureStrings.goalReached)),
               _SessionLabels(
                 subjectId: controller.subjectId,
                 taskId: controller.plannerItemId,
@@ -437,10 +488,14 @@ class _FocusState extends ConsumerState<MeasureFocusScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      Text(MeasureStrings.lost, style: AppTypography.heading),
+                      const SizedBox(height: 4),
                       Text(
                         controller.reconnectFailed
                             ? MeasureStrings.reconnectFailed
-                            : MeasureStrings.lost,
+                            : MeasureStrings.lostBody(
+                                formatDuration(controller.seated),
+                              ),
                       ),
                       if (!controller.reconnectFailed)
                         TextButton(
@@ -452,6 +507,26 @@ class _FocusState extends ConsumerState<MeasureFocusScreen> {
                             ? null
                             : () => controller.resume(manual: true),
                         child: const Text(MeasureStrings.manualContinue),
+                      ),
+                    ],
+                  ),
+                ),
+              if (controller.currentKind == SegmentKind.away)
+                _Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        MeasureStrings.awayTitle,
+                        style: AppTypography.heading,
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(MeasureStrings.awayBody),
+                      const SizedBox(height: 4),
+                      Text(
+                        MeasureStrings.awayElapsed(
+                          _duration(controller.openElapsed),
+                        ),
                       ),
                     ],
                   ),
@@ -479,7 +554,6 @@ class MeasureSummaryScreen extends ConsumerStatefulWidget {
 
 class _SummaryState extends ConsumerState<MeasureSummaryScreen> {
   late final MeasureController controller;
-  String? savedId;
   @override
   void initState() {
     super.initState();
@@ -494,24 +568,36 @@ class _SummaryState extends ConsumerState<MeasureSummaryScreen> {
         body: MeasureStrings.shortBody,
         primaryLabel: MeasureStrings.save,
       );
-      if (!confirmed) return;
+      if (!confirmed || !mounted) return;
     }
-    savedId = controller.sessionId;
-    if (await controller.save() && mounted && controller.sensitivityChanged) {
+    final router = GoRouter.of(context);
+    final saved = await controller.save();
+    if (!saved) return;
+    if (!mounted) return;
+    // Prototype `saveSession`: 저장 → 홈 (the ring updates there). The toast
+    // carries the outcome; a sensitivity change links to the history.
+    if (controller.sensitivityChanged) {
       showAppToast(
         context,
         message: MeasureStrings.sensitivity,
         actionLabel: MeasureStrings.history,
-        onAction: () => context.push('/measure/corrections'),
+        onAction: () => router.push('/measure/corrections'),
       );
+    } else {
+      showAppToast(context, message: MeasureStrings.saved);
     }
+    router.go('/home');
   }
 
   Future<void> _discard() async {
     final ok = await showAppModal(
       context,
-      title: MeasureStrings.discard,
-      body: MeasureStrings.discardBody,
+      title: MeasureStrings.discardTitle,
+      body: MeasureStrings.discardBody(
+        seated: formatDuration(controller.seated),
+        corrections: controller.correctedIds.length,
+        linkedTask: controller.plannerItemId != null,
+      ),
       primaryLabel: MeasureStrings.discard,
       destructive: true,
       onConfirm: controller.discard,
@@ -524,25 +610,10 @@ class _SummaryState extends ConsumerState<MeasureSummaryScreen> {
     listenable: controller,
     builder: (context, _) {
       if (controller.saveState is MeasureSaved) {
-        return FlowScaffold(
+        // Shown for the frame between the save and the home navigation.
+        return const FlowScaffold(
           title: MeasureStrings.summary,
-          child: Column(
-            children: [
-              const Text(MeasureStrings.saved),
-              if (savedId != null)
-                TextButton(
-                  onPressed: () => context.go('/session/$savedId'),
-                  child: const Text(MeasureStrings.viewSession),
-                ),
-              AppButton(
-                label: MeasureStrings.home,
-                onPressed: () {
-                  controller.resetSaved();
-                  context.go('/home');
-                },
-              ),
-            ],
-          ),
+          child: Text(MeasureStrings.saved, textAlign: TextAlign.center),
         );
       }
       if (!controller.hasDraft) {
@@ -628,6 +699,8 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
   final Set<String> corrections = {};
   bool loading = true,
       failed = false,
+      saveFailed = false,
+      deleteFailed = false,
       busy = false,
       editing = false,
       deleted = false;
@@ -660,16 +733,29 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
   }
 
   Future<void> _cancel() async {
+    if (corrections.isEmpty) {
+      // Nothing changed: leave edit mode without a dialog (prototype
+      // `sumDiscardTap` when not corrected).
+      setState(() {
+        editing = false;
+        saveFailed = false;
+      });
+      return;
+    }
     if (await showAppModal(
           context,
-          title: MeasureStrings.cancelChanges,
-          body: MeasureStrings.cancelBody,
+          title: MeasureStrings.cancelTitle,
+          body: MeasureStrings.cancelBody(
+            corrections.length,
+            formatDuration(const SeatedTimeCalculator().seated(original)),
+          ),
           primaryLabel: MeasureStrings.cancelChanges,
         ) &&
         mounted) {
       setState(() {
         corrections.clear();
         editing = false;
+        saveFailed = false;
       });
     }
   }
@@ -677,7 +763,7 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
   Future<void> _save() async {
     setState(() {
       busy = true;
-      failed = false;
+      saveFailed = false;
     });
     final controller = ref.read(measureControllerProvider);
     try {
@@ -701,7 +787,7 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
         );
       }
     } on Object {
-      failed = true;
+      saveFailed = true; // corrections stay selected; 변경 저장 retries
     }
     if (mounted) setState(() => busy = false);
   }
@@ -727,7 +813,7 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
           await repo.commitDelete(id);
         }
       } on Object {
-        if (mounted) setState(() => failed = true);
+        if (mounted) setState(() => deleteFailed = true);
       }
     });
     showUndoToast(
@@ -738,7 +824,7 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
           await repo.undoDelete(id);
           if (mounted) setState(() => deleted = false);
         } on Object {
-          if (mounted) setState(() => failed = true);
+          if (mounted) setState(() => deleteFailed = true);
         }
       },
     );
@@ -776,7 +862,9 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
                 children: [
                   AppButton(
                     label: editing
-                        ? MeasureStrings.saveChanges
+                        ? (saveFailed
+                              ? MeasureStrings.retry
+                              : MeasureStrings.saveChanges)
                         : MeasureStrings.edit,
                     busy: busy,
                     onPressed: busy
@@ -809,12 +897,14 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (failed) ...[
-                    const Text(MeasureStrings.failed),
+                    const Text(MeasureStrings.loadFailed),
                     TextButton(
                       onPressed: _load,
                       child: const Text(MeasureStrings.retry),
                     ),
                   ],
+                  if (saveFailed) const Text(MeasureStrings.failed),
+                  if (deleteFailed) const Text(CommonStrings.deleteFailed),
                   if (deleted)
                     const Text(MeasureStrings.deleted)
                   else if (session == null)
@@ -850,30 +940,76 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
   }
 }
 
-class CorrectionHistoryScreen extends ConsumerWidget {
+class CorrectionHistoryScreen extends ConsumerStatefulWidget {
   const CorrectionHistoryScreen({super.key});
   @override
-  Widget build(BuildContext context, WidgetRef ref) => FlowScaffold(
-    title: MeasureStrings.history,
+  ConsumerState<CorrectionHistoryScreen> createState() => _HistoryState();
+}
+
+/// userflow `corr` · `crEmpty`: the list of 되돌린 구간, the current away
+/// threshold with the 2-week count (facts, PRD 7장 "정정 이력·감도"), and a
+/// next action when empty. Streams are created once (not per build).
+class _HistoryState extends ConsumerState<CorrectionHistoryScreen> {
+  late final Stream<List<Correction>> _corrections = ref
+      .read(sessionRepositoryProvider)
+      .watchAllCorrections();
+  late final Stream<AppSettings> _settings = ref
+      .read(settingsRepositoryProvider)
+      .watch();
+
+  @override
+  Widget build(BuildContext context) => FlowScaffold(
+    title: MeasureStrings.historyTitle,
     onBack: () => context.canPop() ? context.pop() : context.go('/home'),
     child: StreamBuilder<List<Correction>>(
-      stream: ref.watch(sessionRepositoryProvider).watchAllCorrections(),
+      stream: _corrections,
       builder: (context, snap) {
         if (snap.hasError) return const Text(MeasureStrings.loadFailed);
         if (!snap.hasData) return const StatePanel.loading();
-        if (snap.data!.isEmpty) return const Text(MeasureStrings.emptyHistory);
+        final rows = snap.data!;
+        final now = ref.read(appClockProvider).now();
+        final recent = SensitivityPolicy.countRecent(
+          rows.map((c) => c.at),
+          now,
+        );
         return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final c in snap.data!)
-              ListTile(
-                title: Text(
-                  '${MeasureStrings.segment(c.fromKind)} → ${MeasureStrings.segment(c.toKind)}',
+            StreamBuilder<AppSettings>(
+              stream: _settings,
+              builder: (context, settings) {
+                final prefs = settings.data;
+                if (prefs == null) return const SizedBox.shrink();
+                final threshold = AwayPolicy.thresholdFor(
+                  prefs.sensitivityLevel,
+                ).inSeconds;
+                return _Card(
+                  child: Text(
+                    prefs.sensitivityAuto
+                        ? MeasureStrings.sensitivityStatus(threshold, recent)
+                        : MeasureStrings.sensitivityManual(threshold),
+                  ),
+                );
+              },
+            ),
+            if (rows.isEmpty)
+              StatePanel.empty(
+                title: MeasureStrings.emptyHistory,
+                body: MeasureStrings.emptyHistoryBody,
+                actionLabel: MeasureStrings.pastRecords,
+                onAction: () => context.go(AppPaths.stats),
+              )
+            else
+              for (final c in rows)
+                ListTile(
+                  title: Text(
+                    '${MeasureStrings.segment(c.fromKind)} → ${MeasureStrings.segment(c.toKind)}',
+                  ),
+                  subtitle: Text(
+                    '${LocalDate.of(c.at.toLocal()).key} ${formatClock(c.at.toLocal())}',
+                  ),
+                  onTap: () => context.push('/session/${c.sessionId}'),
                 ),
-                subtitle: Text(
-                  '${LocalDate.of(c.at.toLocal()).key} ${formatClock(c.at.toLocal())}',
-                ),
-                onTap: () => context.push('/session/${c.sessionId}'),
-              ),
           ],
         );
       },
@@ -881,7 +1017,7 @@ class CorrectionHistoryScreen extends ConsumerWidget {
   );
 }
 
-class _SessionLabels extends ConsumerWidget {
+class _SessionLabels extends ConsumerStatefulWidget {
   const _SessionLabels({
     required this.subjectId,
     required this.taskId,
@@ -890,23 +1026,154 @@ class _SessionLabels extends ConsumerWidget {
   final String? subjectId, taskId;
   final SessionKind kind;
   @override
-  Widget build(BuildContext context, WidgetRef ref) => _Card(
+  ConsumerState<_SessionLabels> createState() => _SessionLabelsState();
+}
+
+class _SessionLabelsState extends ConsumerState<_SessionLabels> {
+  Future<Subject?>? _subject;
+  Future<PlannerItem?>? _task;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  @override
+  void didUpdateWidget(_SessionLabels oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.subjectId != widget.subjectId ||
+        oldWidget.taskId != widget.taskId) {
+      _refresh();
+    }
+  }
+
+  // One lookup per id: a new Future per build would reset the FutureBuilder
+  // (placeholder flicker) on every 1-second tick of the focus screen.
+  void _refresh() {
+    final subjectId = widget.subjectId;
+    final taskId = widget.taskId;
+    _subject = subjectId == null
+        ? null
+        : ref.read(subjectRepositoryProvider).get(subjectId);
+    _task = taskId == null
+        ? null
+        : ref.read(plannerRepositoryProvider).getItem(taskId);
+  }
+
+  @override
+  Widget build(BuildContext context) => _Card(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(MeasureStrings.kind(kind), style: AppTypography.heading),
-        if (subjectId != null)
+        Text(MeasureStrings.kind(widget.kind), style: AppTypography.heading),
+        if (_subject != null)
           FutureBuilder<Subject?>(
-            future: ref.read(subjectRepositoryProvider).get(subjectId!),
+            future: _subject,
             builder: (_, snap) =>
                 Text(snap.data?.name ?? MeasureStrings.subject),
           ),
-        if (taskId != null)
+        if (_task != null)
           FutureBuilder<PlannerItem?>(
-            future: ref.read(plannerRepositoryProvider).getItem(taskId!),
+            future: _task,
             builder: (_, snap) =>
                 Text(snap.data?.title ?? MeasureStrings.linkedTask),
           ),
+      ],
+    ),
+  );
+}
+
+/// Setup-screen counterpart of the home recovery sheet (same handler, same
+/// three choices) for a session left unfinished after 기록 유지.
+class _PendingRecovery extends ConsumerStatefulWidget {
+  const _PendingRecovery({
+    required this.candidate,
+    required this.today,
+    required this.onChanged,
+  });
+  final RecoveryCandidate candidate;
+  final LocalDate today;
+  final Future<void> Function() onChanged;
+  @override
+  ConsumerState<_PendingRecovery> createState() => _PendingRecoveryState();
+}
+
+class _PendingRecoveryState extends ConsumerState<_PendingRecovery> {
+  bool busy = false;
+
+  String get _startedLabel {
+    final t = widget.candidate.startedAt.toLocal();
+    final day = LocalDate.of(t);
+    if (day == widget.today) return '${HomeStrings.today} ${formatClock(t)}';
+    if (day == widget.today.addDays(-1)) {
+      return '${HomeStrings.yesterday} ${formatClock(t)}';
+    }
+    return '${HomeStrings.monthDay(t.month, t.day)} ${formatClock(t)}';
+  }
+
+  Future<void> _finish() async {
+    if (busy) return;
+    setState(() => busy = true);
+    try {
+      await ref.read(sessionRecoveryHandlerProvider).finish(widget.candidate);
+      if (mounted) context.go('/measure/summary');
+    } on Object {
+      if (mounted) showAppToast(context, message: HomeStrings.recoverFailed);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _discard() async {
+    if (busy) return;
+    final recorded = formatDuration(widget.candidate.recorded);
+    final handler = ref.read(sessionRecoveryHandlerProvider);
+    final ok = await showAppModal(
+      context,
+      title: HomeStrings.recoverDiscardTitle,
+      body: HomeStrings.recoverDiscardBody(recorded),
+      primaryLabel: CommonStrings.delete,
+      destructive: true,
+      onConfirm: () => handler.discard(widget.candidate),
+    );
+    if (!ok || !mounted) return;
+    showAppToast(context, message: HomeStrings.recoverDiscarded(recorded));
+    await widget.onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) => _Card(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(HomeStrings.recoverTitle, style: AppTypography.heading),
+        const SizedBox(height: 4),
+        Text(
+          HomeStrings.recoverBody(
+            _startedLabel,
+            formatDuration(widget.candidate.recorded),
+          ),
+        ),
+        const SizedBox(height: 12),
+        AppButton(
+          label: HomeStrings.recoverResume,
+          busy: busy,
+          onPressed: busy
+              ? null
+              : () => context.go(
+                  '${AppPaths.measureSetup}?resume=${widget.candidate.sessionId}',
+                ),
+        ),
+        const SizedBox(height: 8),
+        AppButton.secondary(
+          label: HomeStrings.recoverFinish,
+          onPressed: busy ? null : _finish,
+        ),
+        TextButton(
+          onPressed: busy ? null : _discard,
+          child: const Text(HomeStrings.recoverDiscard),
+        ),
       ],
     ),
   );
@@ -925,7 +1192,7 @@ class _Timeline extends StatelessWidget {
       for (final s in segments)
         ListTile(
           leading: LucideIcon(
-            s.kind.countsAsSeated ? LucideIcons.circle : LucideIcons.circle,
+            LucideIcons.circle,
             color: s.kind.countsAsSeated
                 ? context.colors.pri
                 : context.colors.tx3,

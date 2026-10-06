@@ -4,6 +4,7 @@
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/contracts/providers.dart';
 import '../../../core/domain/entities/entities.dart';
 import '../../../core/domain/ids.dart';
 import '../../../core/domain/local_date.dart';
@@ -31,9 +32,16 @@ Stream<List<StudySession>> homeRecentSessions(Ref ref) {
 Stream<List<StudySession>> homeAllSessions(Ref ref) =>
     ref.watch(sessionRepositoryProvider).watchAll();
 
+/// Segments overlapping yesterday..today (the ring and the two totals never
+/// need older ones; a session that started yesterday and crossed midnight
+/// is included because its segments overlap today).
 @riverpod
-Stream<List<SessionSegment>> homeSegments(Ref ref) =>
-    ref.watch(sessionRepositoryProvider).watchAllSegments();
+Stream<List<SessionSegment>> homeSegments(Ref ref) {
+  final today = ref.watch(homeTodayProvider);
+  return ref
+      .watch(sessionRepositoryProvider)
+      .watchSegmentsOverlapping(today.addDays(-1), today);
+}
 
 @riverpod
 Stream<List<PlannerItem>> homeTodayItems(Ref ref) => ref
@@ -120,5 +128,6 @@ RecoveryCandidate? homeRecoveryCandidate(Ref ref) {
     snapshot: snapshot.value,
     sessions: all.value!,
     newId: newUuid,
+    deviceId: ref.watch(deviceIdProvider),
   );
 }

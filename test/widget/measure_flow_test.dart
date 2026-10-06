@@ -22,6 +22,7 @@ import 'package:soongong/data/auth/auth_mode.dart';
 import 'package:soongong/data/repositories/repository_providers.dart';
 import 'package:soongong/features/home/application/session_recovery.dart';
 import 'package:soongong/features/measure/application/measure_controller.dart';
+import 'package:soongong/features/measure/domain/session_snapshot.dart';
 
 import '../helpers/measure_fakes.dart';
 import '../unit/data/db_test_helpers.dart';
@@ -164,8 +165,9 @@ void main() {
       await capture(tester, 'summary-light');
       await tap(tester, MeasureStrings.completeTask);
       await tap(tester, MeasureStrings.save);
+      // Prototype: 저장 → 홈 with a toast; the ring shows the new 순공.
       expect(find.text(MeasureStrings.saved), findsOneWidget);
-      await tap(tester, MeasureStrings.home);
+      expect(find.text(HomeStrings.startFocus), findsOneWidget);
       expect(find.text('5분'), findsOneWidget);
       expect((await h.sessions.getAll()).single.seatedSeconds, 300);
       expect((await h.planner.getAllItems()).single.isDone, isTrue);
@@ -196,6 +198,64 @@ void main() {
       await unmount(tester);
     },
   );
+
+  testWidgets(
+    'setup with a kept unfinished session: start locked, 기록 마무리 opens summary, 버리기 unlocks',
+    (tester) async {
+      await h.settings.setSeatDetectionEnabled(on: false);
+      await h.sessions.startActive(
+        SessionSnapshot(
+          sessionId: 'kept',
+          mode: SessionMode.manual,
+          kind: SessionKind.self,
+          startedAt: kT0.subtract(const Duration(hours: 2)),
+          segments: const [],
+          openKind: SegmentKind.manual,
+          openStart: kT0.subtract(const Duration(hours: 2)),
+          savedAt: kT0.subtract(const Duration(hours: 1)),
+          sensitivity: 0,
+        ),
+      );
+      // The home sheet was dismissed (기록 유지) earlier in this run.
+      container.read(recoveryPromptedProvider.notifier).mark();
+      await mount(tester);
+      await tap(tester, HomeStrings.startFocus);
+      expect(find.text(HomeStrings.recoverTitle), findsOneWidget);
+      expect(find.text(HomeStrings.recoverResume), findsOneWidget);
+      final start = tester.widget<AppButton>(
+        find.widgetWithText(AppButton, MeasureStrings.start),
+      );
+      expect(start.onPressed, isNull, reason: 'cannot start over a kept session');
+      await tap(tester, HomeStrings.recoverFinish);
+      expect(find.text(MeasureStrings.summary), findsOneWidget);
+      expect(find.text('01:00:00'), findsOneWidget);
+      await tap(tester, MeasureStrings.discard);
+      await tap(tester, MeasureStrings.discard);
+      expect(await h.sessions.readSnapshot(), isNull);
+      await tap(tester, HomeStrings.startFocus);
+      expect(find.text(HomeStrings.recoverTitle), findsNothing);
+      final startAgain = tester.widget<AppButton>(
+        find.widgetWithText(AppButton, MeasureStrings.start),
+      );
+      expect(startAgain.onPressed, isNotNull);
+      await unmount(tester);
+    },
+  );
+
+  testWidgets('system back on focus pauses instead of ending', (tester) async {
+    await controller.start(mode: SessionMode.manual);
+    container.read(recoveryPromptedProvider.notifier).mark();
+    await mount(tester);
+    container.read(appRouterProvider).go('/measure/focus');
+    await tester.pumpAndSettle();
+    expect(find.text(MeasureStrings.focus), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(controller.isLive, isTrue);
+    expect(controller.paused, isTrue);
+    expect(find.text(MeasureStrings.focus), findsOneWidget);
+    await unmount(tester);
+  });
 
   testWidgets('dark tablet focus and summary preserve layout', (tester) async {
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
@@ -277,7 +337,7 @@ void main() {
       expect(find.text(MeasureStrings.shortTitle), findsOneWidget);
       await tap(tester, MeasureStrings.save);
       expect(find.text(MeasureStrings.saved), findsOneWidget);
-      await tap(tester, MeasureStrings.home);
+      expect(find.text(HomeStrings.startFocus), findsOneWidget);
       expect((await h.sessions.getAll()).single.seatedSeconds, greaterThan(0));
       expect(await h.sessions.readSnapshot(), isNull);
       expect(tester.takeException(), isNull);
@@ -325,8 +385,12 @@ void main() {
       await h.db.customStatement('DROP TRIGGER fail_save');
       await tap(tester, MeasureStrings.retry);
       expect(find.text(MeasureStrings.saved), findsOneWidget);
+      expect(find.text(HomeStrings.startFocus), findsOneWidget);
+      hideAppToast(); // the toast overlay would sit over the detail's bottom buttons
+      await tester.pump();
       final id = (await h.sessions.getAll()).single.id;
-      await tap(tester, MeasureStrings.viewSession);
+      container.read(appRouterProvider).go('/session/$id');
+      await tester.pumpAndSettle();
       await tap(tester, MeasureStrings.edit);
       await tap(tester, MeasureStrings.segment(SegmentKind.away));
       await tap(tester, MeasureStrings.restore);

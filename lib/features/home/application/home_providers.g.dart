@@ -133,8 +133,16 @@ final class HomeAllSessionsProvider
 
 String _$homeAllSessionsHash() => r'6bd56b8fc1fd014595024974301ff1c2d31d0d9d';
 
+/// Segments overlapping yesterday..today (the ring and the two totals never
+/// need older ones; a session that started yesterday and crossed midnight
+/// is included because its segments overlap today).
+
 @ProviderFor(homeSegments)
 final homeSegmentsProvider = HomeSegmentsProvider._();
+
+/// Segments overlapping yesterday..today (the ring and the two totals never
+/// need older ones; a session that started yesterday and crossed midnight
+/// is included because its segments overlap today).
 
 final class HomeSegmentsProvider
     extends
@@ -146,6 +154,9 @@ final class HomeSegmentsProvider
     with
         $FutureModifier<List<SessionSegment>>,
         $StreamProvider<List<SessionSegment>> {
+  /// Segments overlapping yesterday..today (the ring and the two totals never
+  /// need older ones; a session that started yesterday and crossed midnight
+  /// is included because its segments overlap today).
   HomeSegmentsProvider._()
     : super(
         from: null,
@@ -172,7 +183,7 @@ final class HomeSegmentsProvider
   }
 }
 
-String _$homeSegmentsHash() => r'fc793d128c881dc63f00c18862331a9296bcd1ec';
+String _$homeSegmentsHash() => r'5e65548d83bdaa2d1231221434af387429876ffb';
 
 @ProviderFor(homeTodayItems)
 final homeTodayItemsProvider = HomeTodayItemsProvider._();
@@ -424,4 +435,4 @@ final class HomeRecoveryCandidateProvider
 }
 
 String _$homeRecoveryCandidateHash() =>
-    r'2a137cfe2ae0187c9693f476cc0f65b12be51fab';
+    r'998c884691513e153f87c905627f2c443ff2ffa8';
