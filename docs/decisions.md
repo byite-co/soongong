@@ -458,3 +458,17 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **[S06d] "수동으로 이어서"는 모드 결정**: `resume(manual: true)`는 첫 await 전에 타임라인을 manual 로 바꾼다. 백그라운드가 끼어들어도 결정이 남고 복귀 재개는 카메라를 확인하지 않는다.
 - **[S06d] 집중 화면의 오늘 합계 = 홈 규칙**: 저장 세션의 seated/manual 구간을 로컬 자정 경계로 잘라 합산(`SeatedTimeCalculator.seatedSecondsOn`, `getSegmentsOverlapping`). 세션 시작일 기준 합산 폐기. 삭제 대기·미저장 행 제외.
 
+## [S07] 플래너 결정 — 지시문에 없던 사항 (2026-10-09, CC)
+
+- **[S07] 순공 농도 4단계의 기준값**: 최근 60일(오늘 포함) 일별 순공의 **양수 날 중 상위 10% 경계값**(순위 `ceil(n×0.9)`)을 기준으로 하고, 하루 순공 ÷ 기준값을 4등분해 1~4단계로 칠한다(기준값 초과는 4단계 고정, 0은 무색). 기준이 기록에서 나오므로 고정 숫자나 타인 비교가 없다. 양수 날이 없으면 농도 없음. 기준 계산 창은 보고 있는 달과 무관하게 항상 최근 60일(`plannerDensityProvider`). 일별 순공은 홈·S06d 규칙(저장 세션의 seated/manual 구간을 로컬 자정으로 자름, `SeatedTimeCalculator.seatedSecondsOn`)과 같다.
+- **[S07] 반복 종료 옵션 = 계속 · 이달까지 · 날짜 지정**: 프로토타입의 "학기 말"은 날짜 규칙이 정해지지 않아 채택하지 않았다(사람 결정 뒤 `RecurrenceEndOption`에 항목 추가). "이달까지"는 등록 시점 달의 말일. 반복 시작일은 S02 `RecurrenceExpander` 그대로 생성일(`created_at`의 로컬 날짜)이며 과거 날짜에는 전개되지 않는다.
+- **[S07] 기간 띠·할 일의 색 = 과목색**: 스키마에 색 컬럼이 없으므로(D27) 프로토타입의 자유 팔레트 대신 모든 종류가 과목(선택)을 가지며, 과목이 없으면 무채색(띠는 잉크색). 과목 추가는 시트 안에서 8색 팔레트로 `SubjectRepository.create`.
+- **[S07] 접힘 = 선택한 주만 표시**: 날짜 탭·위로 드래그(속도 200px/s 초과)·손잡이 탭으로 선택한 날짜의 주 행만 남기고 그 아래에 날짜 상세. 같은 날짜를 다시 탭하거나 아래로 드래그·손잡이 탭으로 펼친다. 접힌 상태에서는 띠를 숨기고 칸에는 항목 점 4개까지. 태블릿(≥600dp)은 접힘 없이 격자 + 오른쪽 360dp 상세 2열.
+- **[S07] 3D = 칸별 CustomPainter(오블리크 투영)**: 프로토타입처럼 앞면 skewX 26.6°·옆면 skewY 63.4°, 윗면(칸 내용)을 (−h/2, −h)만큼 들어 올린다. 높이는 농도 기준값 대비 비율 × 28px(접힘 14px). 과거·오늘 = 순공, 미래 = **프리미엄만** 계획 목표 합(기준값 없으면 300분 기준)을 불투명도 0.6으로. 전환 250ms(`AppPlanner.transition`), `MediaQuery.disableAnimations`면 즉시. 좌우 스와이프(속도 200px/s 초과)와 헤더 버튼이 같은 토글(D26). 3D 중에는 항목 글자 대신 점과 완료/전체 수.
+- **[S07] 세션 연결 표시**: `sessions.planner_item_id`로 묶인 저장 세션의 순공 합을 항목 오른쪽에 "실제 N분"(프리미엄은 `실제/목표분`)으로 보이고, 탭하면 세션이 1건이면 `/session/:id`, 여러 건이면 목록 시트. 공부 묶음 머리글은 프리미엄 "계획 N분 → 실제 N분", 무료 "실제 N분"(미래 날은 "계획 N개")으로 사실만 적는다.
+- **[S07] 판독 버튼 경로 예약**: 공부 항목의 카메라 버튼은 `/reading/capture?from=planner&itemId=<id>`로 push 한다. S10 몫인 `reading_routes.dart`에 placeholder 라우트를 두었고(공용 파일 변경), 무료 사용자는 버튼에 자물쇠 배지만 더하고 이동은 같다(게이트는 S10/S12).
+- **[S07] 프리미엄 예상 시간 자동 채움**: 등록 시트에서 공부 종류 + 과목이 정해지면 최근 5회 저장 세션(finished/interrupted, 순공 > 0)의 평균 분을 "예상 시간 · 최근 {과목} 5회 평균 N분 · 기록으로 계산"으로 보이고, 사용자가 목표를 건드리기 전까지 그 값을 목표로 채운다("직접 입력 · N분" 칩). 기록이 없으면 "첫 기록 · 30분으로 시작". 무료는 30분 + `PremiumLockHint`(요금제 보기 → S12 전까지 `/settings`). 엔타이틀먼트는 `BillingGateway.entitlement` 스트림(`plannerEntitledProvider`, 첫 값 전에는 무료).
+- **[S07] 쓰기는 `PlannerController` 한 곳**: 등록·수정·삭제·과목 추가·완료 토글 모두 `SyncWriter.runOwnedTransaction(alive:)`로 묶여 계정 전환(D27) 뒤 남은 작업은 커밋되지 않는다([S06d]). 삭제는 soft delete → 5초 되돌리기 토스트 → 기한이 지났을 때만 commit(D22), 되돌리기는 `pending_delete_until`이 남아 있을 때만. 기한 전 타이머 발화·컨트롤러 폐기·실패는 재시작 정산(`DeleteSettler`)에 맡긴다. 반복 일정은 전체 수정·전체 삭제만(PRD 4.2).
+- **[S07] 제안 슬롯**: `kPlannerSuggestionsEnabled = false`로 헤더 슬롯만 두고 숨긴다(PRD 4.3 P1).
+- **[S07] 공용 위젯 보완**: `AppTextField`에 `maxLength · inputFormatters · suffixText · trailing`(라벨 행 오른쪽, 글자 수 표시) 추가. 기존 호출부 영향 없음.
+

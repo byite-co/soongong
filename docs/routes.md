@@ -17,15 +17,16 @@
 /onboarding/1..3      ob1 ob2 ob3
 StatefulShellRoute (탭 4개 · 태블릿 ≥600dp 는 좌측 레일)
   /home               home homeEmpty s1–s4 s14 t5 recover recoverConfirm
-  /planner            (S07 placeholder)
+  /planner            planner planFold plan3d t7 s10 (S07 · `?date=yyyy-MM-dd` 로 그 달·그 날 선택) · 시트: addSheet datePick repeatSheet editItem editCancel editDelete bandEdit discard = `showPlannerItemSheet`
   /timetable          (S07 placeholder)
   /stats              (S08 placeholder)
 /settings             (S09 placeholder · 홈 헤더 기어 · 탭 밖, root navigator push)
 /measure/setup        setupOn setupDen errCam camBusyN s5 (홈 CTA · 복구 "이어서" = ?resume=<sessionId> · 기록 유지 뒤 복구 카드)
 /measure/focus        focus away awayLong lost lostFail s6 s7
 /measure/summary      summary s8 s9 sumDiscard toast (새 기록 저장·정정 시트 · 저장 → 홈 + 토스트)
-/session/:id          session sumEdit sumEditCancel sessDel
+/session/:id          session sumEdit sumEditCancel sessDel (플래너 상세의 "실제 N분" 탭)
 /measure/corrections  정정 이력 (감도 조정 토스트·S09 연결용)
+/reading/capture      capture (S10 placeholder · S07 예약: 플래너 판독 버튼 → `?from=planner&itemId=<plannerItemId>`, 범위는 `range_text` 없으면 제목 D27)
 /_gallery             dev 전용(DEV_MENU)
 /_seat_lab            dev 전용(S04 착석 엔진 실험실 · `measure_routes.dart` 에 등록)
 ```
