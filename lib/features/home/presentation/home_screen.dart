@@ -79,7 +79,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       case _RecoveryResumed(:final route):
         if (route != null) unawaited(context.push(route));
       case _RecoveryFinished():
-        showAppToast(context, message: HomeStrings.recoverFinished(recorded));
+        final route = handler.finishLocation;
+        if (route != null) {
+          unawaited(context.push(route));
+        } else {
+          showAppToast(context, message: HomeStrings.recoverFinished(recorded));
+        }
       case _RecoveryDiscarded():
         showAppToast(context, message: HomeStrings.recoverDiscarded(recorded));
       case _RecoveryFailed():

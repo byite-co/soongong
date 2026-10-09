@@ -55,7 +55,7 @@ final class SessionRecoveryHandlerProvider
 }
 
 String _$sessionRecoveryHandlerHash() =>
-    r'afd3332d014c4d2e77a44f811cbee051e04f5325';
+    r'2c7848a3536e219d310f1a0e59453ec9a90a2ab3';
 
 /// Asked once per app run; a dismissed sheet is not re-shown until the next
 /// launch (prototype: "다음 실행 때 다시 묻습니다").

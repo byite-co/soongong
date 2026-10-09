@@ -36,10 +36,15 @@ class RecoveryCandidate {
 
   Duration get recorded => Duration(seconds: recordedSeconds);
 
+  /// [deviceId]: a row-only candidate (no snapshot) must have been created
+  /// on this device. Rows of other devices arrive through sync (S13) and are
+  /// their device's business — a session live on another phone is not an
+  /// unfinished session here. null keeps the S05 behaviour (any device).
   static RecoveryCandidate? detect({
     required SessionSnapshot? snapshot,
     required List<StudySession> sessions,
     required String Function() newId,
+    String? deviceId,
   }) {
     if (snapshot != null) {
       final r = SessionTimeline.recover(
@@ -62,18 +67,20 @@ class RecoveryCandidate {
     }
     StudySession? open;
     for (final s in sessions) {
-      final unfinished = s.status == SessionStatus.active ||
+      final unfinished =
+          s.status == SessionStatus.active ||
           s.status == SessionStatus.paused ||
           (s.status == SessionStatus.interrupted && s.endedAt == null);
       if (!unfinished) continue;
+      if (deviceId != null && s.stamp.deviceId != deviceId) continue;
       if (open == null || s.startedAt.isAfter(open.startedAt)) open = s;
     }
     if (open == null) return null;
     return RecoveryCandidate(
       sessionId: open.id,
       startedAt: open.startedAt,
-      recordedSeconds: open.seatedSeconds,
-      endedAt: open.endedAt ?? open.startedAt,
+      recordedSeconds: 0,
+      endedAt: open.startedAt,
       session: open,
     );
   }

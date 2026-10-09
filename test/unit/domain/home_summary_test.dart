@@ -156,8 +156,8 @@ void main() {
 
     test('savedDays counts finished and interrupted sessions only (D4)', () {
       final days = HomeSummary.savedDays(<StudySession>[
-        _session(id: '1', start: _t0, seated: 60),
-        _session(id: '2', start: _t0.subtract(const Duration(days: 1)), seated: 10, status: SessionStatus.interrupted),
+        _session(id: '1', start: _t0, end: _t0.add(const Duration(minutes: 1)), seated: 60),
+        _session(id: '2', start: _t0.subtract(const Duration(days: 1)), end: _t0.subtract(const Duration(days: 1)).add(const Duration(seconds: 10)), seated: 10, status: SessionStatus.interrupted),
         _session(id: '3', start: _t0.subtract(const Duration(days: 2)), seated: 10, status: SessionStatus.discarded),
       ]);
       expect(days, <LocalDate>{_today, _today.addDays(-1)});
@@ -197,10 +197,24 @@ void main() {
         newId: () => 'x',
       );
       expect(c?.sessionId, 'live');
-      expect(c?.recordedSeconds, 120);
+      expect(c?.recordedSeconds, 0);
       expect(
         RecoveryCandidate.detect(snapshot: null, sessions: <StudySession>[_session(id: 'done', start: _t0, end: _t0)], newId: () => 'x'),
         isNull,
+      );
+    });
+
+    test('a row-only candidate must come from this device (synced rows of another phone are not ours)', () {
+      final live = _session(id: 'live', start: _t0.subtract(const Duration(minutes: 5)), status: SessionStatus.active);
+      expect(
+        RecoveryCandidate.detect(snapshot: null, sessions: <StudySession>[live], newId: () => 'x', deviceId: 'other-device')
+            ?.sessionId,
+        isNull,
+      );
+      expect(
+        RecoveryCandidate.detect(snapshot: null, sessions: <StudySession>[live], newId: () => 'x', deviceId: live.stamp.deviceId)
+            ?.sessionId,
+        'live',
       );
     });
   });

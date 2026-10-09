@@ -30,6 +30,20 @@ class SessionClock {
     return w.add(_monotonic.elapsed - m);
   }
 
+  /// Moves the anchor forward by [by] (ignored when not positive): the time
+  /// the monotonic clock did not count while the device slept, measured by
+  /// a sleep-aware monotonic source — never by the wall clock, so a device
+  /// time change still cannot move any segment (D23 · [S06c]). The caller
+  /// applies it on foreground return while the timeline is paused: the
+  /// unobserved interval becomes a longer `paused` segment (never 순공) and
+  /// the following segments keep their true position.
+  Duration advance(Duration by) {
+    final w = _wallAnchor;
+    if (w == null || by <= Duration.zero) return Duration.zero;
+    _wallAnchor = w.add(by);
+    return by;
+  }
+
   /// Elapsed since [start] (monotonic).
   Duration get elapsed {
     final m = _monoAnchor;

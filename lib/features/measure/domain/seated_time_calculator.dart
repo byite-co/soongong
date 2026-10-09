@@ -3,6 +3,7 @@
 
 import '../../../core/domain/entities/session.dart';
 import '../../../core/domain/enums.dart';
+import '../../../core/domain/local_date.dart';
 import 'segment.dart';
 
 class SeatedTimeCalculator {
@@ -21,6 +22,24 @@ class SeatedTimeCalculator {
 
   Duration paused(Iterable<Segment> segments) =>
       _sum(segments, (k) => k == SegmentKind.paused);
+
+  /// 순공 of saved [segments] that falls inside the local [day]: seated /
+  /// manual segments clipped to the day's local midnight boundaries, so a
+  /// session that crossed midnight counts on both days by its parts. The
+  /// same rule the home ring uses (`HomeSummary.build`); the caller filters
+  /// the segments to saved, live sessions.
+  int seatedSecondsOn(Iterable<SessionSegment> segments, LocalDate day) {
+    final from = day.toDateTime();
+    final to = day.addDays(1).toDateTime();
+    var total = 0;
+    for (final s in segments) {
+      if (!s.kind.countsAsSeated) continue;
+      final a = s.startAt.isBefore(from) ? from : s.startAt;
+      final b = s.endAt.isAfter(to) ? to : s.endAt;
+      if (b.isAfter(a)) total += b.difference(a).inSeconds;
+    }
+    return total;
+  }
 
   /// Totals per session kind (공부 · 할 일 · 자습) from the cached seconds.
   Map<SessionKind, Duration> byKind(Iterable<StudySession> sessions) {

@@ -61,42 +61,87 @@ class SessionRepository {
       ..orderBy([(t) => OrderingTerm.asc(t.startedAt)]);
   }
 
-  Stream<List<StudySession>> watchAll() => (db.select(_t)
-        ..where(_live)
-        ..orderBy([(t) => OrderingTerm.desc(t.startedAt)]))
-      .watch()
-      .map((rows) => liveOnly(rows.map(sessionOf)));
+  Stream<List<StudySession>> watchAll() =>
+      (db.select(_t)
+            ..where(_live)
+            ..orderBy([(t) => OrderingTerm.desc(t.startedAt)]))
+          .watch()
+          .map((rows) => liveOnly(rows.map(sessionOf)));
 
   Future<List<StudySession>> getAll() async => liveOnly(
-        (await (db.select(_t)
-                  ..where(_live)
-                  ..orderBy([(t) => OrderingTerm.desc(t.startedAt)]))
-                .get())
-            .map(sessionOf),
-      );
+    (await (db.select(_t)
+              ..where(_live)
+              ..orderBy([(t) => OrderingTerm.desc(t.startedAt)]))
+            .get())
+        .map(sessionOf),
+  );
 
   Stream<StudySession?> watch(String id) =>
-      (db.select(_t)..where((t) => t.id.equals(id)))
-          .watchSingleOrNull()
-          .map((r) => r == null ? null : sessionOf(r));
+      (db.select(_t)..where((t) => t.id.equals(id))).watchSingleOrNull().map(
+        (r) => r == null ? null : sessionOf(r),
+      );
 
   Future<StudySession?> get(String id) async {
-    final r = await (db.select(_t)..where((t) => t.id.equals(id))).getSingleOrNull();
+    final r = await (db.select(
+      _t,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
     return r == null ? null : sessionOf(r);
   }
 
   Stream<List<SessionSegment>> watchSegments(String sessionId) =>
-      _segmentsQuery(sessionId).watch().map((rows) => liveOnly(rows.map(segmentOf)));
+      _segmentsQuery(sessionId)
+          .watch()
+          .map((rows) => liveOnly(rows.map(segmentOf)));
 
   Future<List<SessionSegment>> getSegments(String sessionId) async =>
       liveOnly((await _segmentsQuery(sessionId).get()).map(segmentOf));
 
-  SimpleSelectStatement<$SessionSegmentsTable, SessionSegmentRow> _segmentsQuery(
-    String sessionId,
+  Stream<List<SessionSegment>> watchAllSegments() =>
+      (db.select(db.sessionSegments)
+            ..where((s) => s.userId.equals(ctx.userId) & s.deletedAt.isNull())
+            ..orderBy([(s) => OrderingTerm.asc(s.startAt)]))
+          .watch()
+          .map((rows) => liveOnly(rows.map(segmentOf)));
+
+  /// Segments of the user that overlap the local day range [from]..[to]
+  /// (inclusive): `end_at > from 00:00` and `start_at < to+1 00:00`. A
+  /// segment that crosses midnight is returned for both days; the caller
+  /// clips it (`HomeSummary.build`).
+  Stream<List<SessionSegment>> watchSegmentsOverlapping(
+    LocalDate from,
+    LocalDate to,
   ) =>
-      db.select(db.sessionSegments)
-        ..where((s) => s.sessionId.equals(sessionId) & s.deletedAt.isNull())
-        ..orderBy([(s) => OrderingTerm.asc(s.startAt)]);
+      _overlapping(from, to)
+          .watch()
+          .map((rows) => liveOnly(rows.map(segmentOf)));
+
+  Future<List<SessionSegment>> getSegmentsOverlapping(
+    LocalDate from,
+    LocalDate to,
+  ) async =>
+      liveOnly((await _overlapping(from, to).get()).map(segmentOf));
+
+  SimpleSelectStatement<$SessionSegmentsTable, SessionSegmentRow> _overlapping(
+    LocalDate from,
+    LocalDate to,
+  ) {
+    final start = utcIso(from.toDateTime().toUtc());
+    final end = utcIso(to.addDays(1).toDateTime().toUtc());
+    return db.select(db.sessionSegments)
+      ..where(
+        (s) =>
+            s.userId.equals(ctx.userId) &
+            s.deletedAt.isNull() &
+            s.endAt.isBiggerThanValue(start) &
+            s.startAt.isSmallerThanValue(end),
+      )
+      ..orderBy([(s) => OrderingTerm.asc(s.startAt)]);
+  }
+
+  SimpleSelectStatement<$SessionSegmentsTable, SessionSegmentRow>
+  _segmentsQuery(String sessionId) => db.select(db.sessionSegments)
+    ..where((s) => s.sessionId.equals(sessionId) & s.deletedAt.isNull())
+    ..orderBy([(s) => OrderingTerm.asc(s.startAt)]);
 
   Stream<List<Correction>> watchCorrections(String sessionId) =>
       (db.select(db.corrections)
@@ -107,39 +152,92 @@ class SessionRepository {
 
   /// All corrections of the user since [since] (sensitivity window).
   Future<List<Correction>> correctionsSince(DateTime since) async => liveOnly(
-        (await (db.select(db.corrections)
-                  ..where(
-                    (c) =>
-                        c.userId.equals(ctx.userId) &
-                        c.deletedAt.isNull() &
-                        c.at.isBiggerOrEqualValue(utcIso(since)),
-                  )
-                  ..orderBy([(c) => OrderingTerm.asc(c.at)]))
-                .get())
-            .map(correctionOf),
-      );
+    (await (db.select(db.corrections)
+              ..where(
+                (c) =>
+                    c.userId.equals(ctx.userId) &
+                    c.deletedAt.isNull() &
+                    c.at.isBiggerOrEqualValue(utcIso(since)),
+              )
+              ..orderBy([(c) => OrderingTerm.asc(c.at)]))
+            .get())
+        .map(correctionOf),
+  );
 
-  Stream<List<Correction>> watchAllCorrections() => (db.select(db.corrections)
-        ..where((c) => c.userId.equals(ctx.userId) & c.deletedAt.isNull())
-        ..orderBy([(c) => OrderingTerm.desc(c.at)]))
-      .watch()
-      .map((rows) => liveOnly(rows.map(correctionOf)));
+  Stream<List<Correction>> watchAllCorrections() =>
+      (db.select(db.corrections)
+            ..where((c) => c.userId.equals(ctx.userId) & c.deletedAt.isNull())
+            ..orderBy([(c) => OrderingTerm.desc(c.at)]))
+          .watch()
+          .map((rows) => liveOnly(rows.map(correctionOf)));
 
   /// Local dates that have at least one saved session (streak, D4).
   Future<Set<LocalDate>> daysWithSessions() async {
-    final rows = await (db.selectOnly(_t)
-          ..addColumns([_t.startedAt])
-          ..where(_live(_t)))
-        .get();
+    final rows =
+        await (db.selectOnly(_t)
+              ..addColumns([_t.startedAt])
+              ..where(
+                _live(_t) &
+                    _t.endedAt.isNotNull() &
+                    _t.status.isIn([
+                      SessionStatus.finished.name,
+                      SessionStatus.interrupted.name,
+                    ]),
+              ))
+            .get();
     return <LocalDate>{
       for (final r in rows)
         if (r.read(_t.startedAt) != null)
-          LocalDate.of(DateTime.parse(r.read(_t.startedAt)!)),
+          LocalDate.of(DateTime.parse(r.read(_t.startedAt)!).toLocal()),
     };
   }
 
   // ---------------------------------------------------------------------
   // Writes
+
+  /// Persist before opening the camera so even a crash before the first
+  /// checkpoint has a recoverable (zero-time) session.
+  Future<void> startActive(SessionSnapshot snapshot) =>
+      writer.runInTransaction(() async {
+        final now = ctx.nowUtc();
+        await db
+            .into(_t)
+            .insert(
+              SessionsCompanion.insert(
+                id: snapshot.sessionId,
+                userId: ctx.userId,
+                createdAt: now,
+                clientUpdatedAt: now,
+                deviceId: ctx.deviceId,
+                purgeEpoch: Value(await writer.purgeEpoch()),
+                kind: Value(snapshot.kind),
+                mode: Value(snapshot.mode),
+                startedAt: Value(snapshot.startedAt.toUtc()),
+                status: const Value(SessionStatus.active),
+                seatedSeconds: const Value(0),
+                sensitivityLevel: Value(snapshot.sensitivity),
+                subjectId: Value(snapshot.subjectId),
+                plannerItemId: Value(snapshot.plannerItemId),
+              ),
+            );
+        await writer.enqueue(_t.actualTableName, snapshot.sessionId);
+        await writeSnapshot(snapshot);
+      });
+
+  Future<void> markInterrupted(String id) => writer.runInTransaction(() async {
+    await (db.update(
+      _t,
+    )..where((t) => t.id.equals(id) & t.userId.equals(ctx.userId))).write(
+      const SessionsCompanion(status: Value(SessionStatus.interrupted)),
+    );
+    await writer.markUserWrite(_t, id);
+  });
+
+  Future<void> discard(String id) => writer.runInTransaction(() async {
+    if (await get(id) != null) await commitDelete(id);
+    final snapshot = await readSnapshot();
+    if (snapshot?.sessionId == id) await clearSnapshot();
+  });
 
   /// Saves a finished (or interrupted/recovered) session with its closed
   /// segments. `seated_seconds` is computed here. The snapshot is removed.
@@ -163,30 +261,80 @@ class SessionRepository {
     return writer.runInTransaction(() async {
       final now = ctx.nowUtc();
       final epoch = await writer.purgeEpoch();
-      await db.into(_t).insert(
-            SessionsCompanion.insert(
-              id: id,
-              userId: ctx.userId,
-              createdAt: now,
-              clientUpdatedAt: now,
-              deviceId: ctx.deviceId,
-              purgeEpoch: Value(epoch),
-              subjectId: Value(subjectId),
-              plannerItemId: Value(plannerItemId),
-              kind: Value(kind),
-              mode: Value(mode),
-              startedAt: Value(startedAt.toUtc()),
-              endedAt: Value(endedAt.toUtc()),
-              status: Value(status),
-              seatedSeconds: Value(_calc.seatedSeconds(segments)),
-              sensitivityLevel: Value(sensitivityLevel),
-              note: Value(note),
-            ),
-          );
-      await writer.enqueue(_t.actualTableName, id);
+      final existing = await get(id);
+      if (existing != null && existing.stamp.userId != ctx.userId) {
+        throw StateError('Session is not writable');
+      }
+      if (existing != null) {
+        await (db.update(_t)..where((t) => t.id.equals(id))).write(
+          SessionsCompanion(
+            subjectId: Value(subjectId),
+            plannerItemId: Value(plannerItemId),
+            kind: Value(kind),
+            mode: Value(mode),
+            startedAt: Value(startedAt.toUtc()),
+            endedAt: Value(endedAt.toUtc()),
+            status: Value(status),
+            seatedSeconds: Value(_calc.seatedSeconds(segments)),
+            sensitivityLevel: Value(sensitivityLevel),
+            note: Value(note),
+          ),
+        );
+        await writer.markUserWrite(_t, id);
+      } else {
+        await db
+            .into(_t)
+            .insert(
+              SessionsCompanion.insert(
+                id: id,
+                userId: ctx.userId,
+                createdAt: now,
+                clientUpdatedAt: now,
+                deviceId: ctx.deviceId,
+                purgeEpoch: Value(epoch),
+                subjectId: Value(subjectId),
+                plannerItemId: Value(plannerItemId),
+                kind: Value(kind),
+                mode: Value(mode),
+                startedAt: Value(startedAt.toUtc()),
+                endedAt: Value(endedAt.toUtc()),
+                status: Value(status),
+                seatedSeconds: Value(_calc.seatedSeconds(segments)),
+                sensitivityLevel: Value(sensitivityLevel),
+                note: Value(note),
+              ),
+            );
+        await writer.enqueue(_t.actualTableName, id);
+      }
+      final previousSegments = await getSegments(id);
+      final incomingIds = segments
+          .where((s) => !s.isEmpty)
+          .map((s) => s.id)
+          .toSet();
+      for (final old in previousSegments) {
+        if (!incomingIds.contains(old.id)) {
+          await writer.commitDelete(db.sessionSegments, old.id);
+        }
+      }
       for (final s in segments) {
         if (s.isEmpty) continue;
-        await db.into(db.sessionSegments).insert(
+        if (previousSegments.any((old) => old.id == s.id)) {
+          await (db.update(
+            db.sessionSegments,
+          )..where((t) => t.id.equals(s.id))).write(
+            SessionSegmentsCompanion(
+              kind: Value(s.kind),
+              startAt: Value(s.startAt.toUtc()),
+              endAt: Value(s.endAt.toUtc()),
+              corrected: Value(s.corrected),
+            ),
+          );
+          await writer.markUserWrite(db.sessionSegments, s.id);
+          continue;
+        }
+        await db
+            .into(db.sessionSegments)
+            .insert(
               SessionSegmentsCompanion.insert(
                 id: s.id,
                 userId: ctx.userId,
@@ -203,23 +351,25 @@ class SessionRepository {
             );
         await writer.enqueue(db.sessionSegments.actualTableName, s.id);
       }
-      await clearSnapshot();
+      if ((await readSnapshot())?.sessionId == id) await clearSnapshot();
       return (await get(id))!;
     });
   }
 
   Future<void> updateNote(String id, String? note) {
     return writer.runInTransaction(() async {
-      await (db.update(_t)..where((t) => t.id.equals(id)))
-          .write(SessionsCompanion(note: Value(note)));
+      await (db.update(_t)..where((t) => t.id.equals(id))).write(
+        SessionsCompanion(note: Value(note)),
+      );
       await writer.markUserWrite(_t, id);
     });
   }
 
   Future<void> updateSubject(String id, String? subjectId) {
     return writer.runInTransaction(() async {
-      await (db.update(_t)..where((t) => t.id.equals(id)))
-          .write(SessionsCompanion(subjectId: Value(subjectId)));
+      await (db.update(_t)..where((t) => t.id.equals(id))).write(
+        SessionsCompanion(subjectId: Value(subjectId)),
+      );
       await writer.markUserWrite(_t, id);
     });
   }
@@ -245,18 +395,28 @@ class SessionRepository {
             ),
           )
           .toList();
-      final outcome = _corrector.apply(current, segmentId: segmentId, toKind: toKind);
+      final outcome = _corrector.apply(
+        current,
+        segmentId: segmentId,
+        toKind: toKind,
+      );
       if (outcome == null) return null;
       final now = ctx.nowUtc();
 
-      await (db.update(db.sessionSegments)..where((s) => s.id.equals(segmentId)))
-          .write(
-        SessionSegmentsCompanion(kind: Value(toKind), corrected: const Value(true)),
+      await (db.update(
+        db.sessionSegments,
+      )..where((s) => s.id.equals(segmentId))).write(
+        SessionSegmentsCompanion(
+          kind: Value(toKind),
+          corrected: const Value(true),
+        ),
       );
       await writer.markUserWrite(db.sessionSegments, segmentId, at: now);
 
       final correctionId = ctx.newId();
-      await db.into(db.corrections).insert(
+      await db
+          .into(db.corrections)
+          .insert(
             CorrectionsCompanion.insert(
               id: correctionId,
               userId: ctx.userId,
@@ -278,6 +438,7 @@ class SessionRepository {
       await (db.update(_t)..where((t) => t.id.equals(sessionId))).write(
         SessionsCompanion(
           seatedSeconds: Value(_calc.seatedSeconds(outcome.segments)),
+          sensitivityLevel: Value(sensitivityAfter),
         ),
       );
       await writer.markUserWrite(_t, sessionId, at: now);
@@ -294,15 +455,15 @@ class SessionRepository {
 
   Future<void> commitDelete(String id) {
     return writer.runInTransaction(() async {
-      final segs = await (db.select(db.sessionSegments)
-            ..where((s) => s.sessionId.equals(id) & s.deletedAt.isNull()))
-          .get();
+      final segs = await (db.select(
+        db.sessionSegments,
+      )..where((s) => s.sessionId.equals(id) & s.deletedAt.isNull())).get();
       for (final s in segs) {
         await writer.commitDelete(db.sessionSegments, s.id);
       }
-      final corr = await (db.select(db.corrections)
-            ..where((c) => c.sessionId.equals(id) & c.deletedAt.isNull()))
-          .get();
+      final corr = await (db.select(
+        db.corrections,
+      )..where((c) => c.sessionId.equals(id) & c.deletedAt.isNull())).get();
       for (final c in corr) {
         await writer.commitDelete(db.corrections, c.id);
       }
@@ -318,13 +479,11 @@ class SessionRepository {
 
   Future<ApplyServerReport> applyServerSegments(
     Iterable<Map<String, Object?>> rows,
-  ) =>
-      writer.applyServer(db.sessionSegments, rows);
+  ) => writer.applyServer(db.sessionSegments, rows);
 
   Future<ApplyServerReport> applyServerCorrections(
     Iterable<Map<String, Object?>> rows,
-  ) =>
-      writer.applyServer(db.corrections, rows);
+  ) => writer.applyServer(db.corrections, rows);
 
   // ---------------------------------------------------------------------
   // Snapshot (D23, single row, local only)
@@ -332,7 +491,9 @@ class SessionRepository {
   Future<void> writeSnapshot(SessionSnapshot s) {
     return writer.runInTransaction(() async {
       await db.delete(db.sessionSnapshots).go();
-      await db.into(db.sessionSnapshots).insert(
+      await db
+          .into(db.sessionSnapshots)
+          .insert(
             SessionSnapshotsCompanion.insert(
               sessionId: s.sessionId,
               mode: s.mode,
@@ -365,18 +526,18 @@ class SessionRepository {
   Future<void> clearSnapshot() => db.delete(db.sessionSnapshots).go();
 
   SessionSnapshot _snapshotOf(SessionSnapshotRow r) => SessionSnapshot(
-        sessionId: r.sessionId,
-        mode: r.mode,
-        kind: r.kind,
-        startedAt: r.startedAt,
-        segments: SessionSnapshot.decodeSegments(r.segmentsJson),
-        openKind: r.openKind,
-        openStart: r.openStart,
-        savedAt: r.savedAt,
-        sensitivity: r.sensitivity,
-        lastSeatedAt: r.lastSeatedAt,
-        awayCandidateSince: r.awayCandidateSince,
-        subjectId: r.subjectId,
-        plannerItemId: r.plannerItemId,
-      );
+    sessionId: r.sessionId,
+    mode: r.mode,
+    kind: r.kind,
+    startedAt: r.startedAt,
+    segments: SessionSnapshot.decodeSegments(r.segmentsJson),
+    openKind: r.openKind,
+    openStart: r.openStart,
+    savedAt: r.savedAt,
+    sensitivity: r.sensitivity,
+    lastSeatedAt: r.lastSeatedAt,
+    awayCandidateSince: r.awayCandidateSince,
+    subjectId: r.subjectId,
+    plannerItemId: r.plannerItemId,
+  );
 }

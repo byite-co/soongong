@@ -25,7 +25,11 @@ enum HomeArcKind {
 }
 
 class HomeArc {
-  const HomeArc({required this.startHour, required this.endHour, required this.kind});
+  const HomeArc({
+    required this.startHour,
+    required this.endHour,
+    required this.kind,
+  });
 
   final double startHour;
   final double endHour;
@@ -40,7 +44,11 @@ class SubjectTotal {
 }
 
 class TodayEvent {
-  const TodayEvent({required this.title, required this.start, required this.end});
+  const TodayEvent({
+    required this.title,
+    required this.start,
+    required this.end,
+  });
 
   final String title;
   final LocalTime start;
@@ -92,12 +100,21 @@ class HomeSummary {
     required Map<String, Subject> subjects,
     required StreakResult streak,
     required String fallbackSubjectName,
+    List<SessionSegment>? segments,
   }) {
     final yesterday = today.addDays(-1);
     final todaySessions = <StudySession>[];
     var seatedToday = 0;
     var seatedYesterday = 0;
-    for (final s in sessions) {
+    final savedSessions = sessions
+        .where(
+          (s) =>
+              (s.status == SessionStatus.finished ||
+                  s.status == SessionStatus.interrupted) &&
+              s.endedAt != null,
+        )
+        .toList();
+    for (final s in savedSessions) {
       if (s.status == SessionStatus.discarded) continue;
       final day = LocalDate.of(s.startedAt.toLocal());
       if (day == today) {
@@ -109,20 +126,76 @@ class HomeSummary {
     }
 
     final arcs = <HomeArc>[];
-    for (final s in todaySessions) {
-      final start = hourOfDay(s.startedAt.toLocal());
-      final ended = s.endedAt;
-      if (ended == null) continue;
-      final endLocal = ended.toLocal();
-      final end = LocalDate.of(endLocal) == today ? hourOfDay(endLocal) : 24.0;
-      if (end <= start) continue;
-      arcs.add(
-        HomeArc(
-          startHour: start,
-          endHour: end,
-          kind: s.kind == SessionKind.self ? HomeArcKind.self : HomeArcKind.study,
-        ),
-      );
+    if (segments != null) {
+      // Saved segments are the source of truth. Clip each one to the local
+      // day, including sessions which crossed midnight or started earlier.
+      final byId = {for (final session in savedSessions) session.id: session};
+      final dayStart = today.toDateTime();
+      final dayEnd = today.addDays(1).toDateTime();
+      final yesterdayStart = yesterday.toDateTime();
+      int clippedSeconds(SessionSegment segment, DateTime start, DateTime end) {
+        final a = segment.startAt.isBefore(start) ? start : segment.startAt;
+        final b = segment.endAt.isAfter(end) ? end : segment.endAt;
+        return b.isAfter(a) ? b.difference(a).inSeconds : 0;
+      }
+
+      seatedToday = 0;
+      seatedYesterday = 0;
+      todaySessions.clear();
+      final totals = <String, int>{};
+      for (final segment in segments) {
+        final session = byId[segment.sessionId];
+        if (session == null || !segment.kind.countsAsSeated) continue;
+        final seconds = clippedSeconds(segment, dayStart, dayEnd);
+        seatedToday += seconds;
+        seatedYesterday += clippedSeconds(segment, yesterdayStart, dayStart);
+        if (seconds == 0) continue;
+        totals.update(
+          session.id,
+          (value) => value + seconds,
+          ifAbsent: () => seconds,
+        );
+        final start = segment.startAt.isBefore(dayStart)
+            ? dayStart
+            : segment.startAt.toLocal();
+        final end = segment.endAt.isAfter(dayEnd)
+            ? dayEnd
+            : segment.endAt.toLocal();
+        arcs.add(
+          HomeArc(
+            startHour: hourOfDay(start),
+            endHour: end == dayEnd ? 24.0 : hourOfDay(end),
+            kind: session.kind == SessionKind.self
+                ? HomeArcKind.self
+                : HomeArcKind.study,
+          ),
+        );
+      }
+      for (final entry in totals.entries) {
+        todaySessions.add(
+          byId[entry.key]!.copyWith(seatedSeconds: entry.value),
+        );
+      }
+    } else {
+      for (final s in todaySessions) {
+        final start = hourOfDay(s.startedAt.toLocal());
+        final ended = s.endedAt;
+        if (ended == null) continue;
+        final endLocal = ended.toLocal();
+        final end = LocalDate.of(endLocal) == today
+            ? hourOfDay(endLocal)
+            : 24.0;
+        if (end <= start) continue;
+        arcs.add(
+          HomeArc(
+            startHour: start,
+            endHour: end,
+            kind: s.kind == SessionKind.self
+                ? HomeArcKind.self
+                : HomeArcKind.study,
+          ),
+        );
+      }
     }
 
     final events = <TodayEvent>[];
@@ -133,12 +206,22 @@ class HomeSummary {
       if (st == null || en == null || !(en > st)) continue;
       events.add(TodayEvent(title: it.title, start: st, end: en));
       arcs.add(
-        HomeArc(startHour: st.minutesOfDay / 60, endHour: en.minutesOfDay / 60, kind: HomeArcKind.event),
+        HomeArc(
+          startHour: st.minutesOfDay / 60,
+          endHour: en.minutesOfDay / 60,
+          kind: HomeArcKind.event,
+        ),
       );
     }
-    for (final inst in const RecurrenceExpander().expand(recurrences, from: today, to: today)) {
+    for (final inst in const RecurrenceExpander().expand(
+      recurrences,
+      from: today,
+      to: today,
+    )) {
       final r = inst.recurrence;
-      events.add(TodayEvent(title: r.title, start: r.startTime, end: r.endTime));
+      events.add(
+        TodayEvent(title: r.title, start: r.startTime, end: r.endTime),
+      );
       arcs.add(
         HomeArc(
           startHour: r.startTime.minutesOfDay / 60,
@@ -157,7 +240,11 @@ class HomeSummary {
 
     final bySubject = <String?, int>{};
     for (final s in todaySessions) {
-      bySubject.update(s.subjectId, (v) => v + s.seatedSeconds, ifAbsent: () => s.seatedSeconds);
+      bySubject.update(
+        s.subjectId,
+        (v) => v + s.seatedSeconds,
+        ifAbsent: () => s.seatedSeconds,
+      );
     }
     final totals = <SubjectTotal>[
       for (final e in bySubject.entries)
@@ -182,8 +269,10 @@ class HomeSummary {
 
   /// Local dates with a saved session (D4: ≥ 1 saved session, any length).
   static Set<LocalDate> savedDays(Iterable<StudySession> all) => <LocalDate>{
-        for (final s in all)
-          if (s.status == SessionStatus.finished || s.status == SessionStatus.interrupted)
-            LocalDate.of(s.startedAt.toLocal()),
-      };
+    for (final s in all)
+      if ((s.status == SessionStatus.finished ||
+              s.status == SessionStatus.interrupted) &&
+          s.endedAt != null)
+        LocalDate.of(s.startedAt.toLocal()),
+  };
 }

@@ -92,10 +92,11 @@ void main() {
     run(p, seatedUntil: 10, until: 70); // confirmed at 70, start 9
     const longAt = 9 + 300;
     expect(p.observe(at: at(longAt - 1), seated: false), isEmpty);
-    final e = p.observe(at: at(longAt), seated: false).single;
+    expect(p.observe(at: at(longAt), seated: false), isEmpty);
+    final e = p.observe(at: at(longAt + 1), seated: false).single;
     expect(e, isA<AwayLong>());
     expect((e as AwayLong).awayStartAt, at(9));
-    expect(p.observe(at: at(longAt + 1), seated: false), isEmpty);
+    expect(p.observe(at: at(longAt + 2), seated: false), isEmpty);
     expect(p.observe(at: at(longAt + 60), seated: false), isEmpty);
   });
 

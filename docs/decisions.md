@@ -425,3 +425,36 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **[S05b] 동의 ② 문구 = D14 표 3줄**(`core/strings/consent_strings.dart`): ① 기기 보관 30일 · 즉시 삭제·로그아웃 삭제 ② 자사 서버 처리 종료 직후 삭제 · 잔여분 업로드 +24시간 이내 ③ 외부 AI 벤더 전송 사실 + "벤더의 보관 조건은 확정 전". 약속 문구 없음. 온보딩(S05)·페이월 동의(S12)·설정 저장 데이터 표(S09)는 이 상수만 참조한다(복사 금지).
 - **[S05b] 재설정 딥링크 처리 경로 단일화**: `soongong://auth/reset` 은 Supabase SDK(`detectSessionInUri`, app_links)가 PKCE 코드 교환까지 전담하고, 앱은 `AuthChangeEvent.passwordRecovery`(`AuthBackend.passwordRecoveryEvents`) 만 받아 `passwordRecoveryProvider` 를 켜고 가드가 `/auth/reset` 로 보낸다. Flutter 자체 딥링크(`flutter_deeplinking_enabled`·`FlutterDeepLinkingEnabled`)는 **false** 로 두어 중복 교환·중복 라우팅을 없앴고, 가드의 host 정규화는 제거. 플래그는 새 비밀번호 저장·"재설정 메일 다시 요청"·로그아웃에서 꺼진다. 실제 링크(앱 종료 상태·실행 중)는 dev 프로젝트 Redirect URL 등록 후 실기기에서 검증해야 한다(미실행, handoff).
 
+## [S06] 측정 연결 결정 (2026-10-06)
+
+- **[S06] 시작·종료 전 영속 상태**: 시작 전에 active 행과 첫 스냅샷을 같은 트랜잭션에 쓴다. 측정 종료 후 사용자가 저장하기 전에는 ended_at 없는 interrupted 행과 스냅샷으로 남긴다. 최종 저장은 같은 ID를 갱신하고 구간·정정·감도 설정·할 일 완료를 한 트랜잭션에 묶는다. 복구 후 이어서 측정한 세션도 최종 상태는 interrupted다(D23).
+- **[S06] 복구 마무리 확인**: S05 복구 핸들러의 finish는 즉시 저장 대신 summary로 이동한다. 사용자에게 정정·할 일 완료·저장/버리기 결정을 제공한다. finishLocation getter와 홈 이동 분기만 추가했고 루트 app_router는 수정하지 않았다. 기존 S05 공용 홈 코드에 필요한 연결이므로 공용 파일 변경을 PR에 명시한다.
+- **[S06] 홈 링 = 착석 구간**: S05의 세션 시작~종료 링을 saved seated/manual 구간으로 교체한다. away/paused는 빈 구간, 자정 경계는 로컬 날짜별로 자른다. ended_at 없는 active/interrupted는 홈 합계·연속일수에서 제외한다. S08도 같은 구간 규칙을 쓴다.
+- **[S06] 측정 수명 주기 소유권**: 화면 대신 keepAlive MeasureController가 WidgetsBindingObserver를 소유한다. 화면 전환으로 백그라운드 stop을 놓치지 않으며 중복 paused/hidden 알림은 자동 재개 여부를 유지한다. 사용자 일시정지는 복귀 시에도 유지한다. 기존 SeatEngine 계약은 변경하지 않는다.
+- **[S06] 목표 링·배터리·화면 유지**: 링의 목표는 사용자 하루 목표 시간 설정을 사용한다. 배터리는 시작·60초마다 확인하고 ≤20% 전환 시 한 번 lowPower 재시작한다. 새 wakelock_plus ^1.8.0은 포그라운드 측정 중 화면 유지, battery_plus는 기존 S04 패키지를 재사용한다. 실기기 카메라·화면 유지·배터리 검증은 S14/S16 인계다.
+
+## [S06b] 검증·보완 결정 — S06 인수 (2026-10-06, CC)
+
+- **[S06b] 복귀 시 세션 시계 재정렬(전진만)** — *[S06c]로 대체*: 단조 시계(`Stopwatch` = Android `CLOCK_MONOTONIC` · iOS `mach_absolute_time`)는 기기가 잠든 동안 멈춘다. 백그라운드·화면 꺼짐 뒤 복귀하면 `SessionClock.now()`가 잠든 시간만큼 실제보다 뒤처져 이후 구간이 전부 앞당겨 배치되는 문제가 있다. S06b는 복귀 시 벽시계로 기준점을 앞당겼으나, 이는 "측정 중 기기 시각 변경은 무시한다"(D23 · [S04c])와 충돌한다(백그라운드에서 시각을 +1시간 바꾸면 이후 구간과 `ended_at`이 1시간 밀림). [S06c]가 벽시계를 쓰지 않는 방식으로 바꿨다.
+- **[S06b] 복구 후보는 이 기기의 행만**: `RecoveryCandidate.detect(deviceId:)` — 스냅샷이 없는 행 전용 후보(active·paused·ended_at 없는 interrupted)는 `device_id`가 이 기기일 때만 인정한다. S13 동기화로 내려온 다른 기기의 진행 중 세션이 이 기기에서 "종료되지 않은 세션"으로 뜨지 않게 한다. 스냅샷은 로컬 전용이라 그대로 1순위.
+- **[S06b] 저장 → 홈**: 프로토타입 `saveSession`(플래시 620ms 뒤 홈)대로 저장 성공 시 바로 홈으로 이동하고 토스트("기록을 저장했습니다" 또는 감도 조정 + "정정 이력 보기")를 띄운다. S06의 중간 "저장됨" 화면과 "저장한 기록 보기" 링크는 제거(상세는 S08 기록 화면에서 진입).
+- **[S06b] 집중 화면 시스템 뒤로 = 일시정지**: 종료는 되돌릴 수 없으므로 뒤로 제스처는 측정을 끝내지 않고 실행 중이면 일시정지한다(일시정지·중단 상태에서는 아무 동작 없음). 종료는 버튼으로만.
+- **[S06b] 집중 링 = 오늘 합계 / 하루 목표(D25)**: 링 진행률은 "오늘 저장된 순공 + 이 세션 순공"을 하루 목표와 비교한다(시작 시 1회 읽은 당일 합계 `todayTotal`). 캡션 "오늘 합계 N · 하루 목표 N분", 도달 시 "하루 목표 도달". 큰 숫자는 프로토타입대로 이 세션의 순공. 자정을 넘긴 세션은 시작일 기준 합계를 유지한다.
+- **[S06b] 준비 화면의 복구 카드**: 홈 복구 시트를 "기록 유지"로 닫은 뒤 준비 화면에 오면 같은 세 선택(이어서 · 기록 마무리 · 기록 버리기)을 카드로 제공하고 시작 버튼은 잠근다. 같은 `sessionRecoveryHandlerProvider`를 쓴다. 이전에는 시작이 실패하며 해결 경로가 없었다.
+- **[S06b] 정정 이력 화면**: 빈 상태에 다음 행동 "지난 기록 보기"(→ `/stats`, S08 placeholder)와 프로토타입 설명문, 상단에 현재 자리 비움 판정 초·최근 2주 되돌림 건수(사실만). 스트림은 State에서 1회 생성.
+- **[S06b] 문구 정리**: 프로토타입의 "화면을 꺼도 측정은 계속됩니다"는 D23(화면 꺼짐·백그라운드 = paused)과 충돌하므로 채택하지 않고 "다른 앱으로 이동하거나 화면을 끄면 측정을 일시정지합니다"로 둔다. 끊김 카드·자리 비움 카드·버리기/변경 취소 확인창은 프로토타입 문장(지금까지의 순공·되돌린 구간 수·연결 할 일 미완료)을 사실 그대로 쓴다.
+- **[S06b] 홈 구간 조회 범위**: `watchSegmentsOverlapping(어제, 오늘)`로 홈이 필요한 구간만 읽는다(`watchAllSegments`는 S08용으로 유지).
+- **[S06b] 미채택 보류**: 프로토타입 집중 화면의 "잘못 감지예요"(측정 중 현재 이탈 구간을 즉시 순공으로 되돌림)는 PRD 4.1의 정정(종료 후 타임라인)과 감도 집계 의미(즉시 정정도 2주 3건에 포함되는지)가 정해지지 않아 구현하지 않았다. 사람 결정 필요.
+
+## [S06c] GPT 검토 후속 — 계정 전환 뒤 지연 쓰기 차단 · 수면 보정의 벽시계 제거 (2026-10-06, CC)
+
+- **[S06c] 수면 보정은 수면 인지 단조 시계로만**: 세션 시계 보정에 벽시계를 쓰지 않는다. 플랫폼 채널 `co.byite.soongong/clock` → `elapsedRealtimeMillis`(Android `SystemClock.elapsedRealtime()`, iOS `clock_gettime(CLOCK_MONOTONIC)` — 둘 다 잠자는 동안에도 증가)를 `SleepAwareClock`으로 두고, `background()`에서 (수면 인지 시계, Stopwatch) 쌍을 기록, `foreground()`에서 두 시계의 증가량 차 = 잠든 시간만큼 `SessionClock.advance(shift)`로 기준점을 앞당긴다(양수일 때만, paused 상태일 때만). 벽시계를 ±몇 시간 바꿔도 아무 구간도 움직이지 않는다(테스트 고정). 플랫폼 답이 없으면(테스트·미지원 호스트) 보정하지 않는다. `SessionClock.realign(wallNow)`는 삭제. 실기기 확인 전까지 이 채널의 Android/iOS 동작은 미검증이다(handoff D5).
+- **[S06c] 계정 전환 뒤 지연 쓰기 차단**: `measureControllerProvider`는 저장소 체인(`currentUserIdProvider`)을 watch 하므로 사용자가 바뀌면 재생성되고 이전 컨트롤러는 dispose 된다(D27 wipe 뒤). 이전 컨트롤러에 남은 비동기 작업(저장·종료·복구·버리기·정정·체크포인트)은 **모든 await 뒤에 `_checkAlive()`** 를 거쳐 dispose 뒤에는 어떤 DB 쓰기도 하지 않는다(저장 트랜잭션 안에서도 검사 → 롤백, `save()`는 false). 세션 상세의 5초 삭제 커밋 타이머와 되돌리기 콜백은 `currentUserIdProvider`가 삭제한 계정과 같을 때만 실행한다(남은 건 D22 재시작 정산). `dispose()`는 멱등.
+- **[S06c] 미결 유지**: 프로토타입 "잘못 감지예요"(측정 중 즉시 정정)와 `startActive`의 outbox 등록은 사람 결정 대기.
+
+## [S06d] GPT 재검토 후속 — 트랜잭션 안의 소유권 검사 · 수동 전환 의도 · 자정 경계 합계 (2026-10-06, CC)
+
+- **[S06d] 쓰기 소유권은 트랜잭션 안에서 검사한다**: `SyncWriter.runOwnedTransaction(action, alive:)`가 DB 잠금을 쥔 뒤 ① 호출자 생존 ② `sync_meta.account_user_id`가 writer 의 `ctx.userId`와 같은지(바인딩이 없으면 통과) 검사하고, 아니면 `StateError`로 롤백한다. 측정 컨트롤러의 모든 쓰기와 세션 상세의 지연 삭제 커밋·되돌리기가 이 경로를 쓴다. 대기열 진입 전의 검사(S06c)는 계정 전환 트랜잭션 뒤에 커밋되는 경합을 막지 못한다. 다른 레인(S07~)도 화면 수명을 넘기는 지연 쓰기에는 같은 경로를 쓴다.
+- **[S06d] "수동으로 이어서"는 모드 결정**: `resume(manual: true)`는 첫 await 전에 타임라인을 manual 로 바꾼다. 백그라운드가 끼어들어도 결정이 남고 복귀 재개는 카메라를 확인하지 않는다.
+- **[S06d] 집중 화면의 오늘 합계 = 홈 규칙**: 저장 세션의 seated/manual 구간을 로컬 자정 경계로 잘라 합산(`SeatedTimeCalculator.seatedSecondsOn`, `getSegmentsOverlapping`). 세션 시작일 기준 합산 폐기. 삭제 대기·미저장 행 제외.
+

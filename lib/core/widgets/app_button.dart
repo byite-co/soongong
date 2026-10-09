@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 
-enum AppButtonVariant { primary, secondary, destructive }
+enum AppButtonVariant { primary, secondary, accent, destructive }
 
 enum AppButtonSize {
   large(AppLayout.buttonLarge, AppRadius.button),
@@ -99,6 +99,7 @@ class _AppButtonState extends State<AppButton> {
     final (Color bg, Color fg) = switch (widget.variant) {
       AppButtonVariant.primary => (c.pri, c.onPri),
       AppButtonVariant.secondary => (c.sunk, c.tx2),
+      AppButtonVariant.accent => (c.acc, c.onAcc),
       AppButtonVariant.destructive => (c.acc, c.onAcc),
     };
     final disabled = widget.onPressed == null;

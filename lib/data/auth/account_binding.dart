@@ -8,6 +8,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../core/logging/app_logger.dart';
 import '../db/app_database.dart';
 import '../repositories/repository_providers.dart';
+import '../repositories/sync_writer.dart';
 
 part 'account_binding.g.dart';
 
@@ -16,7 +17,7 @@ class AccountBinding {
 
   final AppDatabase _db;
 
-  static const String key = 'account_user_id';
+  static const String key = SyncWriter.accountUserIdKey;
 
   Future<String?> current() async {
     final row = await (_db.select(_db.syncMeta)..where((m) => m.key.equals(key))).getSingleOrNull();
