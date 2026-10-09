@@ -577,4 +577,47 @@ void main() {
     expect(find.text(PlannerStrings.legendPlanned), findsOneWidget);
     await h.unmount(tester);
   });
+
+  testWidgets('[S07c] folded grid + 3D: no overflow on 390×844 and 600×900, free and premium, fold→3D, unfold while 3D, 3D→fold', (tester) async {
+    final repo = h.container.read(plannerRepositoryProvider);
+    final item = await repo.createItem(kind: PlannerKind.study, title: '오늘 공부', date: today, targetMinutes: 60);
+    await seedSession(start: kHarnessNow.subtract(const Duration(hours: 2)), seated: const Duration(minutes: 30), itemId: item.id);
+    List<Planner3dPainter> painters() => tester
+        .widgetList<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is Planner3dPainter))
+        .map((w) => w.painter! as Planner3dPainter)
+        .toList();
+
+    for (final size in <Size>[kPhone, const Size(600, 900)]) {
+      await openPlanner(tester, size: size);
+      // fold → 3D
+      await openDay(tester, today);
+      expect(find.byKey(PlannerKeys.detail), findsOneWidget);
+      await tester.tap(find.byKey(PlannerKeys.toggle3d));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'folded row in 3D must not overflow ($size)');
+      expect(painters().where((p) => p.heightPx > 0).length, 1, reason: 'today has a 순공 column');
+      expect(find.text('${today.day}'), findsWidgets, reason: 'day number still laid out');
+      // unfold while 3D, then fold again
+      await tester.tap(find.byKey(PlannerKeys.handle));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(PlannerKeys.detail), findsNothing);
+      await openDay(tester, today);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      // premium: planned + record on the same folded cell
+      (h.container.read(billingGatewayProvider) as FakeBillingGateway).force(EntitlementStatus.premium);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(painters().where((p) => p.heightPx > 0 && p.plannedHeightPx > 0).length, 1);
+      // 3D → fold off (back to flat)
+      await tester.tap(find.byKey(PlannerKeys.toggle3d));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(painters(), isEmpty);
+      (h.container.read(billingGatewayProvider) as FakeBillingGateway).force(EntitlementStatus.free);
+      await tester.pumpAndSettle();
+      await h.unmount(tester);
+    }
+  });
 }

@@ -336,6 +336,9 @@ class _PlannerScreenState extends ConsumerState<PlannerScreen> with SingleTicker
         final full = constraints.maxHeight - handleH - _weekdayHeaderHeight;
         const foldedH = 64.0;
         final gridH = folded ? foldedH : full;
+        // Room for the lifted 3D content above row 0: the folded row uses
+        // the folded column height (14 dp), not the expanded 28 dp ([S07c]).
+        final topPad = _mode3d ? (folded ? AppPlanner.columnMaxCollapsed : AppPlanner.columnMax) : 0.0;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -355,7 +358,7 @@ class _PlannerScreenState extends ConsumerState<PlannerScreen> with SingleTicker
                 duration: AppMotion.of(context, AppPlanner.fold),
                 curve: AppMotion.meterCurve,
                 height: gridH,
-                padding: EdgeInsets.fromLTRB(AppSpacing.s12, _mode3d ? AppPlanner.columnMax : 0, AppSpacing.s12, 0),
+                padding: EdgeInsets.fromLTRB(AppSpacing.s12, topPad, AppSpacing.s12, 0),
                 decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line))),
                 child: _grid(aggregate, density, today, selected, subjects, entitled, tablet: false),
               ),

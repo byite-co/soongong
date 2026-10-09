@@ -228,17 +228,25 @@ class _DayCell extends StatelessWidget {
                     ? c.priTx
                     : c.tx;
 
+    // The wash/border box fills the cell; the lines inside are laid out
+    // unbounded and clipped, so a short cell (folded row, small screen)
+    // shows what fits instead of raising a flex overflow ([S07c]).
     final content = Container(
       margin: const EdgeInsets.all(2),
       padding: const EdgeInsets.fromLTRB(2, 4, 2, 2),
+      clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(has3d || isToday ? 3 : 0),
         border: isToday ? Border.all(color: c.acc, width: 2) : null,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
+      child: OverflowBox(
+        alignment: Alignment.topLeft,
+        maxHeight: double.infinity,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
           // Align (not Row): a narrow cell must never raise a flex overflow.
           Align(
             alignment: Alignment.topLeft,
@@ -325,6 +333,7 @@ class _DayCell extends StatelessWidget {
             ],
           ],
         ],
+        ),
       ),
     );
 
