@@ -251,7 +251,7 @@ final class StatsViewProvider
   }
 }
 
-String _$statsViewHash() => r'8800877322033deb9a142d0e7908a21eaa46f7ba';
+String _$statsViewHash() => r'e7699159700bbf2a6c7b83b44d888871e742a653';
 
 final class StatsViewFamily extends $Family
     with $FunctionalFamilyOverride<StatsViewState, String> {
@@ -454,7 +454,7 @@ final class StatsWrongsSectionProvider
 }
 
 String _$statsWrongsSectionHash() =>
-    r'676e7b18d33712a42c70f8a8953bfb6c11316bd6';
+    r'0b22295327f168d992bf747935598ba3e9ca1f56';
 
 final class StatsWrongsSectionFamily extends $Family
     with $FunctionalFamilyOverride<WrongsState, String> {
