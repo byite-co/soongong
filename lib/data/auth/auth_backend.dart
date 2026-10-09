@@ -28,7 +28,16 @@ abstract class AuthBackend {
 
   Future<AuthSession> signInWithPassword({required String email, required String password});
 
+  /// Sends the reset mail; the Supabase implementation passes
+  /// [AuthDeepLinks.passwordReset] as `redirectTo` (S05 `/auth/reset`).
   Future<void> resetPasswordForEmail(String email);
+
+  /// `auth.updateUser(password)` for the signed-in user (password recovery).
+  Future<void> updatePassword(String newPassword);
+
+  /// Own `profiles` row (RLS: readable only while it exists) or null when the
+  /// account has no profile yet (`complete-signup` pending). S05 routing.
+  Future<Map<String, dynamic>?> fetchOwnProfile();
 
   Future<void> signOut();
 
@@ -36,4 +45,9 @@ abstract class AuthBackend {
 
   /// Emits the current session on every auth change (null when signed out).
   Stream<AuthSession?> get sessions;
+
+  /// Fires once per password-recovery link the SDK exchanged for a session
+  /// (`AuthChangeEvent.passwordRecovery`). S05b: the SDK's deep-link observer
+  /// owns `soongong://auth/reset`; the router only reacts to this event.
+  Stream<void> get passwordRecoveryEvents;
 }

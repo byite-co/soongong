@@ -13,6 +13,16 @@ abstract final class ConsentVersions {
   static const String reading = '2026-10-01';
 }
 
+/// Deep links the app registers (AndroidManifest · Info.plist, S05). The
+/// password-reset mail must redirect here; Supabase Auth → URL Configuration
+/// has to allow it (docs/handoff/S05.md).
+abstract final class AuthDeepLinks {
+  static const String scheme = 'soongong';
+
+  /// `soongong://auth/reset` → router path `/auth/reset` (host `auth`).
+  static const String passwordReset = 'soongong://auth/reset';
+}
+
 /// Login providers. [wire] is the value sent to `issue-pass` and stored in
 /// `signup_passes.provider` / `signup_approvals.provider`.
 enum SignupProvider {
@@ -108,14 +118,28 @@ sealed class SignInOutcome {
 }
 
 class SignedIn extends SignInOutcome {
-  const SignedIn({required this.userId, required this.isNewUser, this.profile});
+  const SignedIn({
+    required this.userId,
+    required this.isNewUser,
+    this.profile,
+    this.profileLoaded = true,
+  });
 
   final String userId;
 
-  /// true when `complete-signup` created the profile in this flow.
+  /// true when this flow carried an age ticket (new account path).
   final bool isNewUser;
 
+  /// Own `profiles` row, or null when it does not exist yet (consent ① /
+  /// `complete-signup` still pending → `/signup/complete`, S05).
   final ProfileSnapshot? profile;
+
+  /// false when the profile could not be read right after sign-in (offline);
+  /// the auth gate (S05) retries before routing.
+  final bool profileLoaded;
+
+  /// Consent ① not recorded yet.
+  bool get needsSignupCompletion => profileLoaded && profile == null;
 }
 
 class SignInRejected extends SignInOutcome {

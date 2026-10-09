@@ -13,7 +13,12 @@ Future<bool> initSupabaseIfConfigured() async {
     url: AppConfig.supabaseUrl,
     // The legacy anon JWT and the new sb_publishable_… key both go here.
     publishableKey: AppConfig.supabaseAnonKey,
-    authOptions: const FlutterAuthClientOptions(autoRefreshToken: true),
+    // S05b: the SDK's deep-link observer is the single handler of
+    // `soongong://auth/reset` (PKCE code exchange → `passwordRecovery` event).
+    authOptions: const FlutterAuthClientOptions(
+      autoRefreshToken: true,
+      detectSessionInUri: true,
+    ),
   );
   appLog.i('supabase: initialised');
   return true;

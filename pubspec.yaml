@@ -71,6 +71,15 @@ dependencies:
   sensors_plus: ^7.1.0
   archive: ^4.3.0
 
+  # [S05] New packages — reasons in docs/handoff/S05.md
+  # Native provider tokens for signInWithIdToken (D6 step 2): Apple (nonce),
+  # Google (web client id → id_token), Kakao (OIDC id_token).
+  sign_in_with_apple: ^8.2.0
+  google_sign_in: ^7.2.0
+  kakao_flutter_sdk_user: ^1.10.0
+  # sha256 of the Apple nonce (already a transitive dependency).
+  crypto: ^3.0.7
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

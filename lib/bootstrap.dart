@@ -5,6 +5,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' show KakaoSdk;
 
 import 'app.dart';
 import 'core/config/app_config.dart';
@@ -33,6 +34,10 @@ Future<void> bootstrap() async {
   final deviceId = await DeviceIdStore().getOrCreate();
   // S03: Supabase client (auth · functions) when the flavor env has the public keys.
   await initSupabaseIfConfigured();
+  // S05: Kakao SDK needs its (public) native app key before any login call.
+  if (AppConfig.kakaoNativeAppKey.isNotEmpty) {
+    KakaoSdk.init(nativeAppKey: AppConfig.kakaoNativeAppKey);
+  }
 
   appLog.i(
     'bootstrap · flavor=${AppConfig.flavor.name} '

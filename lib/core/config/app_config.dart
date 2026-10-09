@@ -26,6 +26,15 @@ abstract final class AppConfig {
   /// (abuse deterrent, not a secret — it ships in the binary).
   static const String checkEmailAppKey = String.fromEnvironment('CHECK_EMAIL_APP_KEY');
 
+  /// Social sign-in client ids (public, S05 · D6). Empty = provider not
+  /// offered in this build. Google needs the *web* client id for an id_token.
+  static const String googleServerClientId =
+      String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+  static const String googleIosClientId =
+      String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
+  static const String kakaoNativeAppKey =
+      String.fromEnvironment('KAKAO_NATIVE_APP_KEY');
+
   /// RevenueCat public SDK keys (public).
   static const String revenueCatPublicKeyAndroid =
       String.fromEnvironment('REVENUECAT_PUBLIC_KEY_ANDROID');
