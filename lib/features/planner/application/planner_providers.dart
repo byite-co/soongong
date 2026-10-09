@@ -47,7 +47,12 @@ Stream<List<Subject>> plannerSubjects(Ref ref) => ref.watch(subjectRepositoryPro
 Stream<List<Recurrence>> plannerRecurrences(Ref ref) =>
     ref.watch(plannerRepositoryProvider).watchRecurrences();
 
-/// Sessions of the whole history (item links · suggestion samples).
+/// The whole live session history. The month aggregate reads it rather
+/// than a start-date range ([S07b]): a session paused across days owns
+/// segments inside the grid although it started before it, and an item's
+/// 실제 시간 comes from its linked sessions whenever they ran. Also the
+/// suggestion samples of the sheet. `watchAll` is live-only (deleted and
+/// pending-delete rows excluded).
 @riverpod
 Stream<List<StudySession>> plannerAllSessions(Ref ref) =>
     ref.watch(sessionRepositoryProvider).watchAll();
@@ -100,14 +105,6 @@ Stream<List<SessionSegment>> plannerGridSegments(Ref ref, String monthKey) {
   return ref.watch(sessionRepositoryProvider).watchSegmentsOverlapping(grid.first, grid.last);
 }
 
-/// Sessions that started the day before the grid or later (a session that
-/// crossed midnight into the grid is included for its segments).
-@riverpod
-Stream<List<StudySession>> plannerGridSessions(Ref ref, String monthKey) {
-  final grid = ref.watch(plannerGridProvider(monthKey));
-  return ref.watch(sessionRepositoryProvider).watchBetween(grid.first.addDays(-1), grid.last);
-}
-
 sealed class PlannerMonthState {
   const PlannerMonthState();
 }
@@ -136,7 +133,7 @@ PlannerMonthState plannerMonth(Ref ref, String monthKey) {
   final items = ref.watch(plannerGridItemsProvider(monthKey));
   final recs = ref.watch(plannerRecurrencesProvider);
   final segments = ref.watch(plannerGridSegmentsProvider(monthKey));
-  final sessions = ref.watch(plannerGridSessionsProvider(monthKey));
+  final sessions = ref.watch(plannerAllSessionsProvider);
   for (final a in [items, recs, segments, sessions]) {
     if (a.hasError) return PlannerMonthError(a.error!);
   }

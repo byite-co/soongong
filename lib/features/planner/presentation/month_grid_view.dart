@@ -85,7 +85,8 @@ class MonthGridView extends StatelessWidget {
                               isSelected: d == selected,
                               isFuture: d.isAfter(today),
                               level: density.levelOf(aggregate.seatedOn(d)),
-                              columnRatio: _columnRatio(d),
+                              seatedRatio: density.ratioOf(aggregate.seatedOn(d)),
+                              plannedRatio: _plannedRatio(d),
                               tone: _tone(d),
                               lanes: aggregate.bandLayout.lanesOn(d),
                               hiddenBands: aggregate.bandLayout.hiddenOn(d),
@@ -120,12 +121,12 @@ class MonthGridView extends StatelessWidget {
     );
   }
 
-  /// 0..1 height of the cell's column: past/today = 순공 vs the density
-  /// reference; future (premium only) = planned minutes vs the reference.
-  double _columnRatio(LocalDate d) {
-    final seated = aggregate.seatedOn(d);
-    if (seated > 0) return density.ratioOf(seated);
-    if (!entitled || !d.isAfter(today)) return 0;
+  /// 0..1 height of the premium 목표 column (S07 §4.5): the day's planned
+  /// 공부 minutes vs the density reference (300분 when there is none), on
+  /// any day — past and today overlay the 순공 column, future stands alone.
+  /// Free users never see it.
+  double _plannedRatio(LocalDate d) {
+    if (!entitled) return 0;
     final planned = aggregate.dayOf(d).plannedMinutes * 60;
     if (planned <= 0) return 0;
     final ref = density.referenceSeconds > 0 ? density.referenceSeconds : 300 * 60;
@@ -133,10 +134,7 @@ class MonthGridView extends StatelessWidget {
     return r > 1 ? 1 : r;
   }
 
-  ColumnTone _tone(LocalDate d) {
-    if (d == today) return ColumnTone.today;
-    return aggregate.seatedOn(d) > 0 ? ColumnTone.seated : ColumnTone.planned;
-  }
+  ColumnTone _tone(LocalDate d) => d == today ? ColumnTone.today : ColumnTone.seated;
 }
 
 class _DayCell extends StatelessWidget {
@@ -148,7 +146,8 @@ class _DayCell extends StatelessWidget {
     required this.isSelected,
     required this.isFuture,
     required this.level,
-    required this.columnRatio,
+    required this.seatedRatio,
+    required this.plannedRatio,
     required this.tone,
     required this.lanes,
     required this.hiddenBands,
@@ -165,7 +164,8 @@ class _DayCell extends StatelessWidget {
   final bool isSelected;
   final bool isFuture;
   final int level;
-  final double columnRatio;
+  final double seatedRatio;
+  final double plannedRatio;
   final ColumnTone tone;
   final int lanes;
   final int hiddenBands;
@@ -188,10 +188,11 @@ class _DayCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final items = day.items;
-    final has3d = extrusion > 0 && columnRatio > 0 && inMonth;
+    final has3d = extrusion > 0 && (seatedRatio > 0 || plannedRatio > 0) && inMonth;
     final maxH = collapsed ? AppPlanner.columnMaxCollapsed : AppPlanner.columnMax;
-    final h = has3d ? (columnRatio * maxH).clamp(4.0, maxH) : 0.0;
-    final lift = h * extrusion;
+    final h = has3d && seatedRatio > 0 ? (seatedRatio * maxH).clamp(4.0, maxH) : 0.0;
+    final hp = has3d && plannedRatio > 0 ? (plannedRatio * maxH).clamp(4.0, maxH) : 0.0;
+    final lift = (h > 0 ? h : hp) * extrusion;
     final dx = Planner3dPainter.shearOf(lift);
 
     final wash = level == 0 || !inMonth
@@ -210,15 +211,13 @@ class _DayCell extends StatelessWidget {
 
     final (front, side) = switch (tone) {
       ColumnTone.today => (c.acc, c.isDark ? AppPlanner.todaySideDark : AppPlanner.todaySide),
-      ColumnTone.seated => (
+      _ => (
           c.isDark ? AppPlanner.columnFrontDark : AppPlanner.columnFront,
           c.isDark ? AppPlanner.columnSideDark : AppPlanner.columnSide
         ),
-      ColumnTone.planned => (
-          c.isDark ? AppPlanner.plannedFrontDark : AppPlanner.plannedFront,
-          c.isDark ? AppPlanner.plannedSideDark : AppPlanner.plannedSide
-        ),
     };
+    final plannedFront = c.isDark ? AppPlanner.plannedFrontDark : AppPlanner.plannedFront;
+    final plannedSide = c.isDark ? AppPlanner.plannedSideDark : AppPlanner.plannedSide;
     final numberColor = isToday
         ? c.accTx
         : !inMonth
@@ -240,23 +239,23 @@ class _DayCell extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                width: 22,
-                height: 22,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: isSelected && !isToday ? Border.all(color: c.tx, width: 2) : null,
-                ),
-                child: Text(
-                  '${date.day}',
-                  style: AppTypography.withWeight(AppTypography.caption, 600)
-                      .copyWith(color: numberColor, height: 1, fontFeatures: AppTypography.tabularFigures),
-                ),
+          // Align (not Row): a narrow cell must never raise a flex overflow.
+          Align(
+            alignment: Alignment.topLeft,
+            child: Container(
+              width: 22,
+              height: 22,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: isSelected && !isToday ? Border.all(color: c.tx, width: 2) : null,
               ),
-            ],
+              child: Text(
+                '${date.day}',
+                style: AppTypography.withWeight(AppTypography.caption, 600)
+                    .copyWith(color: numberColor, height: 1, fontFeatures: AppTypography.tabularFigures),
+              ),
+            ),
           ),
           if (collapsed)
             Padding(
@@ -353,7 +352,9 @@ class _DayCell extends StatelessWidget {
                       side: side,
                       top: c.surface,
                       edge: c.line,
-                      opacity: tone == ColumnTone.planned ? AppPlanner.plannedOpacity : 1,
+                      plannedHeightPx: hp,
+                      plannedFront: plannedFront,
+                      plannedSide: plannedSide,
                     )
                   : null,
               child: Transform.translate(

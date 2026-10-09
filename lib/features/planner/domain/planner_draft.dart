@@ -65,7 +65,8 @@ class PlannerDraft {
 
   static const int titleMaxLength = 80;
   static const int rangeMaxLength = 40;
-  static const List<int> targetChips = <int>[20, 30, 45, 60];
+  /// S07 §4.3: 15 · 30 · 45 · 60 · 90 · 120 (plus 직접 입력).
+  static const List<int> targetChips = <int>[15, 30, 45, 60, 90, 120];
   static const int freeDefaultTargetMinutes = 30;
   static const int timeStepMinutes = 30;
 

@@ -182,6 +182,11 @@ void main() {
   group('PlannerDraft', () {
     final day = LocalDate.parse('2026-10-09');
 
+    test('target chips follow S07 §4.3 (15 · 30 · 45 · 60 · 90 · 120)', () {
+      expect(PlannerDraft.targetChips, <int>[15, 30, 45, 60, 90, 120]);
+      expect(PlannerDraft.targetChips, contains(PlannerDraft.freeDefaultTargetMinutes));
+    });
+
     test('create defaults, kind switch keeps title and applies target rules', () {
       final d = PlannerDraft.create(date: day);
       expect(d.kind, PlannerKind.study);
@@ -330,6 +335,43 @@ void main() {
       expect(agg.sessionsByItem['i1']!.map((s) => s.id), <String>['b', 'a']);
       expect(agg.actualMinutes(d1.items[1]), 30);
       expect(agg.actualMinutes(d1.items[0]), 0);
+    });
+
+    test('[S07b] sessions outside the grid: a paused-across-days session owns today\'s segment; an item\'s 실제 시간 comes from any month; unlinked sessions list under their start day', () {
+      // A: started 9/20 (before the October grid), paused, resumed 10/3 for 30 min.
+      final a = session('a', start: DateTime(2026, 9, 20, 9), seatedSeconds: 1800);
+      // B: linked to an August item, executed 10/3.
+      final b = session('b', start: DateTime(2026, 10, 3, 14), seatedSeconds: 1800, itemId: 'aug-item');
+      // C/D: saved without a plan on 10/3 (자습) — D later in the day; E unsaved.
+      final cS = session('c', start: DateTime(2026, 10, 3, 20), seatedSeconds: 600, subjectId: 'math');
+      final dS = session('d', start: DateTime(2026, 10, 3, 21), seatedSeconds: 1200);
+      final e = session('e', start: DateTime(2026, 10, 3, 22), seatedSeconds: 900, status: SessionStatus.active, ended: false);
+      final all = <StudySession>[a, b, cS, dS, e];
+      final segs = <SessionSegment>[
+        segment('a', DateTime(2026, 9, 20, 9), DateTime(2026, 9, 20, 9, 10)),
+        segment('a', DateTime(2026, 9, 20, 9, 10), DateTime(2026, 10, 3, 9), kind: SegmentKind.paused),
+        segment('a', DateTime(2026, 10, 3, 9), DateTime(2026, 10, 3, 9, 30)),
+        segment('b', DateTime(2026, 10, 3, 14), DateTime(2026, 10, 3, 14, 30)),
+        segment('c', DateTime(2026, 10, 3, 20), DateTime(2026, 10, 3, 20, 10)),
+        segment('d', DateTime(2026, 10, 3, 21), DateTime(2026, 10, 3, 21, 20)),
+        segment('e', DateTime(2026, 10, 3, 22), DateTime(2026, 10, 3, 22, 15)),
+      ];
+      final oct = MonthAggregate.build(grid: grid, items: const <PlannerItem>[], recurrences: const <Recurrence>[], segments: segs, sessions: all);
+      final d3 = oct.dayOf(LocalDate.parse('2026-10-03'));
+      expect(d3.seatedSeconds, 1800 + 1800 + 600 + 1200, reason: 'A counts although it started 9/20; E (unsaved) does not');
+      expect(d3.sessions.map((x) => x.id), <String>['c', 'd'], reason: 'unlinked saved sessions, oldest first; B hangs off its item');
+      expect(d3.unlinkedMinutes, 30);
+      expect(oct.dayOf(LocalDate.parse('2026-09-20')), isNot(same(d3)));
+
+      final aug = MonthAggregate.build(
+        grid: MonthGrid.of(2026, 8, weekStart: 1),
+        items: <PlannerItem>[item('aug-item', date: '2026-08-01', title: '밀린 일', target: 30)],
+        recurrences: const <Recurrence>[],
+        segments: const <SessionSegment>[],
+        sessions: all,
+      );
+      expect(aug.actualMinutes(aug.dayOf(LocalDate.parse('2026-08-01')).items.single), 30, reason: 'linked session from October');
+      expect(aug.dayOf(LocalDate.parse('2026-08-01')).sessions, isEmpty);
     });
 
     test('dailySeated window', () {

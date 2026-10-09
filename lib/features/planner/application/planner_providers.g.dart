@@ -296,12 +296,22 @@ final class PlannerRecurrencesProvider
 String _$plannerRecurrencesHash() =>
     r'133222452fc03f693e70d159aa4a1d12cc32fda2';
 
-/// Sessions of the whole history (item links · suggestion samples).
+/// The whole live session history. The month aggregate reads it rather
+/// than a start-date range ([S07b]): a session paused across days owns
+/// segments inside the grid although it started before it, and an item's
+/// 실제 시간 comes from its linked sessions whenever they ran. Also the
+/// suggestion samples of the sheet. `watchAll` is live-only (deleted and
+/// pending-delete rows excluded).
 
 @ProviderFor(plannerAllSessions)
 final plannerAllSessionsProvider = PlannerAllSessionsProvider._();
 
-/// Sessions of the whole history (item links · suggestion samples).
+/// The whole live session history. The month aggregate reads it rather
+/// than a start-date range ([S07b]): a session paused across days owns
+/// segments inside the grid although it started before it, and an item's
+/// 실제 시간 comes from its linked sessions whenever they ran. Also the
+/// suggestion samples of the sheet. `watchAll` is live-only (deleted and
+/// pending-delete rows excluded).
 
 final class PlannerAllSessionsProvider
     extends
@@ -313,7 +323,12 @@ final class PlannerAllSessionsProvider
     with
         $FutureModifier<List<StudySession>>,
         $StreamProvider<List<StudySession>> {
-  /// Sessions of the whole history (item links · suggestion samples).
+  /// The whole live session history. The month aggregate reads it rather
+  /// than a start-date range ([S07b]): a session paused across days owns
+  /// segments inside the grid although it started before it, and an item's
+  /// 실제 시간 comes from its linked sessions whenever they ran. Also the
+  /// suggestion samples of the sheet. `watchAll` is live-only (deleted and
+  /// pending-delete rows excluded).
   PlannerAllSessionsProvider._()
     : super(
         from: null,
@@ -663,98 +678,6 @@ final class PlannerGridSegmentsFamily extends $Family
   String toString() => r'plannerGridSegmentsProvider';
 }
 
-/// Sessions that started the day before the grid or later (a session that
-/// crossed midnight into the grid is included for its segments).
-
-@ProviderFor(plannerGridSessions)
-final plannerGridSessionsProvider = PlannerGridSessionsFamily._();
-
-/// Sessions that started the day before the grid or later (a session that
-/// crossed midnight into the grid is included for its segments).
-
-final class PlannerGridSessionsProvider
-    extends
-        $FunctionalProvider<
-          AsyncValue<List<StudySession>>,
-          List<StudySession>,
-          Stream<List<StudySession>>
-        >
-    with
-        $FutureModifier<List<StudySession>>,
-        $StreamProvider<List<StudySession>> {
-  /// Sessions that started the day before the grid or later (a session that
-  /// crossed midnight into the grid is included for its segments).
-  PlannerGridSessionsProvider._({
-    required PlannerGridSessionsFamily super.from,
-    required String super.argument,
-  }) : super(
-         retry: null,
-         name: r'plannerGridSessionsProvider',
-         isAutoDispose: true,
-         dependencies: null,
-         $allTransitiveDependencies: null,
-       );
-
-  @override
-  String debugGetCreateSourceHash() => _$plannerGridSessionsHash();
-
-  @override
-  String toString() {
-    return r'plannerGridSessionsProvider'
-        ''
-        '($argument)';
-  }
-
-  @$internal
-  @override
-  $StreamProviderElement<List<StudySession>> $createElement(
-    $ProviderPointer pointer,
-  ) => $StreamProviderElement(pointer);
-
-  @override
-  Stream<List<StudySession>> create(Ref ref) {
-    final argument = this.argument as String;
-    return plannerGridSessions(ref, argument);
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return other is PlannerGridSessionsProvider && other.argument == argument;
-  }
-
-  @override
-  int get hashCode {
-    return argument.hashCode;
-  }
-}
-
-String _$plannerGridSessionsHash() =>
-    r'dbbc3c81efdc14fc3c86c2607f0e74e645ff4581';
-
-/// Sessions that started the day before the grid or later (a session that
-/// crossed midnight into the grid is included for its segments).
-
-final class PlannerGridSessionsFamily extends $Family
-    with $FunctionalFamilyOverride<Stream<List<StudySession>>, String> {
-  PlannerGridSessionsFamily._()
-    : super(
-        retry: null,
-        name: r'plannerGridSessionsProvider',
-        dependencies: null,
-        $allTransitiveDependencies: null,
-        isAutoDispose: true,
-      );
-
-  /// Sessions that started the day before the grid or later (a session that
-  /// crossed midnight into the grid is included for its segments).
-
-  PlannerGridSessionsProvider call(String monthKey) =>
-      PlannerGridSessionsProvider._(argument: monthKey, from: this);
-
-  @override
-  String toString() => r'plannerGridSessionsProvider';
-}
-
 /// One month's grid data (items · bands · recurrences · 순공 per day ·
 /// linked sessions). Reused by S08.
 
@@ -826,7 +749,7 @@ final class PlannerMonthProvider
   }
 }
 
-String _$plannerMonthHash() => r'fd273df4a25aa0e1a5278662256a61c8acbb2b8f';
+String _$plannerMonthHash() => r'da71923283c9e3709263d9132258e8b550bb5ded';
 
 /// One month's grid data (items · bands · recurrences · 순공 per day ·
 /// linked sessions). Reused by S08.

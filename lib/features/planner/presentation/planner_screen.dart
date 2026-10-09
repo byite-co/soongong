@@ -47,6 +47,7 @@ abstract final class PlannerKeys {
   static Key record(String id) => Key('planner-record-$id');
   static Key band(String id) => Key('planner-detail-band-$id');
   static Key recurrence(String id) => Key('planner-detail-rec-$id');
+  static Key session(String id) => Key('planner-detail-session-$id');
 }
 
 class PlannerScreen extends ConsumerStatefulWidget {
@@ -224,6 +225,8 @@ class _PlannerScreenState extends ConsumerState<PlannerScreen> with SingleTicker
     };
     final tablet = context.isTablet;
     final selected = tablet ? (_selected ?? today) : _selected;
+    // On a tablet too narrow for two columns `_tabletBody` falls back to the
+    // fold layout, which reads `_selected` itself.
 
     final body = switch (state) {
       PlannerMonthLoading() => const StatePanel.loading(),
@@ -407,12 +410,32 @@ class _PlannerScreenState extends ConsumerState<PlannerScreen> with SingleTicker
     );
   }
 
+  /// Narrowest grid the two-column layout may give the 7 columns (44 dp
+  /// touch targets); below that the fold layout is used even on tablets.
+  static const double _minGridWidth = MonthGrid.columns * AppSpacing.touchTarget + 2 * AppSpacing.s12;
+  static const double _panelMin = 260;
+  static const double _panelMax = 360;
+
   Widget _tabletBody(AppColors c, MonthAggregate aggregate, density, LocalDate today, LocalDate selected, Map<String, Subject> subjects, bool entitled) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // The panel takes 40 % of the width within 260–360 dp; when the
+        // grid would drop under 7 × 44 dp (e.g. 600 dp with the rail) the
+        // phone (fold) layout is used instead ([S07b]).
+        final panel = (constraints.maxWidth * 0.4).clamp(_panelMin, _panelMax).toDouble();
+        if (constraints.maxWidth - panel - 1 < _minGridWidth) {
+          return _phoneBody(c, aggregate, density, today, _selected, subjects, entitled);
+        }
+        return _twoColumns(c, aggregate, density, today, selected, subjects, entitled, panel: panel);
+      },
+    );
+  }
+
+  Widget _twoColumns(AppColors c, MonthAggregate aggregate, density, LocalDate today, LocalDate selected, Map<String, Subject> subjects, bool entitled, {required double panel}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Expanded(
-          flex: 3,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -436,7 +459,7 @@ class _PlannerScreenState extends ConsumerState<PlannerScreen> with SingleTicker
         ),
         VerticalDivider(width: 1, thickness: 1, color: c.line),
         SizedBox(
-          width: 360,
+          width: panel,
           child: _DayDetail(
             key: PlannerKeys.detail,
             date: selected,
@@ -671,7 +694,14 @@ class _DayDetail extends StatelessWidget {
     final events = day.events.toList();
     final bands = aggregate.bands.where((b) => date >= b.bandStart! && date <= b.bandEnd!).toList();
     final recs = day.recurrences;
-    final empty = study.isEmpty && todos.isEmpty && self.isEmpty && events.isEmpty && bands.isEmpty && recs.isEmpty;
+    final records = day.sessions; // 자습 saved without a plan ([S07b])
+    final empty = study.isEmpty &&
+        todos.isEmpty &&
+        self.isEmpty &&
+        records.isEmpty &&
+        events.isEmpty &&
+        bands.isEmpty &&
+        recs.isEmpty;
 
     final summary = isPast
         ? (day.hasSeated ? PlannerStrings.seatedSummary(PlannerStrings.hm(day.seatedSeconds)) : PlannerStrings.noRecord)
@@ -763,9 +793,9 @@ class _DayDetail extends StatelessWidget {
                       onOpenRecords: onOpenRecords,
                     ),
                 ],
-                if (self.isNotEmpty) ...<Widget>[
+                if (self.isNotEmpty || records.isNotEmpty) ...<Widget>[
                   _SectionLabel(
-                    '${PlannerStrings.sectionSelf} · ${PlannerStrings.selfSum(self.fold<int>(0, (a, i) => a + aggregate.actualMinutes(i)))}',
+                    '${PlannerStrings.sectionSelf} · ${PlannerStrings.selfSum(self.fold<int>(0, (a, i) => a + aggregate.actualMinutes(i)) + day.unlinkedMinutes)}',
                     color: c.accTx,
                   ),
                   for (final it in self)
@@ -781,6 +811,14 @@ class _DayDetail extends StatelessWidget {
                       onToggle: () => onToggleDone(it),
                       onTap: () => onEditItem(it),
                       onOpenRecords: onOpenRecords,
+                    ),
+                  for (final s in records)
+                    _UnlinkedSessionRow(
+                      key: PlannerKeys.session(s.id),
+                      session: s,
+                      subjectName: s.subjectId == null ? null : subjects[s.subjectId]?.name,
+                      color: _color(c, s.subjectId, fallback: c.acc),
+                      onTap: () => onOpenRecords(<StudySession>[s]),
                     ),
                 ],
                 if (events.isNotEmpty || recs.isNotEmpty) ...<Widget>[
@@ -1105,6 +1143,81 @@ class _RecurrenceRow extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.s4),
               LucideIcon.small(LucideIcons.repeat, color: c.tx3),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A saved session without a planner item, listed under 추가 자습 ([S07b]):
+/// subject (or 자습) · start time · 순공, tap → session detail.
+class _UnlinkedSessionRow extends StatelessWidget {
+  const _UnlinkedSessionRow({
+    super.key,
+    required this.session,
+    required this.subjectName,
+    required this.color,
+    required this.onTap,
+  });
+
+  final StudySession session;
+  final String? subjectName;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final start = session.startedAt.toLocal();
+    final minutes = session.seatedSeconds ~/ 60;
+    return Semantics(
+      button: true,
+      label: PlannerStrings.sessionDetail,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: AppSpacing.touchTarget),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line))),
+          child: Row(
+            children: <Widget>[
+              SizedBox(
+                width: AppSpacing.touchTarget,
+                child: Center(
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(color: c.acc, borderRadius: BorderRadius.circular(6)),
+                    child: const Icon(Icons.check, size: 12, color: AppAccent.onOrange),
+                  ),
+                ),
+              ),
+              Container(width: 3, height: 22, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(width: AppSpacing.s10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      subjectName ?? PlannerStrings.selfRecord,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.body.copyWith(color: c.tx, height: 1.3),
+                    ),
+                    Text(
+                      PlannerStrings.recordStartedAt(LocalTime.of(start).key),
+                      style: AppTypography.caption.copyWith(color: c.tx3),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                PlannerStrings.targetMinutes(minutes),
+                style: AppTypography.withWeight(AppTypography.caption, 600).copyWith(color: c.accTx),
+              ),
+              LucideIcon.small(LucideIcons.chevronRight, color: c.tx3),
             ],
           ),
         ),

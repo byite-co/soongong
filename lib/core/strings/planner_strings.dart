@@ -52,6 +52,8 @@ abstract final class PlannerStrings {
   static String recordCount(int n) => '기록 $n건';
   static const String sessionDetail = '세션 상세';
   static const String sessionsTitle = '연결된 기록';
+  static const String selfRecord = '자습';
+  static String recordStartedAt(String hm) => '$hm 시작 · 계획 없이 기록';
   static String targetMinutes(int minutes) => '$minutes분';
   static String recurrenceTime(String start, String end) => '$start–$end';
   static const String toggleDone = '완료';

@@ -20,6 +20,7 @@ class DayAggregate {
     required this.seatedSeconds,
     required this.items,
     required this.recurrences,
+    this.sessions = const <StudySession>[],
   });
 
   final LocalDate date;
@@ -32,6 +33,14 @@ class DayAggregate {
 
   /// Recurrence instances on this day, by start time.
   final List<RecurrenceInstance> recurrences;
+
+  /// Saved sessions that **started** this local day without a planner item
+  /// (`planner_item_id` null) — 자습 recorded without a plan ([S07b]),
+  /// oldest first. Linked sessions hang off their item instead.
+  final List<StudySession> sessions;
+
+  /// 순공 minutes of the unlinked sessions.
+  int get unlinkedMinutes => sessions.fold<int>(0, (a, s) => a + s.seatedSeconds) ~/ 60;
 
   bool get hasSeated => seatedSeconds > 0;
   Iterable<PlannerItem> get study => items.where((i) => i.kind == PlannerKind.study);
@@ -72,7 +81,13 @@ class MonthAggregate {
   final int doneCount;
 
   DayAggregate dayOf(LocalDate d) =>
-      days[d] ?? DayAggregate(date: d, seatedSeconds: 0, items: const <PlannerItem>[], recurrences: const <RecurrenceInstance>[]);
+      days[d] ??
+      DayAggregate(
+        date: d,
+        seatedSeconds: 0,
+        items: const <PlannerItem>[],
+        recurrences: const <RecurrenceInstance>[],
+      );
 
   int seatedOn(LocalDate d) => days[d]?.seatedSeconds ?? 0;
 
@@ -84,10 +99,13 @@ class MonthAggregate {
   static bool isSaved(StudySession s) =>
       s.endedAt != null && (s.status == SessionStatus.finished || s.status == SessionStatus.interrupted);
 
-  /// [segments] must belong to saved, live sessions (the caller filters by
-  /// `savedSessionIds`). [items] = everything overlapping the grid, bands
-  /// included. [sessions] = sessions whose `started_at` is in the grid
-  /// range (their item links).
+  /// [items] = everything overlapping the grid, bands included. [segments]
+  /// = segments overlapping the grid (any session). [sessions] = the user's
+  /// **whole** live session history ([S07b]): a session that started before
+  /// the grid still owns segments inside it (paused across days), and an
+  /// item's 실제 시간 comes from its linked sessions whenever they ran. Only
+  /// saved sessions count (`isSaved`); deleted and pending-delete rows never
+  /// reach here (live reads).
   factory MonthAggregate.build({
     required MonthGrid grid,
     required List<PlannerItem> items,
@@ -136,13 +154,29 @@ class MonthAggregate {
       }
     }
     final byItem = <String, List<StudySession>>{};
+    final unlinkedByDay = <LocalDate, List<StudySession>>{};
     for (final s in saved) {
       final id = s.plannerItemId;
-      if (id == null) continue;
-      byItem.putIfAbsent(id, () => <StudySession>[]).add(s);
+      if (id != null) {
+        byItem.putIfAbsent(id, () => <StudySession>[]).add(s);
+        continue;
+      }
+      final d = LocalDate.of(s.startedAt);
+      if (grid.contains(d)) unlinkedByDay.putIfAbsent(d, () => <StudySession>[]).add(s);
     }
     for (final l in byItem.values) {
       l.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    }
+    for (final e in unlinkedByDay.entries) {
+      e.value.sort((a, b) => a.startedAt.compareTo(b.startedAt));
+      final day = days[e.key]!;
+      days[e.key] = DayAggregate(
+        date: day.date,
+        seatedSeconds: day.seatedSeconds,
+        items: day.items,
+        recurrences: day.recurrences,
+        sessions: List<StudySession>.unmodifiable(e.value),
+      );
     }
     return MonthAggregate(
       grid: grid,

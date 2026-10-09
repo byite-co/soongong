@@ -452,4 +452,129 @@ void main() {
     expect(router.state.uri.path, '/session/sess-${start.millisecondsSinceEpoch}');
     await h.unmount(tester);
   });
+
+  // ------------------------------------------------------------------
+  // [S07b] GPT review regressions
+
+  testWidgets('[S07b] P2-1: 자습 saved without a plan shows under 추가 자습 and opens /session/:id', (tester) async {
+    final start = kHarnessNow.subtract(const Duration(hours: 3));
+    await h.container.read(sessionRepositoryProvider).saveFinished(
+          id: 'self-1',
+          kind: SessionKind.self,
+          mode: SessionMode.manual,
+          startedAt: start,
+          endedAt: start.add(const Duration(minutes: 30)),
+          status: SessionStatus.finished,
+          segments: <Segment>[
+            Segment(id: 'self-1-seg', kind: SegmentKind.manual, startAt: start.toUtc(), endAt: start.add(const Duration(minutes: 30)).toUtc()),
+          ],
+          sensitivityLevel: 0,
+        );
+    await openPlanner(tester);
+    await openDay(tester, today);
+    expect(find.text(PlannerStrings.seatedSummary('30분')), findsOneWidget);
+    expect(find.text('${PlannerStrings.sectionSelf} · ${PlannerStrings.selfSum(30)}'), findsOneWidget);
+    expect(find.byKey(PlannerKeys.session('self-1')), findsOneWidget);
+    expect(find.text(PlannerStrings.selfRecord), findsOneWidget);
+    expect(find.text(PlannerStrings.recordStartedAt('07:00')), findsOneWidget);
+    expect(find.text(PlannerStrings.empty), findsNothing);
+    await tester.tap(find.byKey(PlannerKeys.session('self-1')));
+    await tester.pumpAndSettle();
+    expect(h.container.read(appRouterProvider).state.uri.path, '/session/self-1');
+    await h.unmount(tester);
+  });
+
+  testWidgets('[S07b] P2-2: a session paused since last month counts today; an August item shows 실제 from an October session', (tester) async {
+    final sessions = h.container.read(sessionRepositoryProvider);
+    // A: started 9/20, paused across days, resumed today for 30 min.
+    final aStart = DateTime(2026, 9, 20, 9);
+    final resume = DateTime(2026, 10, 3, 9);
+    await sessions.saveFinished(
+      id: 'paused-a',
+      kind: SessionKind.study,
+      mode: SessionMode.manual,
+      startedAt: aStart,
+      endedAt: resume.add(const Duration(minutes: 30)),
+      status: SessionStatus.finished,
+      segments: <Segment>[
+        Segment(id: 'a-p', kind: SegmentKind.paused, startAt: aStart.toUtc(), endAt: resume.toUtc()),
+        Segment(id: 'a-s', kind: SegmentKind.manual, startAt: resume.toUtc(), endAt: resume.add(const Duration(minutes: 30)).toUtc()),
+      ],
+      sensitivityLevel: 0,
+    );
+    // B: an August 밀린 일 executed today for 30 min.
+    final repo = h.container.read(plannerRepositoryProvider);
+    final aug = await repo.createItem(kind: PlannerKind.study, title: '밀린 개념 정리', date: LocalDate.parse('2026-08-01'), targetMinutes: 30);
+    await seedSession(start: DateTime(2026, 10, 3, 14), seated: const Duration(minutes: 30), itemId: aug.id);
+
+    await openPlanner(tester);
+    await openDay(tester, today);
+    expect(find.text(PlannerStrings.seatedSummary('1시간')), findsOneWidget, reason: '30 (A) + 30 (B)');
+    expect(find.byKey(PlannerKeys.session('paused-a')), findsNothing, reason: 'unlinked rows list under their start day (9/20), not today; the 순공 still counts today');
+    await h.unmount(tester);
+  });
+
+  testWidgets('[S07b] P2-2b: August grid: the item linked to an October session shows 실제 30분', (tester) async {
+    final repo = h.container.read(plannerRepositoryProvider);
+    final aug = await repo.createItem(kind: PlannerKind.study, title: '밀린 개념 정리', date: LocalDate.parse('2026-08-01'), targetMinutes: 30);
+    await seedSession(start: DateTime(2026, 10, 3, 14), seated: const Duration(minutes: 30), itemId: aug.id);
+    await openPlanner(tester);
+    await tester.tap(find.byKey(PlannerKeys.prev));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(PlannerKeys.prev));
+    await tester.pumpAndSettle();
+    expect(find.text(PlannerStrings.monthTitle(2026, 8)), findsOneWidget);
+    await openDay(tester, LocalDate.parse('2026-08-01'));
+    expect(find.byKey(PlannerKeys.record(aug.id)), findsOneWidget);
+    expect(find.text(PlannerStrings.targetMinutes(30)), findsOneWidget, reason: 'free: actual minutes from the October session');
+    expect(find.text('${PlannerStrings.sectionStudy} · ${PlannerStrings.studyActual(30)}'), findsOneWidget);
+    await h.unmount(tester);
+  });
+
+  testWidgets('[S07b] P2-3: 600×900 uses the fold layout (no overflow); 768×1024 and 1024×768 use two columns', (tester) async {
+    await openPlanner(tester, size: const Size(600, 900));
+    expect(find.byKey(PlannerKeys.handle), findsOneWidget, reason: 'too narrow for two columns beside the rail');
+    expect(find.byKey(PlannerKeys.detail), findsNothing);
+    await openDay(tester, today);
+    expect(find.byKey(PlannerKeys.detail), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await h.unmount(tester);
+
+    await openPlanner(tester, size: const Size(768, 1024));
+    expect(find.byKey(PlannerKeys.handle), findsNothing);
+    expect(find.byKey(PlannerKeys.detail), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await h.unmount(tester);
+
+    await openPlanner(tester, size: kTablet);
+    expect(find.byKey(PlannerKeys.handle), findsNothing);
+    expect(find.byKey(PlannerKeys.detail), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await h.unmount(tester);
+  });
+
+  testWidgets('[S07b] §4.5: premium 목표 column overlays the 순공 column on the same day; free has none', (tester) async {
+    final repo = h.container.read(plannerRepositoryProvider);
+    final yesterday = today.addDays(-1);
+    await repo.createItem(kind: PlannerKind.study, title: '계획', date: yesterday, targetMinutes: 60);
+    await seedSession(start: kHarnessNow.subtract(const Duration(days: 1)), seated: const Duration(minutes: 30));
+    List<Planner3dPainter> painters() => tester
+        .widgetList<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is Planner3dPainter))
+        .map((w) => w.painter! as Planner3dPainter)
+        .toList();
+
+    await openPlanner(tester);
+    await tester.tap(find.byKey(PlannerKeys.toggle3d));
+    await tester.pumpAndSettle();
+    expect(painters().every((p) => p.plannedHeightPx == 0), isTrue, reason: 'free: no 목표 column');
+    expect(painters().where((p) => p.heightPx > 0).length, 1, reason: 'yesterday has 순공');
+
+    (h.container.read(billingGatewayProvider) as FakeBillingGateway).force(EntitlementStatus.premium);
+    await tester.pumpAndSettle();
+    final both = painters().where((p) => p.heightPx > 0 && p.plannedHeightPx > 0).toList();
+    expect(both.length, 1, reason: 'yesterday: record and plan on the same cell');
+    expect(both.single.liftPx, both.single.heightPx, reason: 'content sits on the record');
+    expect(find.text(PlannerStrings.legendPlanned), findsOneWidget);
+    await h.unmount(tester);
+  });
 }
