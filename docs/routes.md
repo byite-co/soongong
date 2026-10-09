@@ -18,14 +18,16 @@
 StatefulShellRoute (탭 4개 · 태블릿 ≥600dp 는 좌측 레일)
   /home               home homeEmpty s1–s4 s14 t5 recover recoverConfirm
   /planner            planner planFold plan3d t7 s10 (S07 · `?date=yyyy-MM-dd` 로 그 달·그 날 선택) · 시트: addSheet datePick repeatSheet editItem editCancel editDelete bandEdit discard = `showPlannerItemSheet`
-  /timetable          (S07 placeholder)
-  /stats              (S08 placeholder)
+  /timetable          tt t6 evEdit evScope (S08 · 주간 00–24×7열 · 블록 → /session/:id · 반복 일정 수정 = `showPlannerItemSheet` · 전체 삭제 확인창 + 되돌리기)
+  /stats              t1 s11 s12 statsP statsF cross(숨김) (S08 · 주간/월간 · 오답 카드 무료/프리미엄/종료)
 /settings             (S09 placeholder · 홈 헤더 기어 · 탭 밖, root navigator push)
 /measure/setup        setupOn setupDen errCam camBusyN s5 (홈 CTA · 복구 "이어서" = ?resume=<sessionId> · 기록 유지 뒤 복구 카드)
 /measure/focus        focus away awayLong lost lostFail s6 s7
 /measure/summary      summary s8 s9 sumDiscard toast (새 기록 저장·정정 시트 · 저장 → 홈 + 토스트)
 /session/:id          session sumEdit sumEditCancel sessDel (플래너 상세의 "실제 N분" 탭)
 /measure/corrections  정정 이력 (감도 조정 토스트·S09 연결용)
+/wrongs               wrongs (S09 placeholder · S08 예약: 통계 오답 카드 "전체 보기")
+/paywall              paywall (S12 placeholder · S08 예약: 통계 프리미엄 배지 · 재구독 · 타임테이블 시트 잠금 힌트)
 /reading/capture      capture (S10 placeholder · S07 예약: 플래너 판독 버튼 → `?from=planner&itemId=<plannerItemId>`, 범위는 `range_text` 없으면 제목 D27)
 /_gallery             dev 전용(DEV_MENU)
 /_seat_lab            dev 전용(S04 착석 엔진 실험실 · `measure_routes.dart` 에 등록)
