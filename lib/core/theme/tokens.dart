@@ -297,3 +297,43 @@ abstract final class AppRing {
   static const double handHaloWidth = 7;
   static const double handKnobRadius = 3.2;
 }
+
+/// Planner month grid (S07, prototype 08/09). Density = the cell's blue
+/// wash by level 1..4 (`DensityScale`); 3D columns use the prototype's
+/// `--blk` / `--pri-dk` (past 순공), `--plan-blk` / `--plan-dk` (premium
+/// planned, drawn translucent) and the orange pair for today.
+abstract final class AppPlanner {
+  /// Alpha of the blue wash per density level (index 0 = no 순공).
+  static const List<double> densityAlpha = <double>[0, 0.10, 0.22, 0.34, 0.46];
+
+  static const Color columnFront = Color(0xFF4A5EC2);
+  static const Color columnFrontDark = Color(0xFF4B5DB8);
+  static const Color columnSide = Color(0xFF7484D4);
+  static const Color columnSideDark = Color(0xFF6C7CD0);
+  static const Color plannedFront = Color(0xFFC9CCD9);
+  static const Color plannedFrontDark = Color(0xFF2A2B36);
+  static const Color plannedSide = Color(0xFFDDDFE8);
+  static const Color plannedSideDark = Color(0xFF3A3B4A);
+  static const Color todaySide = Color(0xFFF2916E);
+  static const Color todaySideDark = Color(0xFFF0895F);
+
+  /// Planned (future) columns are translucent — a plan, not a record.
+  static const double plannedOpacity = 0.6;
+
+  /// Column height at the density reference (expanded / collapsed rows).
+  static const double columnMax = 28;
+  static const double columnMaxCollapsed = 14;
+
+  /// 3D transition (PRD "250ms"); reduced motion = immediate.
+  static const Duration transition = Duration(milliseconds: 250);
+
+  /// Fold/unfold of the grid.
+  static const Duration fold = Duration(milliseconds: 280);
+
+  /// Max item lines per cell before "+N".
+  static const int maxItemLines = 3;
+
+  /// Band strip height and gap inside a cell.
+  static const double bandHeight = 15;
+  static const double bandGap = 2;
+}

@@ -3,6 +3,7 @@
 // current error concerns this field).
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
@@ -22,6 +23,10 @@ class AppTextField extends StatelessWidget {
     this.highlightError = false,
     this.onSubmitted,
     this.onChanged,
+    this.maxLength,
+    this.inputFormatters,
+    this.suffixText,
+    this.trailing,
   });
 
   final TextEditingController controller;
@@ -37,6 +42,14 @@ class AppTextField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
 
+  /// [S07] Hard limit (the built-in counter is hidden; show your own).
+  final int? maxLength;
+  final List<TextInputFormatter>? inputFormatters;
+  final String? suffixText;
+
+  /// [S07] Right-aligned widget on the label row (e.g. a "12/40" counter).
+  final Widget? trailing;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -47,10 +60,17 @@ class AppTextField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(label, style: AppTypography.caption.copyWith(color: c.tx2)),
+        Row(
+          children: <Widget>[
+            Expanded(child: Text(label, style: AppTypography.caption.copyWith(color: c.tx2))),
+            ?trailing,
+          ],
+        ),
         const SizedBox(height: AppSpacing.s6),
         TextField(
           controller: controller,
+          maxLength: maxLength,
+          inputFormatters: inputFormatters,
           obscureText: obscure,
           keyboardType: keyboardType,
           textInputAction: textInputAction,
@@ -63,6 +83,9 @@ class AppTextField extends StatelessWidget {
           enableSuggestions: !obscure,
           style: AppTypography.body.copyWith(color: c.tx),
           decoration: InputDecoration(
+            counterText: '',
+            suffixText: suffixText,
+            suffixStyle: AppTypography.label.copyWith(color: c.tx3),
             hintText: hint,
             hintStyle: AppTypography.body.copyWith(color: c.tx3),
             filled: true,
