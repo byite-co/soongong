@@ -3,6 +3,8 @@
 // role key here and there never will be — server secrets live in
 // `supabase/.env` (S03) and are never referenced from app code.
 
+import 'dart:io' show Platform;
+
 enum AppFlavor { dev, prod }
 
 abstract final class AppConfig {
@@ -14,6 +16,13 @@ abstract final class AppConfig {
 
   static bool get isProd => flavor == AppFlavor.prod;
   static bool get isDev => flavor == AppFlavor.dev;
+
+  /// App version shown in 설정 (S09) and sent with 문의. The build injects
+  /// `APP_VERSION` (pubspec `version`); the default matches pubspec today.
+  static const String appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '0.1.0');
+
+  /// `ios` · `android` · … for the inquiry summary line (no device ids).
+  static String get platformLabel => Platform.operatingSystem;
 
   /// Supabase project URL (public).
   static const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');

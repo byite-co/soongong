@@ -1,8 +1,16 @@
 import 'package:go_router/go_router.dart';
 
-/// Routes owned by the `help` feature.
+import 'presentation/help_screen.dart';
+
+/// Routes owned by the `help` feature (S09, prototype N4 · N-문의 전송 실패).
 ///
-/// Exported to `core/router/app_router.dart` (S05 owns the router). Route
-/// paths follow userflow node IDs (CLAUDE.md §4). Sheets and modals are not
-/// routes — use `showAppSheet` / `showAppModal`.
-final List<RouteBase> helpRoutes = <RouteBase>[];
+/// Exported to `core/router/app_router.dart` (S05 owns the router).
+final List<RouteBase> helpRoutes = <RouteBase>[
+  GoRoute(
+    path: helpPath,
+    name: 'help',
+    builder: (_, _) => const HelpScreen(),
+  ),
+];
+
+const String helpPath = '/settings/help';

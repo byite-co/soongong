@@ -53,6 +53,9 @@ class FakeAuthBackend implements AuthBackend {
   Object? profileError;
 
   AuthSession? session;
+
+  /// Reported by [currentProvider] (S09 계정 row).
+  String? provider;
   AuthSession signedInSession = const AuthSession(userId: 'u-1', email: 'a@x.io');
   final StreamController<AuthSession?> _ctrl = StreamController<AuthSession?>.broadcast();
 
@@ -150,6 +153,9 @@ class FakeAuthBackend implements AuthBackend {
 
   @override
   AuthSession? get currentSession => session;
+
+  @override
+  String? get currentProvider => session == null ? null : provider;
 
   @override
   Stream<AuthSession?> get sessions => _ctrl.stream;

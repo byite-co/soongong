@@ -176,6 +176,65 @@ final class BillingGatewayProvider
 
 String _$billingGatewayHash() => r'c0af888c38a4123d8321f76584cf494e5dc88bf0';
 
+/// S09: the device notification gateway. The real plugin-backed gateway is
+/// the default (dev builds on devices get real notifications); widget tests
+/// override this provider with `FakeNotificationGateway`.
+
+@ProviderFor(notificationGateway)
+final notificationGatewayProvider = NotificationGatewayProvider._();
+
+/// S09: the device notification gateway. The real plugin-backed gateway is
+/// the default (dev builds on devices get real notifications); widget tests
+/// override this provider with `FakeNotificationGateway`.
+
+final class NotificationGatewayProvider
+    extends
+        $FunctionalProvider<
+          NotificationGateway,
+          NotificationGateway,
+          NotificationGateway
+        >
+    with $Provider<NotificationGateway> {
+  /// S09: the device notification gateway. The real plugin-backed gateway is
+  /// the default (dev builds on devices get real notifications); widget tests
+  /// override this provider with `FakeNotificationGateway`.
+  NotificationGatewayProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'notificationGatewayProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$notificationGatewayHash();
+
+  @$internal
+  @override
+  $ProviderElement<NotificationGateway> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  NotificationGateway create(Ref ref) {
+    return notificationGateway(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(NotificationGateway value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<NotificationGateway>(value),
+    );
+  }
+}
+
+String _$notificationGatewayHash() =>
+    r'718fab634b3febce6e723b540e1e168c263cea20';
+
 @ProviderFor(syncEngine)
 final syncEngineProvider = SyncEngineProvider._();
 

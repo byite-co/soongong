@@ -23,6 +23,8 @@ import '../../core/domain/ids.dart';
 import '../../core/domain/local_date.dart';
 import '../../core/logging/app_logger.dart';
 import '../../features/home/domain/recovery_candidate.dart';
+import '../../features/privacy/application/photo_retention.dart';
+import '../../features/settings/application/notification_scheduler.dart';
 import '../auth/auth_gate.dart';
 import '../repositories/repositories.dart';
 import '../seed/dev_seeder.dart';
@@ -74,6 +76,9 @@ class UserStartupTasks {
     _done.add(userId);
     try {
       final settled = await _ref.read(deleteSettlerProvider).settle();
+      // S09: expired photos (D14 row 3) and the notification plan.
+      final expiredPhotos = await _ref.read(photoRetentionProvider).purgeExpired();
+      _ref.read(notificationSchedulerProvider).start();
       final today = LocalDate.of(_ref.read(appClockProvider).now());
       final created = await _ref.read(activityRepositoryProvider).touch(today);
       final sessions = _ref.read(sessionRepositoryProvider);
@@ -92,7 +97,8 @@ class UserStartupTasks {
       );
       appLog.i(
         'startup · pending deletes committed=${report.committed} restored=${report.restored} '
-        'activityCreated=${report.activityCreated} recoveryPending=${report.recoveryPending}',
+        'activityCreated=${report.activityCreated} recoveryPending=${report.recoveryPending} '
+        'expiredPhotos=$expiredPhotos',
       );
       return report;
     } on Object catch (e, st) {
