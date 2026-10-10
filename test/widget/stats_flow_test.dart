@@ -79,7 +79,9 @@ void main() {
           WrongItemDraft(id: 'w1', pageIndex: 0, number: 3, mark: Mark.wrong, confidence: 0.5, userConfirmed: true),
           WrongItemDraft(id: 'w2', pageIndex: 0, number: 7, mark: Mark.unsolved, confidence: 0.4, userConfirmed: true),
         ],
-        entries: const <ReviewEntryDraft>[],
+        entries: <ReviewEntryDraft>[
+          ReviewEntryDraft(id: 'e1', wrongItemId: 'w1', dueAt: DateTime(2026, 10, 4), intervalDays: 1, consecutiveCorrect: 0),
+        ],
       );
 
   FakeBillingGateway billing() => h.container.read(billingGatewayProvider) as FakeBillingGateway;
@@ -188,23 +190,41 @@ void main() {
     await h.unmount(tester);
   });
 
-  testWidgets('wrongs: free teaser → paywall; premium card with counts and 전체 보기 → /wrongs; expired read-only card → 재구독', (tester) async {
+  testWidgets('[S08b] D18 wrongs card: free without wrongs = teaser → paywall; free/expired with saved wrongs = read-only with 기존 오답 보기 → /wrongs and 재구독; premium = counts + 전체 보기', (tester) async {
     final ids = await seedWeek();
-    await seedWrongs(ids.math);
     await openStats(tester);
+    // free (trial unused), nothing saved → teaser
     expect(find.text(StatsStrings.wrongsTeaserTitle), findsOneWidget);
-    expect(find.text(StatsStrings.premiumBadge), findsOneWidget);
     await tester.tap(find.byKey(StatsKeys.wrongsBadge));
     await tester.pumpAndSettle();
     expect(find.text(BillingStrings.paywallTitle), findsWidgets);
     h.container.read(appRouterProvider).pop();
     await tester.pumpAndSettle();
 
-    billing().force(EntitlementStatus.premium);
+    // free (trial unused) + saved wrongs → read-only card (D18: !entitled && 기존 오답)
+    await seedWrongs(ids.math);
     await tester.pumpAndSettle();
     expect(find.text(StatsStrings.wrongsTeaserTitle), findsNothing);
+    expect(find.text(StatsStrings.wrongsExpired(2, 1)), findsOneWidget);
+    expect(find.text(StatsStrings.readOnly), findsOneWidget);
+    expect(find.text(StatsStrings.wrongsExpiredBody), findsOneWidget);
+    await tester.tap(find.byKey(StatsKeys.wrongsViewExisting));
+    await tester.pumpAndSettle();
+    expect(find.text(WrongsStrings.title), findsWidgets, reason: '기존 오답 N문항 보기 → /wrongs');
+    h.container.read(appRouterProvider).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(StatsKeys.wrongsResubscribe));
+    await tester.pumpAndSettle();
+    expect(find.text(BillingStrings.paywallTitle), findsWidgets);
+    h.container.read(appRouterProvider).pop();
+    await tester.pumpAndSettle();
+
+    // premium → counts (재풀이, S08 §4.2-9) + per-subject + 전체 보기
+    billing().force(EntitlementStatus.premium);
+    await tester.pumpAndSettle();
+    expect(find.text(StatsStrings.wrongsExpired(2, 1)), findsNothing);
     expect(
-      find.text('${StatsStrings.wrongsOpen(2)} · ${StatsStrings.readingsThisWeek(0)} · ${StatsStrings.wrongsResolved(0)}'),
+      find.text('${StatsStrings.wrongsOpen(2)} · ${StatsStrings.retriesIn(StatsStrings.thisWeek, 0)} · ${StatsStrings.wrongsResolved(0)}'),
       findsOneWidget,
     );
     expect(find.text(StatsStrings.wrongsCount(2)), findsOneWidget);
@@ -214,14 +234,78 @@ void main() {
     h.container.read(appRouterProvider).pop();
     await tester.pumpAndSettle();
 
+    // expired + saved wrongs → the same read-only card
     billing().force(EntitlementStatus.expired);
     await tester.pumpAndSettle();
     expect(find.text(StatsStrings.wrongsExpired(2, 1)), findsOneWidget);
-    expect(find.text(StatsStrings.readOnly), findsOneWidget);
-    expect(find.text(StatsStrings.wrongsExpiredBody), findsOneWidget);
-    await tester.tap(find.byKey(StatsKeys.wrongsResubscribe));
+    expect(find.byKey(StatsKeys.wrongsViewExisting), findsOneWidget);
+    expect(find.byKey(StatsKeys.wrongsResubscribe), findsOneWidget);
+    await h.unmount(tester);
+  });
+
+  testWidgets('[S08b] wrongs card label follows the shown range: 이번 주 · 지난주 · dates · 이번 달 · month; 재풀이 counted inside the range', (tester) async {
+    final ids = await seedWeek();
+    await seedWrongs(ids.math);
+    await h.container.read(reviewRepositoryProvider).recordRetry(wrongItemId: 'w1', result: RetryResult.correct, at: DateTime(2026, 9, 24, 10));
+    billing().force(EntitlementStatus.premium);
+    final items = await h.container.read(wrongsRepositoryProvider).getAll();
+    final open = items.where((w) => w.status == WrongItemStatus.open).length;
+    final resolved = items.length - open;
+    await openStats(tester);
+    String headline(String range, int n) => '${StatsStrings.wrongsOpen(open)} · ${StatsStrings.retriesIn(range, n)} · ${StatsStrings.wrongsResolved(resolved)}';
+    expect(find.text(headline(StatsStrings.thisWeek, 0)), findsOneWidget);
+
+    await tester.tap(find.byKey(StatsKeys.prev));
     await tester.pumpAndSettle();
-    expect(find.text(BillingStrings.paywallTitle), findsWidgets);
+    expect(find.text(headline(StatsStrings.lastWeek, 1)), findsOneWidget, reason: '9/24 retry sits in the previous week');
+    await tester.tap(find.byKey(StatsKeys.prev));
+    await tester.pumpAndSettle();
+    expect(find.text(headline(StatsStrings.weekRange(9, 14, 9, 20), 0)), findsOneWidget);
+    await tester.tap(find.byKey(StatsKeys.today));
+    await tester.pumpAndSettle();
+    expect(find.text(headline(StatsStrings.thisWeek, 0)), findsOneWidget);
+
+    await tester.tap(find.text(StatsStrings.periodMonth));
+    await tester.pumpAndSettle();
+    expect(find.text(headline(StatsStrings.thisMonth, 0)), findsOneWidget);
+    await tester.tap(find.byKey(StatsKeys.prev));
+    await tester.pumpAndSettle();
+    expect(find.text(headline(PlannerStrings.pickerMonth(2026, 9), 1)), findsOneWidget);
+    await tester.tap(find.byKey(StatsKeys.today));
+    await tester.pumpAndSettle();
+    expect(find.text(headline(StatsStrings.thisMonth, 0)), findsOneWidget);
+    await h.unmount(tester);
+  });
+
+  testWidgets('[S08b] stats open across month end: the minute tick moves 이번 달 to November; resume refreshes the week view', (tester) async {
+    final old = h;
+    h = AppHarness(mode: AuthMode.localOnly, now: DateTime(2026, 10, 31, 23, 59));
+    await old.dispose();
+    await seedSession(id: 'a', start: DateTime(2026, 10, 28, 9), length: const Duration(hours: 1));
+    await seedSession(id: 'b', start: DateTime(2026, 10, 29, 9), length: const Duration(hours: 1));
+    await seedSession(id: 'c', start: DateTime(2026, 10, 30, 9), length: const Duration(hours: 1));
+    await openStats(tester);
+    await tester.tap(find.text(StatsStrings.periodMonth));
+    await tester.pumpAndSettle();
+    expect(find.text(PlannerStrings.pickerMonth(2026, 10)), findsOneWidget);
+    expect(find.text(StatsStrings.thisMonthSeated), findsOneWidget);
+
+    h.clock.advance(const Duration(minutes: 2)); // 2026-11-01 00:01
+    await tester.pump(const Duration(minutes: 1));
+    await tester.pumpAndSettle();
+    expect(find.text(PlannerStrings.pickerMonth(2026, 11)), findsOneWidget, reason: 'month view follows the new month');
+    expect(find.text(StatsStrings.thisMonthSeated), findsOneWidget);
+    expect(find.text(StatsStrings.monthRange(11, 30)), findsOneWidget);
+    expect(find.byKey(StatsKeys.today), findsNothing, reason: 'offset 0 = the new current month');
+
+    await tester.tap(find.text(StatsStrings.periodWeek));
+    await tester.pumpAndSettle();
+    expect(find.text(StatsStrings.weekRange(10, 26, 11, 1)), findsOneWidget);
+    h.clock.advance(const Duration(days: 1)); // 2026-11-02 00:01 (Monday)
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.text(StatsStrings.weekRange(11, 2, 11, 8)), findsOneWidget, reason: 'resume re-reads the calendar day');
     await h.unmount(tester);
   });
 

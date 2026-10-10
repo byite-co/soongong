@@ -18,6 +18,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/domain/entities/entities.dart';
 import '../../../core/domain/enums.dart';
 import '../../../core/domain/local_date.dart';
+import '../../../core/lifecycle/calendar_day.dart';
 import '../../../core/strings/planner_strings.dart';
 import '../../../core/strings/timetable_strings.dart';
 import '../../../core/theme/app_theme.dart';
@@ -46,6 +47,7 @@ abstract final class TimetableKeys {
   static const Key emptyStart = Key('timetable-empty-start');
   static const Key emptyAdd = Key('timetable-empty-add');
   static const Key nowLine = Key('timetable-now');
+  static const Key noRecord = Key('timetable-no-record');
   static const Key addInPlanner = Key('timetable-add-in-planner');
   static Key column(LocalDate day) => Key('timetable-col-${day.key}');
   static Key block(String sessionId, LocalDate day, int index) => Key('timetable-block-$sessionId-${day.key}-$index');
@@ -73,9 +75,12 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
   @override
   void initState() {
     super.initState();
-    // The current-time line moves once a minute.
+    // The current-time line moves once a minute, and the calendar day is
+    // re-read so a screen left open across midnight shows the new week ([S08b]).
     _tick = Timer.periodic(_tickEvery, (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      ref.read(calendarDayProvider.notifier).refresh();
+      setState(() {});
     });
   }
 
@@ -341,7 +346,10 @@ class _WeekPage extends ConsumerWidget {
           onAction: () => ref.invalidate(timetableWeekProvider(weekStart.key)),
         );
       case TimetableWeekReady(:final week):
-        final gridOrEmpty = week.hasBlocks
+        // The grid shows whenever there is anything to place on it — 순공
+        // blocks or recurrence instances (S08 original: 반복 일정 in the
+        // grid); the empty card only when the week has neither ([S08b]).
+        final gridOrEmpty = week.hasBlocks || week.hasRecurrences
             ? _WeekGrid(
                 week: week,
                 today: today,
@@ -351,6 +359,9 @@ class _WeekPage extends ConsumerWidget {
                 onTapRecurrence: onEditRecurrence,
               )
             : _EmptyCard(onStart: onStartFocus, onAdd: onAddRecurrence);
+        final noRecord = week.hasBlocks || !week.hasRecurrences
+            ? null
+            : _NoRecordRow(onStart: onStartFocus, onAdd: onAddRecurrence);
         final side = _RecurrenceSection(
           recurrences: recurrences,
           subjects: subjects,
@@ -368,7 +379,7 @@ class _WeekPage extends ConsumerWidget {
                   Expanded(
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(AppSpacing.page, 0, AppSpacing.s8, AppSpacing.s24),
-                      children: <Widget>[gridOrEmpty, const SizedBox(height: AppSpacing.s10), const _Legend()],
+                      children: <Widget>[gridOrEmpty, const SizedBox(height: AppSpacing.s10), const _Legend(), ?noRecord],
                     ),
                   ),
                   SizedBox(
@@ -387,6 +398,7 @@ class _WeekPage extends ConsumerWidget {
                 gridOrEmpty,
                 const SizedBox(height: AppSpacing.s10),
                 const _Legend(),
+                ?noRecord,
                 const SizedBox(height: AppSpacing.s24),
                 side,
               ],
@@ -555,6 +567,15 @@ class _DayColumn extends StatelessWidget {
 
   static const double minBlockFraction = 0.02;
 
+  /// Top and height of a block inside the 00–24 column: the minimum height
+  /// never pushes the block past the day's end (a 23:59 session stays
+  /// visible and tappable, [S08b]).
+  static (double, double) place(double startMinutes, double endMinutes, double h) {
+    final height = math.max((endMinutes - startMinutes) / 1440 * h, h * minBlockFraction);
+    final top = math.min(startMinutes / 1440 * h, h - height);
+    return (math.max(0, top), height);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -580,8 +601,8 @@ class _DayColumn extends StatelessWidget {
               Positioned.fill(child: CustomPaint(painter: _HourLinesPainter(color: c.line))),
               for (final inst in recurrences)
                 Positioned(
-                  top: inst.start.minutesOfDay / 1440 * h,
-                  height: math.max((inst.end.minutesOfDay - inst.start.minutesOfDay) / 1440 * h, h * minBlockFraction),
+                  top: place(inst.start.minutesOfDay.toDouble(), inst.end.minutesOfDay.toDouble(), h).$1,
+                  height: place(inst.start.minutesOfDay.toDouble(), inst.end.minutesOfDay.toDouble(), h).$2,
                   left: 1,
                   right: 1,
                   child: _RecurrenceBlock(
@@ -593,8 +614,8 @@ class _DayColumn extends StatelessWidget {
                 ),
               for (final (i, b) in blocks.indexed)
                 Positioned(
-                  top: b.startMinutes / 1440 * h,
-                  height: math.max((b.endMinutes - b.startMinutes) / 1440 * h, h * minBlockFraction),
+                  top: place(b.startMinutes, b.endMinutes, h).$1,
+                  height: place(b.startMinutes, b.endMinutes, h).$2,
                   left: 2,
                   right: 2,
                   child: _SessionBlock(
@@ -821,6 +842,51 @@ class _EmptyCard extends StatelessWidget {
             spacing: AppSpacing.s10,
             runSpacing: AppSpacing.s10,
             alignment: WrapAlignment.center,
+            children: <Widget>[
+              AppButton(
+                key: TimetableKeys.emptyStart,
+                label: TimetableStrings.emptyStart,
+                size: AppButtonSize.small,
+                expand: false,
+                onPressed: onStart,
+              ),
+              AppButton.secondary(
+                key: TimetableKeys.emptyAdd,
+                label: TimetableStrings.emptyAddRecurrence,
+                size: AppButtonSize.small,
+                expand: false,
+                onPressed: onAdd,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Under the grid of a week that has recurrences but no 순공: the empty
+/// card's facts and next actions in one row ([S08b]).
+class _NoRecordRow extends StatelessWidget {
+  const _NoRecordRow({required this.onStart, required this.onAdd});
+
+  final VoidCallback onStart;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Padding(
+      key: TimetableKeys.noRecord,
+      padding: const EdgeInsets.only(top: AppSpacing.s14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(TimetableStrings.emptyTitle, style: AppTypography.withWeight(AppTypography.label, 600).copyWith(color: c.tx)),
+          const SizedBox(height: AppSpacing.s8),
+          Wrap(
+            spacing: AppSpacing.s10,
+            runSpacing: AppSpacing.s10,
             children: <Widget>[
               AppButton(
                 key: TimetableKeys.emptyStart,

@@ -58,6 +58,16 @@ void main() {
             sensitivityLevel: 0,
           );
 
+  /// The recurrence list sits under the grid in a lazy ListView.
+  Future<void> reveal(WidgetTester tester, Finder target) async {
+    await tester.scrollUntilVisible(
+      target,
+      200,
+      scrollable: find.descendant(of: find.byType(ListView).first, matching: find.byType(Scrollable)).first,
+    );
+    await tester.pumpAndSettle();
+  }
+
   Future<Recurrence> seedRecurrence({String title = '수학 학원', String? subjectId}) =>
       h.container.read(plannerRepositoryProvider).createRecurrence(
             title: title,
@@ -148,9 +158,13 @@ void main() {
   testWidgets('recurrences: row summary and grid block; delete → confirm → undo restores; delete again → commit after 5 s', (tester) async {
     final r = await seedRecurrence();
     await openTimetable(tester);
+    expect(find.byKey(TimetableKeys.grid), findsOneWidget, reason: '[S08b] recurrences are drawn on the grid even without 순공');
+    await reveal(tester, find.byKey(TimetableKeys.recurrenceRow(r.id)));
     expect(find.text('수학 학원'), findsWidgets);
     expect(find.text(TimetableStrings.recurrenceSummary('토·일', '16:00', '17:30')), findsOneWidget);
-    expect(find.byKey(TimetableKeys.recurrenceBlock(r.id, const LocalDate(2026, 10, 3))), findsNothing, reason: 'empty week shows the empty card, not the grid');
+    expect(find.byKey(TimetableKeys.recurrenceBlock(r.id, const LocalDate(2026, 10, 3))), findsOneWidget);
+    expect(find.byKey(TimetableKeys.empty), findsNothing);
+    expect(find.byKey(TimetableKeys.noRecord), findsOneWidget, reason: 'facts + next actions under the grid');
 
     await tester.tap(find.byKey(TimetableKeys.recurrenceDelete(r.id)));
     await tester.pumpAndSettle();
@@ -159,12 +173,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(TimetableStrings.deletedAll('수학 학원')), findsOneWidget);
     expect(find.byKey(TimetableKeys.recurrenceRow(r.id)), findsNothing);
+    expect(find.byKey(TimetableKeys.empty), findsOneWidget, reason: 'nothing left to draw');
     final repo = h.container.read(plannerRepositoryProvider);
     expect(await repo.getRecurrences(), isEmpty, reason: 'pending delete is not live');
 
     await tester.tap(find.text(CommonStrings.undo));
     await tester.pumpAndSettle();
     expect(find.text(TimetableStrings.restored), findsOneWidget);
+    expect(find.byKey(TimetableKeys.grid), findsOneWidget, reason: 'the restored recurrence is drawn again');
+    await reveal(tester, find.byKey(TimetableKeys.recurrenceRow(r.id)));
     expect(find.byKey(TimetableKeys.recurrenceRow(r.id)), findsOneWidget);
     expect((await repo.getRecurrences()).length, 1);
     hideAppToast();
@@ -186,6 +203,7 @@ void main() {
   testWidgets('recurrence edit: row tap opens the S07 sheet, whole-recurrence note, save → 모두 바꿨습니다; empty-state add opens the repeat sheet', (tester) async {
     final r = await seedRecurrence();
     await openTimetable(tester);
+    await reveal(tester, find.byKey(TimetableKeys.recurrenceRow(r.id)));
     await tester.tap(find.byKey(TimetableKeys.recurrenceRow(r.id)));
     await tester.pumpAndSettle();
     expect(find.text(PlannerStrings.sheetEditRecurrence), findsOneWidget);
@@ -200,6 +218,7 @@ void main() {
     hideAppToast();
     await tester.pump();
 
+    await reveal(tester, find.byKey(TimetableKeys.emptyAdd));
     await tester.tap(find.byKey(TimetableKeys.emptyAdd));
     await tester.pumpAndSettle();
     expect(find.text(PlannerStrings.sheetAddEvent), findsOneWidget);
@@ -225,6 +244,81 @@ void main() {
     final scaffold = tester.widget<Scaffold>(find.descendant(of: find.byType(TimetableScreen), matching: find.byType(Scaffold)));
     expect(scaffold.backgroundColor, AppColors.dark.bg);
     expect(tester.takeException(), isNull);
+    await h.unmount(tester);
+  });
+
+  testWidgets('[S08b] 23:59 and 00:00 short blocks stay inside the column and open the detail; midnight-crossing session on both days', (tester) async {
+    await seedSession(id: 'late', start: DateTime(2026, 10, 3, 23, 59), end: DateTime(2026, 10, 3, 23, 59, 30));
+    await seedSession(id: 'early', start: DateTime(2026, 10, 3, 0, 0), end: DateTime(2026, 10, 3, 0, 0, 30));
+    await seedSession(id: 'cross', start: DateTime(2026, 10, 1, 23, 50), end: DateTime(2026, 10, 2, 0, 10));
+    final r = await h.container.read(plannerRepositoryProvider).createRecurrence(
+          title: '야간 수업',
+          weekdayMask: Recurrence.maskOf(const <int>[6]),
+          startTime: const LocalTime(23, 30),
+          endTime: const LocalTime(23, 59),
+        );
+    await openTimetable(tester);
+
+    final column = tester.getRect(find.byKey(TimetableKeys.column(const LocalDate(2026, 10, 3))));
+    final late = tester.getRect(find.byKey(TimetableKeys.block('late', const LocalDate(2026, 10, 3), 1)));
+    expect(late.bottom, lessThanOrEqualTo(column.bottom + 0.01), reason: 'minimum height never pushes the block past 24:00');
+    expect(late.top, greaterThanOrEqualTo(column.top));
+    expect(late.height, greaterThanOrEqualTo(column.height * 0.02 - 0.01));
+    final early = tester.getRect(find.byKey(TimetableKeys.block('early', const LocalDate(2026, 10, 3), 0)));
+    expect(early.top, closeTo(column.top, 0.01));
+    final rec = tester.getRect(find.byKey(TimetableKeys.recurrenceBlock(r.id, const LocalDate(2026, 10, 3))));
+    expect(rec.bottom, lessThanOrEqualTo(column.bottom + 0.01));
+
+    await tester.tapAt(late.center);
+    await tester.pumpAndSettle();
+    expect(find.text(MeasureStrings.detail), findsWidgets, reason: 'the 23:59 block is tappable');
+    h.container.read(appRouterProvider).pop();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(TimetableKeys.block('cross', const LocalDate(2026, 10, 1), 0)), findsOneWidget);
+    final crossNext = find.byKey(TimetableKeys.block('cross', const LocalDate(2026, 10, 2), 0));
+    expect(crossNext, findsOneWidget);
+    expect(tester.getRect(crossNext).top, closeTo(tester.getRect(find.byKey(TimetableKeys.column(const LocalDate(2026, 10, 2)))).top, 0.01));
+    await tester.tap(crossNext);
+    await tester.pumpAndSettle();
+    expect(find.text(MeasureStrings.detail), findsWidgets);
+    h.container.read(appRouterProvider).pop();
+    await tester.pumpAndSettle();
+    await h.unmount(tester);
+  });
+
+  testWidgets('[S08b] screen open across Sunday→Monday midnight: the minute tick moves the week, today column and now line', (tester) async {
+    final old = h;
+    h = AppHarness(mode: AuthMode.localOnly, now: DateTime(2026, 10, 4, 23, 59));
+    await old.dispose();
+    await seedSession(id: 'sun', start: DateTime(2026, 10, 4, 22), end: DateTime(2026, 10, 4, 23));
+    await seedSession(id: 'mon', start: DateTime(2026, 10, 5, 0, 0, 30), end: DateTime(2026, 10, 5, 0, 10));
+    await openTimetable(tester);
+    expect(find.text(TimetableStrings.weekRange(9, 28, 10, 4)), findsOneWidget);
+    expect(find.descendant(of: find.byKey(TimetableKeys.column(const LocalDate(2026, 10, 4))), matching: find.byKey(TimetableKeys.nowLine)), findsOneWidget);
+
+    h.clock.advance(const Duration(minutes: 2)); // 2026-10-05 00:01
+    await tester.pump(const Duration(minutes: 1)); // minute tick → CalendarDay.refresh()
+    await tester.pumpAndSettle();
+    expect(find.text(TimetableStrings.weekRange(10, 5, 10, 11)), findsOneWidget, reason: 'the current week is now Monday 10/5');
+    expect(find.text(TimetableStrings.weekRange(9, 28, 10, 4)), findsNothing);
+    expect(find.byKey(TimetableKeys.thisWeek), findsNothing, reason: 'still offset 0');
+    expect(find.descendant(of: find.byKey(TimetableKeys.column(const LocalDate(2026, 10, 5))), matching: find.byKey(TimetableKeys.nowLine)), findsOneWidget);
+    expect(find.byKey(TimetableKeys.block('mon', const LocalDate(2026, 10, 5), 0)), findsOneWidget);
+    await h.unmount(tester);
+  });
+
+  testWidgets('[S08b] app resume after midnight refreshes the date without waiting for the tick', (tester) async {
+    final old = h;
+    h = AppHarness(mode: AuthMode.localOnly, now: DateTime(2026, 10, 4, 23, 59));
+    await old.dispose();
+    await openTimetable(tester);
+    expect(find.text(TimetableStrings.weekRange(9, 28, 10, 4)), findsOneWidget);
+    h.clock.advance(const Duration(minutes: 3));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.text(TimetableStrings.weekRange(10, 5, 10, 11)), findsOneWidget);
     await h.unmount(tester);
   });
 }

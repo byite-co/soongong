@@ -396,6 +396,52 @@ final class StatsSavedReadingsProvider
 String _$statsSavedReadingsHash() =>
     r'a43637c72f4d91651d0a0f391e2eb3f03912f178';
 
+/// 재풀이 records (S08 §4.2-9 "이번 주 재풀이 수"); S11 writes them.
+
+@ProviderFor(statsRetries)
+final statsRetriesProvider = StatsRetriesProvider._();
+
+/// 재풀이 records (S08 §4.2-9 "이번 주 재풀이 수"); S11 writes them.
+
+final class StatsRetriesProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<List<RetryRecord>>,
+          List<RetryRecord>,
+          Stream<List<RetryRecord>>
+        >
+    with
+        $FutureModifier<List<RetryRecord>>,
+        $StreamProvider<List<RetryRecord>> {
+  /// 재풀이 records (S08 §4.2-9 "이번 주 재풀이 수"); S11 writes them.
+  StatsRetriesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'statsRetriesProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$statsRetriesHash();
+
+  @$internal
+  @override
+  $StreamProviderElement<List<RetryRecord>> $createElement(
+    $ProviderPointer pointer,
+  ) => $StreamProviderElement(pointer);
+
+  @override
+  Stream<List<RetryRecord>> create(Ref ref) {
+    return statsRetries(ref);
+  }
+}
+
+String _$statsRetriesHash() => r'a1ef0d3649922a312e75592b7e00e3ef3d36d371';
+
 @ProviderFor(statsWrongsSection)
 final statsWrongsSectionProvider = StatsWrongsSectionFamily._();
 
@@ -454,7 +500,7 @@ final class StatsWrongsSectionProvider
 }
 
 String _$statsWrongsSectionHash() =>
-    r'0b22295327f168d992bf747935598ba3e9ca1f56';
+    r'16c91ce10ae3a94bca5f73d4ec114c3b4ac0ff2e';
 
 final class StatsWrongsSectionFamily extends $Family
     with $FunctionalFamilyOverride<WrongsState, String> {

@@ -17,6 +17,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/domain/entities/entities.dart';
 import '../../../core/domain/local_date.dart';
+import '../../../core/lifecycle/calendar_day.dart';
 import '../../../core/strings/common_strings.dart';
 import '../../../core/strings/planner_strings.dart';
 import '../../../core/strings/stats_strings.dart';
@@ -51,6 +52,7 @@ abstract final class StatsKeys {
   static const Key wrongsBadge = Key('stats-wrongs-badge');
   static const Key wrongsSeeAll = Key('stats-wrongs-see-all');
   static const Key wrongsResubscribe = Key('stats-wrongs-resubscribe');
+  static const Key wrongsViewExisting = Key('stats-wrongs-view-existing');
   static const Key crossView = Key('stats-cross-view');
 }
 
@@ -64,6 +66,22 @@ class StatsScreen extends ConsumerStatefulWidget {
 class _StatsScreenState extends ConsumerState<StatsScreen> {
   StatsPeriod _period = StatsPeriod.week;
   int _offset = 0;
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    // A screen left open across midnight follows the new day ([S08b]).
+    _tick = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) ref.read(calendarDayProvider.notifier).refresh();
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
 
   /// Two columns from this body width (prototype t1: 340px + 1fr).
   static const double twoColumnMinWidth = 700;
@@ -93,10 +111,10 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
 
     final wrongs = _WrongsSection(
       rangeKey: range.key,
-      period: _period,
+      rangeLabel: range.periodLabel(today),
       subjects: subjects,
       onOpenPaywall: _openPaywall,
-      onSeeAll: () => context.push(wrongsPath),
+      onSeeAll: () => unawaited(context.push(wrongsPath)),
     );
 
     final Widget body = switch (record) {
@@ -1027,14 +1045,16 @@ class _Skeleton extends StatelessWidget {
 class _WrongsSection extends ConsumerWidget {
   const _WrongsSection({
     required this.rangeKey,
-    required this.period,
+    required this.rangeLabel,
     required this.subjects,
     required this.onOpenPaywall,
     required this.onSeeAll,
   });
 
   final String rangeKey;
-  final StatsPeriod period;
+
+  /// 이번 주 · 지난주 · 이번 달 · or the dates of a past range.
+  final String rangeLabel;
   final Map<String, Subject> subjects;
   final VoidCallback onOpenPaywall;
   final VoidCallback onSeeAll;
@@ -1078,12 +1098,26 @@ class _WrongsSection extends ConsumerWidget {
             const SizedBox(height: AppSpacing.s4),
             Text(StatsStrings.wrongsExpiredBody, style: AppTypography.label.copyWith(color: c.tx2)),
             const SizedBox(height: AppSpacing.s12),
-            AppButton.secondary(
-              key: StatsKeys.wrongsResubscribe,
-              label: StatsStrings.resubscribe,
-              size: AppButtonSize.small,
-              expand: false,
-              onPressed: onOpenPaywall,
+            Wrap(
+              spacing: AppSpacing.s10,
+              runSpacing: AppSpacing.s10,
+              children: <Widget>[
+                // PRD 4.4 "기존 오답 N문항 보기": the saved wrongs stay readable.
+                AppButton(
+                  key: StatsKeys.wrongsViewExisting,
+                  label: StatsStrings.viewExistingWrongs(facts.total),
+                  size: AppButtonSize.small,
+                  expand: false,
+                  onPressed: onSeeAll,
+                ),
+                AppButton.secondary(
+                  key: StatsKeys.wrongsResubscribe,
+                  label: StatsStrings.resubscribe,
+                  size: AppButtonSize.small,
+                  expand: false,
+                  onPressed: onOpenPaywall,
+                ),
+              ],
             ),
           ],
         ),
@@ -1101,7 +1135,7 @@ class _WrongsSection extends ConsumerWidget {
               children: <Widget>[
                 Text(
                   '${StatsStrings.wrongsOpen(facts.open)} · '
-                  '${period == StatsPeriod.week ? StatsStrings.readingsThisWeek(facts.readingsInRange) : StatsStrings.readingsThisMonth(facts.readingsInRange)} · '
+                  '${StatsStrings.retriesIn(rangeLabel, facts.retriesInRange)} · '
                   '${StatsStrings.wrongsResolved(facts.resolved)}',
                   style: AppTypography.label.copyWith(color: c.tx2),
                 ),

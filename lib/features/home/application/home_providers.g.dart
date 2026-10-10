@@ -8,13 +8,17 @@ part of 'home_providers.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
+/// Today, refreshed at midnight and on app resume ([S08b] `CalendarDay`).
 
 @ProviderFor(homeToday)
 final homeTodayProvider = HomeTodayProvider._();
 
+/// Today, refreshed at midnight and on app resume ([S08b] `CalendarDay`).
+
 final class HomeTodayProvider
     extends $FunctionalProvider<LocalDate, LocalDate, LocalDate>
     with $Provider<LocalDate> {
+  /// Today, refreshed at midnight and on app resume ([S08b] `CalendarDay`).
   HomeTodayProvider._()
     : super(
         from: null,
@@ -48,7 +52,7 @@ final class HomeTodayProvider
   }
 }
 
-String _$homeTodayHash() => r'c85b1be6bad9661eb6499e14b4524b9ee2b79efa';
+String _$homeTodayHash() => r'1ea4733a5007b3d19209530a201c45888ab9f484';
 
 @ProviderFor(homeRecentSessions)
 final homeRecentSessionsProvider = HomeRecentSessionsProvider._();

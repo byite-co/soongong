@@ -12,6 +12,8 @@ import '../../../core/contracts/providers.dart';
 import '../../../core/domain/entities/entities.dart';
 import '../../../core/domain/enums.dart';
 import '../../../core/domain/local_date.dart';
+import '../../../core/strings/planner_strings.dart';
+import '../../../core/strings/stats_strings.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../planner/application/planner_providers.dart';
 import '../domain/seated_aggregate.dart';
@@ -60,6 +62,19 @@ class StatsRange {
 
   StatsRange get previous => shift(-1);
   StatsRange get next => shift(1);
+
+  /// Label of the shown range relative to [today]: 이번 주 · 지난주 · 이번 달,
+  /// else the dates (`9월 21일 – 27일` · `2026년 9월`) — so a card never says
+  /// "이번 주" about a past week ([S08b]).
+  String periodLabel(LocalDate today) {
+    if (period == StatsPeriod.week) {
+      if (contains(today)) return StatsStrings.thisWeek;
+      if (next.contains(today)) return StatsStrings.lastWeek;
+      return StatsStrings.weekRange(from.month, from.day, to.month, to.day);
+    }
+    if (contains(today)) return StatsStrings.thisMonth;
+    return PlannerStrings.pickerMonth(from.year, from.month);
+  }
 }
 
 /// Segments overlapping the range [from]..[to] of [key] — the previous
@@ -190,14 +205,18 @@ Stream<List<WrongItem>> statsWrongs(Ref ref) => ref.watch(wrongsRepositoryProvid
 @riverpod
 Stream<List<ReadingRequest>> statsSavedReadings(Ref ref) => ref.watch(readingRepositoryProvider).watchSaved();
 
+/// 재풀이 records (S08 §4.2-9 "이번 주 재풀이 수"); S11 writes them.
+@riverpod
+Stream<List<RetryRecord>> statsRetries(Ref ref) => ref.watch(reviewRepositoryProvider).watchAllRetries();
+
 enum WrongsCardKind {
   /// Entitled: counts, per-subject rows, 전체 보기.
   premium,
 
-  /// Never entitled: the free teaser.
+  /// Not entitled and nothing saved: the free teaser.
   teaser,
 
-  /// Subscription ended with saved wrongs: read-only card (PRD 4.4).
+  /// Not entitled with saved wrongs (D18): read-only card (PRD 4.4).
   expired,
 }
 
@@ -208,6 +227,7 @@ class WrongsFacts {
     required this.resolved,
     required this.ranges,
     required this.readingsInRange,
+    required this.retriesInRange,
     required this.openBySubject,
   });
 
@@ -218,8 +238,12 @@ class WrongsFacts {
   /// Distinct (subject · range) pairs among the saved wrongs.
   final int ranges;
 
-  /// Saved readings completed inside the shown range.
+  /// Saved readings completed inside the shown range (kept for S10/S12;
+  /// the card shows 재풀이).
   final int readingsInRange;
+
+  /// Non-voided 재풀이 inside the shown range (S08 §4.2-9).
+  final int retriesInRange;
 
   /// Subject id → open count, largest first.
   final List<MapEntry<String, int>> openBySubject;
@@ -247,7 +271,10 @@ WrongsState statsWrongsSection(Ref ref, String rangeKey) {
   final entitlement = ref.watch(statsEntitlementProvider);
   final wrongs = ref.watch(statsWrongsProvider);
   final readings = ref.watch(statsSavedReadingsProvider);
-  if (!entitlement.hasValue || !wrongs.hasValue || !readings.hasValue) return const WrongsLoading();
+  final retries = ref.watch(statsRetriesProvider);
+  if (!entitlement.hasValue || !wrongs.hasValue || !readings.hasValue || !retries.hasValue) {
+    return const WrongsLoading();
+  }
   final e = entitlement.value!;
   final items = wrongs.value!;
   var open = 0;
@@ -270,11 +297,17 @@ WrongsState statsWrongsSection(Ref ref, String rangeKey) {
     final at = (r.completedAt ?? r.submittedAt)?.toLocal();
     if (at != null && !at.isBefore(from) && at.isBefore(to)) inRange++;
   }
-  // Read-only card only when there is something to read (PRD 4.4: 기존
-  // 오답 N문항 보기); an ended subscription without saved wrongs sees the teaser.
+  var retriesInRange = 0;
+  for (final r in retries.value!) {
+    if (r.voided) continue;
+    final at = r.at.toLocal();
+    if (!at.isBefore(from) && at.isBefore(to)) retriesInRange++;
+  }
+  // D18: read-only = `!entitled && 기존 오답 존재`, whatever the trial history
+  // or how the entitlement ended; nothing saved → the free teaser.
   final kind = e.entitled
       ? WrongsCardKind.premium
-      : items.isNotEmpty && (e.status == EntitlementStatus.expired || e.trialUsed)
+      : items.isNotEmpty
           ? WrongsCardKind.expired
           : WrongsCardKind.teaser;
   final sorted = bySubject.entries.toList()
@@ -289,6 +322,7 @@ WrongsState statsWrongsSection(Ref ref, String rangeKey) {
       resolved: resolved,
       ranges: ranges.length,
       readingsInRange: inRange,
+      retriesInRange: retriesInRange,
       openBySubject: sorted,
     ),
   );

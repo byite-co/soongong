@@ -81,8 +81,11 @@ abstract final class StatsStrings {
   static const String seeAll = '전체 보기';
   static String wrongsOpen(int n) => '미해결 $n문항';
   static String wrongsResolved(int n) => '해결 $n문항';
-  static String readingsThisWeek(int n) => '이번 주 판독 $n회';
-  static String readingsThisMonth(int n) => '이번 달 판독 $n회';
+  static const String thisWeek = '이번 주';
+  static const String lastWeek = '지난주';
+  static const String thisMonth = '이번 달';
+  static String retriesIn(String range, int n) => '$range 재풀이 $n회';
+  static String readingsIn(String range, int n) => '$range 판독 $n회';
   static String wrongsCount(int n) => '$n문항';
   static const String wrongsTeaserTitle = '틀린 문항이 여기에 모입니다';
   static const String wrongsTeaserBody = '채점 판독을 켜면 과목·범위별 오답과 시간 대비 비율이 여기에 표시됩니다';
@@ -92,6 +95,7 @@ abstract final class StatsStrings {
   static const String readOnly = '읽기 전용';
   static const String wrongsExpiredBody = '구독 종료 후 새 오답은 쌓이지 않습니다 · 재구독하면 이어집니다';
   static const String resubscribe = '재구독';
+  static String viewExistingWrongs(int n) => '기존 오답 $n문항 보기';
 
   // Cross view (PRD 4.3 P1, hidden in v1)
   static const String crossHidden = '시간 대비 오답 비율은 4주 데이터가 쌓이면 표시됩니다';

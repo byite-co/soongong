@@ -9,6 +9,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../core/contracts/providers.dart';
 import '../../../core/domain/entities/entities.dart';
 import '../../../core/domain/local_date.dart';
+import '../../../core/lifecycle/calendar_day.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../domain/density_scale.dart';
 import '../domain/month_aggregate.dart';
@@ -21,8 +22,9 @@ part 'planner_providers.g.dart';
 /// the slot so S14/S16 can turn it on without touching layout.
 const bool kPlannerSuggestionsEnabled = false;
 
+/// Today, refreshed at midnight and on app resume ([S08b] `CalendarDay`).
 @riverpod
-LocalDate plannerToday(Ref ref) => LocalDate.of(ref.watch(appClockProvider).now());
+LocalDate plannerToday(Ref ref) => ref.watch(calendarDayProvider);
 
 @riverpod
 Stream<AppSettings> plannerSettings(Ref ref) => ref.watch(settingsRepositoryProvider).watch();
