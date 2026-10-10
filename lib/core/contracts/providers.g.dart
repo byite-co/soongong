@@ -176,6 +176,65 @@ final class BillingGatewayProvider
 
 String _$billingGatewayHash() => r'c0af888c38a4123d8321f76584cf494e5dc88bf0';
 
+/// S09: the device notification gateway. The real plugin-backed gateway is
+/// the default (dev builds on devices get real notifications); widget tests
+/// override this provider with `FakeNotificationGateway`.
+
+@ProviderFor(notificationGateway)
+final notificationGatewayProvider = NotificationGatewayProvider._();
+
+/// S09: the device notification gateway. The real plugin-backed gateway is
+/// the default (dev builds on devices get real notifications); widget tests
+/// override this provider with `FakeNotificationGateway`.
+
+final class NotificationGatewayProvider
+    extends
+        $FunctionalProvider<
+          NotificationGateway,
+          NotificationGateway,
+          NotificationGateway
+        >
+    with $Provider<NotificationGateway> {
+  /// S09: the device notification gateway. The real plugin-backed gateway is
+  /// the default (dev builds on devices get real notifications); widget tests
+  /// override this provider with `FakeNotificationGateway`.
+  NotificationGatewayProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'notificationGatewayProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$notificationGatewayHash();
+
+  @$internal
+  @override
+  $ProviderElement<NotificationGateway> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  NotificationGateway create(Ref ref) {
+    return notificationGateway(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(NotificationGateway value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<NotificationGateway>(value),
+    );
+  }
+}
+
+String _$notificationGatewayHash() =>
+    r'718fab634b3febce6e723b540e1e168c263cea20';
+
 @ProviderFor(syncEngine)
 final syncEngineProvider = SyncEngineProvider._();
 
@@ -216,3 +275,52 @@ final class SyncEngineProvider
 }
 
 String _$syncEngineHash() => r'957a9638da6001921491c73228bce8c5c8be6050';
+
+/// S09b: device network state (문의 전송 비활성). Tests override with
+/// `FakeNetworkStatus`.
+
+@ProviderFor(networkStatus)
+final networkStatusProvider = NetworkStatusProvider._();
+
+/// S09b: device network state (문의 전송 비활성). Tests override with
+/// `FakeNetworkStatus`.
+
+final class NetworkStatusProvider
+    extends $FunctionalProvider<NetworkStatus, NetworkStatus, NetworkStatus>
+    with $Provider<NetworkStatus> {
+  /// S09b: device network state (문의 전송 비활성). Tests override with
+  /// `FakeNetworkStatus`.
+  NetworkStatusProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'networkStatusProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$networkStatusHash();
+
+  @$internal
+  @override
+  $ProviderElement<NetworkStatus> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  NetworkStatus create(Ref ref) {
+    return networkStatus(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(NetworkStatus value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<NetworkStatus>(value),
+    );
+  }
+}
+
+String _$networkStatusHash() => r'2eea1f3f27e6fcc52cedd167e6da6759d3c0373f';

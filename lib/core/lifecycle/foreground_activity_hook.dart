@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/auth/auth_gate.dart';
 import '../../data/repositories/repositories.dart';
+import '../../features/privacy/application/photo_retention.dart';
+import '../../features/settings/application/notification_scheduler.dart';
 import '../domain/local_date.dart';
 import '../logging/app_logger.dart';
 
@@ -48,6 +50,17 @@ class _ForegroundActivityHookState extends ConsumerState<ForegroundActivityHook>
     ref.read(activityRepositoryProvider).touch(today).catchError((Object e, StackTrace st) {
       appLog.w('activity_days touch failed', error: e, stackTrace: st);
       return false;
+    });
+    // S09: 30-day photo expiry on foreground (D14) and the notification plan
+    // re-read (device permission may have changed in the OS settings).
+    ref.read(photoRetentionProvider).purgeExpired().catchError((Object e, StackTrace st) {
+      appLog.w('photo expiry failed', error: e, stackTrace: st);
+      return 0;
+    });
+    ref.read(notificationPermissionStateProvider.notifier).refresh().then((_) {
+      return ref.read(notificationSchedulerProvider).reschedule();
+    }).catchError((Object e, StackTrace st) {
+      appLog.w('notification refresh failed', error: e, stackTrace: st);
     });
   }
 

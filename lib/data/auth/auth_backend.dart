@@ -43,6 +43,11 @@ abstract class AuthBackend {
 
   AuthSession? get currentSession;
 
+  /// Sign-in method of the current user as the auth server reports it
+  /// (`apple` · `google` · `kakao` · `email`), null when signed out or
+  /// unknown. S09 settings › 계정 shows it; never logged.
+  String? get currentProvider;
+
   /// Emits the current session on every auth change (null when signed out).
   Stream<AuthSession?> get sessions;
 
