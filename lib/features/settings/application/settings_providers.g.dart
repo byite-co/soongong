@@ -258,7 +258,7 @@ final class AccountInfoProvider
   }
 }
 
-String _$accountInfoHash() => r'3470ad52d6a3eb471f5bc26208cc4c977aa3b795';
+String _$accountInfoHash() => r'82e9217a680108d6113693c906677782a1eb39ed';
 
 @ProviderFor(goalWindowSegments)
 final goalWindowSegmentsProvider = GoalWindowSegmentsProvider._();
@@ -440,4 +440,4 @@ final class SettingsControllerProvider
 }
 
 String _$settingsControllerHash() =>
-    r'4071e3498b84eac15336abe282a5a49aaae3dcbf';
+    r'10ed54fc780b2b69425f0dc4a358e3d0b25c4527';

@@ -17,21 +17,21 @@ import '../../../core/contracts/notification_gateway.dart';
 import '../../../core/domain/entities/entities.dart';
 import '../../../core/domain/enums.dart';
 import '../../../core/domain/local_date.dart';
+import '../../../core/strings/common_strings.dart';
 import '../../../core/strings/settings_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/widgets.dart';
-import '../../../data/repositories/repository_providers.dart';
 import '../../auth/domain/auth_redirect.dart';
 import '../../billing/billing_routes.dart';
 import '../../help/help_routes.dart';
 import '../../planner/presentation/recurrence_editor.dart' show SegmentedChoice;
 import '../../privacy/privacy_routes.dart';
 import '../../subjects/subjects_routes.dart';
-import '../application/account_controller.dart';
 import '../application/notification_scheduler.dart';
 import '../application/settings_providers.dart';
+import '../settings_routes.dart';
 
 /// Widget keys for tests.
 abstract final class SettingsKeys {
@@ -41,10 +41,10 @@ abstract final class SettingsKeys {
   static const Key privacyRow = Key('settings-privacy');
   static const Key readingRow = Key('settings-reading');
   static const Key exportRow = Key('settings-export');
-  static const Key accountCard = Key('settings-account');
-  static const Key logout = Key('settings-logout');
-  static const Key deleteAccount = Key('settings-delete-account');
+  static const Key accountRow = Key('settings-account');
+  static const Key licensesRow = Key('settings-licenses');
   static const Key notifRow = Key('settings-notif');
+  static const Key notifPickTime = Key('settings-notif-pick-time');
   static const Key themeChoice = Key('settings-theme');
   static const Key planRow = Key('settings-plan');
   static const Key helpRow = Key('settings-help');
@@ -114,27 +114,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (!ok) showAppToast(context, message: SettingsStrings.saveFailed);
   }
 
-  Future<void> _logout() async {
-    await showAppModal(
-      context,
-      title: SettingsStrings.logoutTitle,
-      body: SettingsStrings.logoutBody,
-      primaryLabel: SettingsStrings.logoutConfirm,
-      onConfirm: () => ref.read(accountControllerProvider).logout(),
-    );
-  }
-
-  Future<void> _deleteAccount() async {
-    await showAppModal(
-      context,
-      title: SettingsStrings.deleteAccountTitle,
-      body: SettingsStrings.deleteAccountBody,
-      primaryLabel: SettingsStrings.deleteAccountConfirm,
-      destructive: true,
-      onConfirm: () => ref.read(accountControllerProvider).deleteAccount(),
-    );
-  }
-
   String _notifValue(AppSettings s) {
     final review = s.notifReviewTime;
     if (review == null && !s.notifEvent10min) return SettingsStrings.notifOff;
@@ -152,7 +131,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final entitled = ref.watch(settingsEntitlementProvider).value?.entitled ?? false;
     final planLabel = ref.watch(planLabelProvider);
     final account = ref.watch(accountInfoProvider);
-    final now = ref.watch(appClockProvider).now();
 
     return FlowScaffold(
       title: SettingsStrings.title,
@@ -208,12 +186,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               AppListSection(
                 title: SettingsStrings.sectionAccount,
                 children: <Widget>[
-                  _AccountCard(
-                    key: SettingsKeys.accountCard,
-                    info: account,
-                    now: now,
-                    onLogout: () => unawaited(_logout()),
-                    onDelete: () => unawaited(_deleteAccount()),
+                  AppListRow(
+                    key: SettingsKeys.accountRow,
+                    label: account.localOnly ? SettingsStrings.localOnlyTitle : (account.email ?? SettingsStrings.accountEmailUnknown),
+                    hint: account.localOnly ? SettingsStrings.localOnlyBody : (account.providerLabel ?? SettingsStrings.providerUnknown),
+                    onTap: () => context.push(accountPath),
                   ),
                 ],
               ),
@@ -271,12 +248,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ],
               ),
-              Center(
-                child: Text(
-                  SettingsStrings.version(AppConfig.appVersion),
-                  key: SettingsKeys.version,
-                  style: AppTypography.caption.copyWith(color: c.tx3),
-                ),
+              AppListSection(
+                title: SettingsStrings.sectionAppInfo,
+                children: <Widget>[
+                  AppListRow(
+                    key: SettingsKeys.version,
+                    label: SettingsStrings.versionLabel,
+                    value: SettingsStrings.version(AppConfig.appVersion),
+                  ),
+                  AppListRow(
+                    key: SettingsKeys.licensesRow,
+                    label: SettingsStrings.licenses,
+                    onTap: () => showLicensePage(
+                      context: context,
+                      applicationName: CommonStrings.appName,
+                      applicationVersion: AppConfig.appVersion,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -286,114 +275,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         _ => const StatePanel.loading(),
       },
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// 계정 card (12 설정 · 계정)
-
-class _AccountCard extends StatelessWidget {
-  const _AccountCard({
-    super.key,
-    required this.info,
-    required this.now,
-    required this.onLogout,
-    required this.onDelete,
-  });
-
-  final AccountInfo info;
-  final DateTime now;
-  final VoidCallback onLogout;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    if (info.localOnly) {
-      return Padding(
-        padding: const EdgeInsets.all(AppSpacing.s16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(SettingsStrings.localOnlyTitle, style: AppTypography.body.copyWith(color: c.tx)),
-            Text(SettingsStrings.localOnlyBody, style: AppTypography.caption.copyWith(color: c.tx3)),
-          ],
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.s16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: c.priWeak, shape: BoxShape.circle),
-                child: Text(
-                  info.initial,
-                  style: AppTypography.withWeight(AppTypography.body, 700).copyWith(color: c.priTx, height: 1),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.s12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      info.email ?? SettingsStrings.accountEmailUnknown,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.body.copyWith(color: c.tx),
-                    ),
-                    Text(
-                      '${info.providerLabel ?? SettingsStrings.providerUnknown} · ${syncLabelOf(info.lastSyncedAt, now)}',
-                      style: AppTypography.caption.copyWith(color: c.tx3),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.s14),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: AppButton.secondary(
-                  key: SettingsKeys.logout,
-                  label: SettingsStrings.logout,
-                  size: AppButtonSize.small,
-                  onPressed: onLogout,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.s8),
-              Expanded(
-                child: Semantics(
-                  button: true,
-                  label: SettingsStrings.deleteAccount,
-                  child: GestureDetector(
-                    key: SettingsKeys.deleteAccount,
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onDelete,
-                    child: Container(
-                      height: AppSpacing.touchTarget,
-                      alignment: Alignment.center,
-                      child: Text(
-                        SettingsStrings.deleteAccount,
-                        style: AppTypography.withWeight(AppTypography.label, 600).copyWith(color: c.accTx),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }
@@ -685,6 +566,23 @@ class _NotificationsSheetState extends ConsumerState<_NotificationsSheet> {
     }
   }
 
+  /// 원본 §4.4-5 시각 선택: any hour·minute through the platform picker
+  /// (typed entry), stored as `LocalTime` (S02 `HH:mm` contract).
+  Future<void> _pickTime(LocalTime current, SettingsController controller) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: current.hour, minute: current.minute),
+      initialEntryMode: TimePickerEntryMode.input,
+      // 24-hour entry like every time the app shows (HH:mm, S02 LocalTime).
+      builder: (ctx, child) => MediaQuery(
+        data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
+        child: child ?? const SizedBox.shrink(),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    await _write(() => controller.setNotifReviewTime(LocalTime(picked.hour, picked.minute)));
+  }
+
   Future<void> _onPermissionTap(NotificationPermission p) async {
     switch (p) {
       case NotificationPermission.granted:
@@ -784,6 +682,14 @@ class _NotificationsSheetState extends ConsumerState<_NotificationsSheet> {
                   selected: review.key == t,
                   onTap: () => unawaited(_write(() => controller.setNotifReviewTime(LocalTime.parse(t)))),
                 ),
+              if (!SettingsStrings.notifTimes.contains(review.key))
+                _Chip(key: SettingsKeys.notifTime(review.key), label: review.key, selected: true, onTap: () {}),
+              _Chip(
+                key: SettingsKeys.notifPickTime,
+                label: SettingsStrings.notifPickTime,
+                selected: false,
+                onTap: () => unawaited(_pickTime(review, controller)),
+              ),
             ],
           ),
         ],

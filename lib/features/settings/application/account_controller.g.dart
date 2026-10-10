@@ -8,12 +8,12 @@ part of 'account_controller.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// keepAlive: the controller is used across async gaps from modals.
+/// Rebuilt when the account (write context) changes.
 
 @ProviderFor(accountController)
 final accountControllerProvider = AccountControllerProvider._();
 
-/// keepAlive: the controller is used across async gaps from modals.
+/// Rebuilt when the account (write context) changes.
 
 final class AccountControllerProvider
     extends
@@ -23,7 +23,7 @@ final class AccountControllerProvider
           AccountController
         >
     with $Provider<AccountController> {
-  /// keepAlive: the controller is used across async gaps from modals.
+  /// Rebuilt when the account (write context) changes.
   AccountControllerProvider._()
     : super(
         from: null,
@@ -58,4 +58,4 @@ final class AccountControllerProvider
   }
 }
 
-String _$accountControllerHash() => r'4a58bd1aae3438e74122498e3f95565ad4271063';
+String _$accountControllerHash() => r'c5ca4506df325992f170480f839568e8d528d632';

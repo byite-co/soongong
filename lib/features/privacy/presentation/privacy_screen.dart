@@ -1,10 +1,12 @@
-// PrivacyScreen (`/settings/privacy`, S09, PRD 4.4 카메라와 개인정보 · 7장
-// · D14 · prototype 11 · N6 · N7 · expSheet · delDlg): what the camera does
-// (hero · how), what is stored (D14 table), the camera toggle, the
-// corrections fact, the reading row (premium), the device photos (list ·
-// delete one / all, 30-day rule), 내 기록 내보내기 (CSV · JSON share) and
-// 모든 기록 삭제 (server purge + local purge; blocked while measuring).
-// Expired photos are purged when the screen opens.
+// PrivacyScreen (`/settings/privacy`, S09 · S09b, PRD 4.4 카메라와 개인정보
+// · 7장 · D14 · prototype 11 · N6 · N7 · expSheet · delDlg · delAllDlg):
+// what the camera does (hero · how), what is stored (the D14 table, vendor
+// terms pending), the camera toggle, the corrections fact + 감도 자동 조정
+// toggle (§4.5-9), the reading row (premium; consent ② wording reused),
+// the device photos (list · delete one / all, 30-day rule), 내 기록
+// 내보내기 (CSV · JSON share) and 모든 기록 삭제 (two confirmations, nothing
+// deleted before the last one; entry blocked while measuring). Expired
+// photos are purged when the screen opens.
 
 import 'dart:async';
 
@@ -12,17 +14,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/strings/consent_strings.dart';
 import '../../../core/strings/privacy_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../../data/export/export_service.dart';
+import '../../../data/repositories/repository_providers.dart';
 import '../../auth/domain/auth_redirect.dart';
 import '../../billing/billing_routes.dart';
+import '../../measure/domain/away_policy.dart';
 import '../../settings/application/settings_providers.dart';
 import '../application/photo_retention.dart';
 import '../application/privacy_providers.dart';
+
+/// S06 정정 이력 화면 (`measure_routes.dart`).
+const String kCorrectionsPath = '/measure/corrections';
 
 /// Widget keys for tests.
 abstract final class PrivacyKeys {
@@ -30,6 +38,8 @@ abstract final class PrivacyKeys {
   static const Key heroOff = Key('privacy-hero-off');
   static const Key cameraSwitch = Key('privacy-camera-switch');
   static const Key corrections = Key('privacy-corrections');
+  static const Key sensitivitySwitch = Key('privacy-sensitivity-switch');
+  static const Key storedTable = Key('privacy-stored-table');
   static const Key readingAction = Key('privacy-reading-action');
   static const Key photosOpen = Key('privacy-photos-open');
   static const Key photosDeleteAll = Key('privacy-photos-delete-all');
@@ -51,6 +61,7 @@ class PrivacyScreen extends ConsumerStatefulWidget {
 
 class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
   bool _cameraBusy = false;
+  bool _sensitivityBusy = false;
   bool _photosBusy = false;
 
   @override
@@ -67,6 +78,15 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     final ok = await ref.read(settingsControllerProvider).setSeatDetection(on: on);
     if (!mounted) return;
     setState(() => _cameraBusy = false);
+    if (!ok) showAppToast(context, message: PrivacyStrings.loadFailed);
+  }
+
+  Future<void> _setSensitivityAuto(bool on) async {
+    if (_sensitivityBusy) return;
+    setState(() => _sensitivityBusy = true);
+    final ok = await ref.read(settingsControllerProvider).setSensitivityAuto(on: on);
+    if (!mounted) return;
+    setState(() => _sensitivityBusy = false);
     if (!ok) showAppToast(context, message: PrivacyStrings.loadFailed);
   }
 
@@ -110,17 +130,32 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
         builder: (_) => const _ExportSheet(),
       );
 
+  /// delDlg (impact: the five groups + what stays) → delAllDlg (final) →
+  /// execute. Nothing is deleted before the final confirmation; a running
+  /// measurement blocks the entry (PRD 4.4 측정 중에는 진입 불가).
   Future<void> _deleteAll() async {
-    DeleteAllOutcome? outcome;
+    if (await ref.read(sessionRepositoryProvider).readSnapshot() != null) {
+      if (mounted) showAppToast(context, message: PrivacyStrings.deleteAllBlocked);
+      return;
+    }
+    if (!mounted) return;
     final body = <String>[
       PrivacyStrings.deleteAllBody,
       ...PrivacyStrings.deleteAllItems,
       PrivacyStrings.deleteAllKeeps,
     ].join('\n');
-    await showAppModal(
+    final next = await showAppModal(
       context,
       title: PrivacyStrings.deleteAllTitle,
       body: body,
+      primaryLabel: PrivacyStrings.deleteAllNext,
+    );
+    if (!next || !mounted) return;
+    DeleteAllOutcome? outcome;
+    await showAppModal(
+      context,
+      title: PrivacyStrings.deleteAllFinalTitle,
+      body: PrivacyStrings.deleteAllFinalBody,
       primaryLabel: PrivacyStrings.deleteAllConfirm,
       destructive: true,
       onConfirm: () async {
@@ -133,6 +168,8 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     switch (outcome) {
       case DeleteAllDone():
         showAppToast(context, message: PrivacyStrings.deleteAllDone);
+      case DeleteAllPartial(:final failedPhotos):
+        showAppToast(context, message: PrivacyStrings.deleteAllPartial(failedPhotos));
       case DeleteAllBlocked():
         showAppToast(context, message: PrivacyStrings.deleteAllBlocked);
       case DeleteAllFailed():
@@ -185,7 +222,22 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
                   AppListRow(
                     key: PrivacyKeys.corrections,
                     label: PrivacyStrings.corrections,
-                    hint: PrivacyStrings.correctionsStatus(corrections, value.sensitivityAuto),
+                    hint: PrivacyStrings.correctionsStatus(corrections, AwayPolicy.thresholdFor(value.sensitivityLevel).inSeconds),
+                    value: PrivacyStrings.correctionsOpen,
+                    onTap: () => context.push(kCorrectionsPath),
+                  ),
+                  AppListRow(
+                    label: PrivacyStrings.sensitivityAuto,
+                    hint: PrivacyStrings.sensitivityAutoHint,
+                    trailing: Semantics(
+                      label: PrivacyStrings.sensitivityAuto,
+                      child: Switch(
+                        key: PrivacyKeys.sensitivitySwitch,
+                        value: value.sensitivityAuto,
+                        activeTrackColor: c.pri,
+                        onChanged: _sensitivityBusy ? null : (on) => unawaited(_setSensitivityAuto(on)),
+                      ),
+                    ),
                   ),
                   _ReadingRow(entitled: entitled, onOpenPaywall: () => context.push(paywallPath)),
                 ],
@@ -332,54 +384,55 @@ class _HowRow extends StatelessWidget {
   }
 }
 
-/// D14 table — what is stored, row by row.
+/// D14 table — data · location · retention, row by row (the decided table,
+/// vendor terms shown as pending).
 class _StoredTable extends StatelessWidget {
   const _StoredTable();
-
-  static const List<(String, String)> rows = <(String, String)>[
-    (PrivacyStrings.storedFocus, PrivacyStrings.storedFocusBody),
-    (PrivacyStrings.storedAway, PrivacyStrings.storedAwayBody),
-    (PrivacyStrings.storedCorrection, PrivacyStrings.storedCorrectionBody),
-    (PrivacyStrings.storedReading, PrivacyStrings.storedReadingBody),
-    (PrivacyStrings.storedAccount, PrivacyStrings.storedAccountBody),
-    (PrivacyStrings.storedNever, PrivacyStrings.storedNeverBody),
-  ];
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Material(
-      color: c.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        side: BorderSide(color: c.line),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: <Widget>[
-          for (var i = 0; i < rows.length; i++) ...<Widget>[
-            if (i > 0) Divider(height: 1, thickness: 1, color: c.line),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  SizedBox(
-                    width: 92,
-                    child: Text(
-                      rows[i].$1,
-                      style: AppTypography.withWeight(AppTypography.label, 600).copyWith(
-                        color: i == rows.length - 1 ? c.accTx : c.tx,
-                      ),
-                    ),
-                  ),
-                  Expanded(child: Text(rows[i].$2, style: AppTypography.label.copyWith(color: c.tx2))),
-                ],
+    const rows = PrivacyStrings.d14Rows;
+    return Column(
+      key: PrivacyKeys.storedTable,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Material(
+          color: c.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            side: BorderSide(color: c.line),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(PrivacyStrings.storedColumns, style: AppTypography.caption.copyWith(color: c.tx3)),
+                ),
               ),
-            ),
-          ],
-        ],
-      ),
+              for (final (data, location, retention) in rows) ...<Widget>[
+                Divider(height: 1, thickness: 1, color: c.line),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(data, style: AppTypography.withWeight(AppTypography.label, 600).copyWith(color: c.tx)),
+                      Text(location, style: AppTypography.caption.copyWith(color: c.priTx)),
+                      Text(retention, style: AppTypography.caption.copyWith(color: c.tx2, height: 1.5)),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.s8),
+        Text(PrivacyStrings.storedVendorPending, style: AppTypography.caption.copyWith(color: c.accTx)),
+      ],
     );
   }
 }
@@ -416,9 +469,12 @@ class _ReadingRow extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.s4),
           Text(
-            entitled ? PrivacyStrings.readingOnBody : PrivacyStrings.readingOffBody,
-            style: AppTypography.caption.copyWith(color: c.tx3, height: 1.5),
+            entitled ? PrivacyStrings.readingStatusOn : PrivacyStrings.readingStatusOff,
+            style: AppTypography.caption.copyWith(color: c.tx2),
           ),
+          const SizedBox(height: AppSpacing.s4),
+          for (final line in ConsentStrings.readingLines)
+            Text(line, style: AppTypography.caption.copyWith(color: c.tx3, height: 1.5)),
           if (!entitled) ...<Widget>[
             const SizedBox(height: AppSpacing.s8),
             AppButton.secondary(

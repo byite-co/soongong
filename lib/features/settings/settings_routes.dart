@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 
 import '../auth/domain/auth_redirect.dart';
+import 'presentation/account_screen.dart';
 import 'presentation/settings_screen.dart';
 
 /// Routes owned by the `settings` feature (S09).
@@ -16,4 +17,12 @@ final List<RouteBase> settingsRoutes = <RouteBase>[
     name: 'settings',
     builder: (_, _) => const SettingsScreen(),
   ),
+  GoRoute(
+    path: accountPath,
+    name: 'account',
+    builder: (_, _) => const AccountScreen(),
+  ),
 ];
+
+/// 계정 (원본 S09 §4.2, S09b).
+const String accountPath = '/settings/account';

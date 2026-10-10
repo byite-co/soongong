@@ -1,7 +1,8 @@
-// SubjectsScreen (`/settings/subjects`, S09, PRD 4.4 과목 관리 · prototype
-// 13 · N11 · B8 · subjDelN): rows (colour dot + name + 이번 주 순공 fact),
-// add/edit sheet (name ≤ 20 · one of the 8 colours, unique), delete with
-// the 5-second undo (D22; records move to 기타 on commit). 기타 cannot be
+// SubjectsScreen (`/settings/subjects`, S09 · S09b, PRD 4.4 과목 관리 ·
+// prototype 13 · N11 · B8 · subjDelN): rows (colour dot + name + 이번 주
+// 순공 fact), add/edit sheet (name ≤ 20 · one of the 8 colours, unique;
+// 기타 renames only — its colour is locked, §4.3-4), delete with the
+// 5-second undo (D22; records move to 기타 on commit). 기타 cannot be
 // deleted. At most 8 subjects — one per colour (PRD §8: colours stay
 // distinguishable and always carry a name label).
 
@@ -273,7 +274,7 @@ class _SubjectSheetState extends ConsumerState<_SubjectSheet> {
                 color: c.subject(i),
                 selected: i == _color,
                 taken: taken.contains(i),
-                onTap: taken.contains(i) || _saving
+                onTap: taken.contains(i) || _saving || (existing?.isDefault ?? false)
                     ? null
                     : () => setState(() {
                           _color = i;
@@ -282,7 +283,12 @@ class _SubjectSheetState extends ConsumerState<_SubjectSheet> {
               ),
           ],
         ),
-        if (taken.isNotEmpty)
+        if (existing?.isDefault ?? false)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.s4),
+            child: Text(SubjectsStrings.defaultColorLocked, style: AppTypography.caption.copyWith(color: c.tx3)),
+          )
+        else if (taken.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.s4),
             child: Text(

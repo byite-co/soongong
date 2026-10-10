@@ -73,12 +73,12 @@ abstract final class HelpStrings {
   static const String send = '보내기';
   static const String sending = '보내는 중…';
   static const String resend = '다시 보내기';
-  static const String sent = '보냈습니다 · 보통 하루 안에 답장합니다';
-  static const String sendFailed =
-      '전송에 실패했습니다. 작성한 내용은 그대로 남아 있으니 연결을 확인하고 다시 보내 주세요. 계속 실패하면 아래 주소로 메일 앱에서 보낼 수 있습니다.';
+  static const String sent = '보냈습니다';
+  static const String sendFailed = '전송에 실패했습니다. 작성한 내용은 그대로 남아 있으니 연결을 확인하고 다시 보내 주세요.';
+  static const String offline = '인터넷 연결이 없어 지금은 보낼 수 없습니다 · 작성한 내용은 남아 있습니다';
+  static const String supportAddressPending = '대체 메일 주소는 확정 전입니다';
+  static String supportAddress(String email) => '메일 앱에서 보낼 수 있는 주소: $email';
   static const String sendRateLimited = '오늘 보낼 수 있는 문의 수(10건)를 넘었습니다 · 내일 다시 보낼 수 있습니다';
-  static const String supportEmail = 'help@soongong.app';
-  static const String replyTime = '보통 하루 안에 답장합니다';
   static String summaryLine(int sessions, String seated, String platform, String version) =>
       '최근 7일 · 세션 $sessions회 · 순공 $seated · $platform · 순공 $version';
   static String bodyWithKind(String kind, String body) => '[$kind] $body';

@@ -204,9 +204,17 @@ class AuthRepository {
   Future<void> signOut() => _backend.signOut();
 
   /// `delete-account` (server data + auth user) then local sign-out. The
-  /// caller wipes the local DB and photo files (D5 · D27).
-  Future<void> deleteAccount() async {
+  /// caller wipes the local DB and photo files (D5 · D27). [forUserId]
+  /// ([S09b]): the sign-out runs only while that account is still the
+  /// current session — a response arriving after another account signed in
+  /// must not sign that account out.
+  Future<void> deleteAccount({String? forUserId}) async {
+    final owner = forUserId ?? _backend.currentSession?.userId;
     await _backend.invoke('delete-account');
+    if (owner != null && _backend.currentSession?.userId != owner) {
+      appLog.w('auth: delete-account answered after an account switch · sign-out skipped');
+      return;
+    }
     try {
       await _backend.signOut();
     } on Object catch (_) {

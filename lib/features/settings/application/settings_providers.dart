@@ -1,7 +1,9 @@
-// Settings providers (S09): the settings stream, the theme the app follows,
-// the plan label facts, the account facts (email · 로그인 방식 · 동기화
-// 시각) and the premium goal suggestion. Writes go through
-// `SettingsController` (3-state: busy → saved / failed, input kept).
+// Settings providers (S09 · S09b): the settings stream, the theme the app
+// follows, the plan label facts, the account facts (email · 로그인 방식 ·
+// 동의 ①·② · 동기화는 S13 전까지 미연결) and the premium goal suggestion.
+// Writes go through `SettingsController` (3-state: busy → saved / failed,
+// input kept), built per account and committed inside owned transactions
+// ([S09b]: a write parked behind an account switch is refused).
 
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -15,8 +17,10 @@ import '../../../core/lifecycle/calendar_day.dart';
 import '../../../core/strings/settings_strings.dart';
 import '../../../data/auth/auth_gate.dart';
 import '../../../data/auth/auth_mode.dart';
+import '../../../data/auth/auth_models.dart';
 import '../../../data/auth/auth_providers.dart';
 import '../../../data/repositories/repository_providers.dart';
+import '../../../data/repositories/settings_repository.dart';
 import '../../stats/domain/seated_aggregate.dart';
 import 'notification_scheduler.dart';
 
@@ -59,14 +63,25 @@ String planLabel(Ref ref) {
   };
 }
 
-/// Facts shown on the 계정 card.
+/// Facts shown on the 계정 row and screen. [lastSyncedAt] stays null until
+/// S13 connects the real sync engine (the fake engine's time is not a
+/// server fact, [S09b]).
 class AccountInfo {
-  const AccountInfo({required this.localOnly, this.email, this.providerLabel, this.lastSyncedAt});
+  const AccountInfo({
+    required this.localOnly,
+    this.email,
+    this.providerLabel,
+    this.lastSyncedAt,
+    this.profile,
+  });
 
   final bool localOnly;
   final String? email;
   final String? providerLabel;
   final DateTime? lastSyncedAt;
+
+  /// Consent ①·② versions and times (null in local-only mode).
+  final ProfileSnapshot? profile;
 
   String get initial {
     final e = email;
@@ -84,7 +99,7 @@ AccountInfo accountInfo(Ref ref) {
     localOnly: false,
     email: backend.currentSession?.email,
     providerLabel: providerLabelOf(backend.currentProvider),
-    lastSyncedAt: ref.watch(syncEngineProvider).lastSyncedAt,
+    profile: gate.profile,
   );
 }
 
@@ -136,36 +151,51 @@ int? goalSuggestionMinutes(Ref ref) {
 // ---------------------------------------------------------------------------
 // Writes
 
+/// Built per account (the repository is captured); every write commits
+/// inside `SyncWriter.runOwnedTransaction` with this controller's liveness,
+/// so a write queued behind an account switch is refused instead of landing
+/// in the next account's database ([S06d] · [S09b]).
 class SettingsController {
-  SettingsController(this._ref);
+  SettingsController(this.repo, {required this.onNotificationChanged});
 
-  final Ref _ref;
+  final SettingsRepository repo;
+  final Future<void> Function() onNotificationChanged;
+
+  bool _disposed = false;
+  void dispose() => _disposed = true;
 
   Future<bool> _run(Future<void> Function() write, {bool reschedule = false}) async {
+    if (_disposed) return false;
     try {
-      await write();
-      if (reschedule) await _ref.read(notificationSchedulerProvider).reschedule();
+      await repo.writer.runOwnedTransaction(write, alive: () => !_disposed);
+      if (reschedule) await onNotificationChanged();
       return true;
     } on Object {
       return false;
     }
   }
 
-  Future<bool> setDailyGoal(int minutes) => _run(() => _ref.read(settingsRepositoryProvider).setDailyGoalMinutes(minutes));
+  Future<bool> setDailyGoal(int minutes) => _run(() => repo.setDailyGoalMinutes(minutes));
 
-  Future<bool> setWeekStart(int weekday) => _run(() => _ref.read(settingsRepositoryProvider).setWeekStart(weekday));
+  Future<bool> setWeekStart(int weekday) => _run(() => repo.setWeekStart(weekday));
 
-  Future<bool> setTheme(ThemeSetting theme) => _run(() => _ref.read(settingsRepositoryProvider).setTheme(theme));
+  Future<bool> setTheme(ThemeSetting theme) => _run(() => repo.setTheme(theme));
 
-  Future<bool> setSeatDetection({required bool on}) =>
-      _run(() => _ref.read(settingsRepositoryProvider).setSeatDetectionEnabled(on: on));
+  Future<bool> setSeatDetection({required bool on}) => _run(() => repo.setSeatDetectionEnabled(on: on));
 
-  Future<bool> setNotifReviewTime(LocalTime? time) =>
-      _run(() => _ref.read(settingsRepositoryProvider).setNotifReviewTime(time), reschedule: true);
+  Future<bool> setSensitivityAuto({required bool on}) => _run(() => repo.setSensitivityAuto(on: on));
 
-  Future<bool> setNotifEvent10min({required bool on}) =>
-      _run(() => _ref.read(settingsRepositoryProvider).setNotifEvent10min(on: on), reschedule: true);
+  Future<bool> setNotifReviewTime(LocalTime? time) => _run(() => repo.setNotifReviewTime(time), reschedule: true);
+
+  Future<bool> setNotifEvent10min({required bool on}) => _run(() => repo.setNotifEvent10min(on: on), reschedule: true);
 }
 
 @Riverpod(keepAlive: true)
-SettingsController settingsController(Ref ref) => SettingsController(ref);
+SettingsController settingsController(Ref ref) {
+  final c = SettingsController(
+    ref.watch(settingsRepositoryProvider),
+    onNotificationChanged: () => ref.read(notificationSchedulerProvider).reschedule(),
+  );
+  ref.onDispose(c.dispose);
+  return c;
+}

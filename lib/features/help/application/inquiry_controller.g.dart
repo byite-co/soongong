@@ -59,3 +59,41 @@ final class InquiryControllerProvider
 }
 
 String _$inquiryControllerHash() => r'9405d5bf6b9d27c410f082a8b685a119748c4f8c';
+
+/// S09b: device network state for the 문의 form (offline → sending disabled).
+
+@ProviderFor(networkOnline)
+final networkOnlineProvider = NetworkOnlineProvider._();
+
+/// S09b: device network state for the 문의 form (offline → sending disabled).
+
+final class NetworkOnlineProvider
+    extends $FunctionalProvider<AsyncValue<bool>, bool, Stream<bool>>
+    with $FutureModifier<bool>, $StreamProvider<bool> {
+  /// S09b: device network state for the 문의 form (offline → sending disabled).
+  NetworkOnlineProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'networkOnlineProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$networkOnlineHash();
+
+  @$internal
+  @override
+  $StreamProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $StreamProviderElement(pointer);
+
+  @override
+  Stream<bool> create(Ref ref) {
+    return networkOnline(ref);
+  }
+}
+
+String _$networkOnlineHash() => r'1b4115aa9593c3aa491b58fcce8a3895854e0957';

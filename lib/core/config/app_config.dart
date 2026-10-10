@@ -21,6 +21,12 @@ abstract final class AppConfig {
   /// `APP_VERSION` (pubspec `version`); the default matches pubspec today.
   static const String appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '0.1.0');
 
+  /// S09b: the support mailbox shown as the fallback for a failed inquiry.
+  /// Empty (default) = not decided yet — the help screen then states that
+  /// the fallback address is pending instead of inventing one.
+  static const String supportEmail = String.fromEnvironment('SUPPORT_EMAIL');
+  static bool get hasSupportEmail => supportEmail.trim().isNotEmpty;
+
   /// `ios` · `android` · … for the inquiry summary line (no device ids).
   static String get platformLabel => Platform.operatingSystem;
 

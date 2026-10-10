@@ -24,6 +24,7 @@ import '../../core/domain/local_date.dart';
 import '../../core/logging/app_logger.dart';
 import '../../features/home/domain/recovery_candidate.dart';
 import '../../features/privacy/application/photo_retention.dart';
+import '../../features/privacy/application/privacy_providers.dart';
 import '../../features/settings/application/notification_scheduler.dart';
 import '../auth/auth_gate.dart';
 import '../repositories/repositories.dart';
@@ -76,8 +77,11 @@ class UserStartupTasks {
     _done.add(userId);
     try {
       final settled = await _ref.read(deleteSettlerProvider).settle();
-      // S09: expired photos (D14 row 3) and the notification plan.
+      // S09: expired photos (D14 row 3) and the notification plan; S09b: a
+      // local purge left pending (server already purged) is completed.
       final expiredPhotos = await _ref.read(photoRetentionProvider).purgeExpired();
+      final pendingPurge = await _ref.read(privacyActionsProvider).completePending();
+      if (pendingPurge != null) appLog.i('startup · pending local purge → ${pendingPurge.runtimeType}');
       _ref.read(notificationSchedulerProvider).start();
       final today = LocalDate.of(_ref.read(appClockProvider).now());
       final created = await _ref.read(activityRepositoryProvider).touch(today);

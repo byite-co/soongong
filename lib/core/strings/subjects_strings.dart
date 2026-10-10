@@ -33,6 +33,7 @@ abstract final class SubjectsStrings {
   static const String nameTooLong = '과목 이름은 20자까지입니다';
   static const int nameMaxLength = 20;
   static const String deleteRow = "과목 삭제 · 기록은 '기타'로 이동";
+  static const String defaultColorLocked = "'기타'의 색은 바꿀 수 없습니다 · 이름만 바꿀 수 있습니다";
   static const String defaultCannotDelete = "'기타'는 지울 수 없습니다 · 다른 과목의 기록이 모이는 곳";
 
   // Delete (B8 · D22)

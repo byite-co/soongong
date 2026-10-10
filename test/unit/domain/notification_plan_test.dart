@@ -1,12 +1,12 @@
-// NotificationPlan (S09): only the two PRD notifications — 복습 큐 once a
-// day at the chosen time when something is due, and 10 minutes before a
-// timetable event — inside a 7-day horizon, never in the past, with stable
-// ids per source so re-planning replaces entries.
+// NotificationPlan (S09 · S09b): only the two PRD notifications — 복습 큐
+// once a day at the chosen time when something is due (entitled accounts
+// only), and 10 minutes before a timetable recurrence instance — inside a
+// 7-day horizon, never in the past, with stable ids per source so
+// re-planning replaces entries, cut to the 64 soonest (device limit).
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/core/contracts/notification_gateway.dart';
 import 'package:soongong/core/domain/entities/entities.dart';
-import 'package:soongong/core/domain/enums.dart';
 import 'package:soongong/core/domain/local_date.dart';
 import 'package:soongong/core/strings/settings_strings.dart';
 import 'package:soongong/features/settings/domain/notification_plan.dart';
@@ -29,32 +29,12 @@ void main() {
         endTime: const LocalTime(17, 30),
       );
 
-  PlannerItem item({
-    required String id,
-    required LocalDate date,
-    PlannerKind kind = PlannerKind.event,
-    LocalTime? start,
-    LocalDate? bandStart,
-    LocalDate? bandEnd,
-  }) =>
-      PlannerItem(
-        id: id,
-        stamp: stamp,
-        kind: kind,
-        title: '모의고사',
-        date: date,
-        startTime: start,
-        sortOrder: 0,
-        bandStart: bandStart,
-        bandEnd: bandEnd,
-      );
-
   const off = AppSettings();
   const reviewOn = AppSettings(notifReviewTime: LocalTime(21, 0));
   const eventsOn = AppSettings(notifEvent10min: true);
 
-  List<PlannedNotification> build(AppSettings s, {Iterable<ReviewEntry> queue = const [], Iterable<Recurrence> recs = const [], Iterable<PlannerItem> events = const [], DateTime? at}) =>
-      NotificationPlan.build(now: at ?? now, settings: s, queue: queue, recurrences: recs, events: events);
+  List<PlannedNotification> build(AppSettings s, {Iterable<ReviewEntry> queue = const [], Iterable<Recurrence> recs = const [], DateTime? at, bool entitled = true}) =>
+      NotificationPlan.build(now: at ?? now, settings: s, entitled: entitled, queue: queue, recurrences: recs);
 
   test('everything off → nothing, whatever is due', () {
     final plan = build(off, queue: [entry('e', now)], recs: [recurrence()]);
@@ -97,22 +77,21 @@ void main() {
     expect(plan.every((n) => n.id >= NotificationPlan.eventIdBase), isTrue);
   });
 
-  test('events: planner events with a start time count, past · todo · band · out-of-window do not', () {
-    final today = LocalDate.of(now);
-    final plan = build(
-      eventsOn,
-      events: [
-        item(id: 'past', date: today, start: const LocalTime(9, 0)),
-        item(id: 'soon', date: today, start: const LocalTime(10, 20)),
-        item(id: 'tomorrow', date: today.addDays(1), start: const LocalTime(9, 0)),
-        item(id: 'todo', date: today.addDays(1), kind: PlannerKind.todo, start: const LocalTime(9, 0)),
-        item(id: 'no-time', date: today.addDays(1)),
-        item(id: 'band', date: today.addDays(1), start: const LocalTime(9, 0), bandStart: today, bandEnd: today.addDays(3)),
-        item(id: 'far', date: today.addDays(7), start: const LocalTime(9, 0)),
-      ],
-    );
-    expect(plan.map((n) => n.at), <DateTime>[DateTime(2026, 10, 3, 10, 10), DateTime(2026, 10, 4, 8, 50)]);
-    expect(plan.map((n) => n.id).toSet().length, 2);
+  test('review reminders need the entitlement (D18): free → none, premium → planned', () {
+    final queue = [entry('a', now)];
+    expect(build(reviewOn, queue: queue, entitled: false), isEmpty);
+    expect(build(reviewOn, queue: queue).length, 7);
+  });
+
+  test('device limit: sorted by time and cut to the 64 soonest, reviews and events mixed', () {
+    final recs = [for (var i = 0; i < 10; i++) recurrence(id: 'r$i', weekdays: const <int>[1, 2, 3, 4, 5, 6, 7], start: LocalTime(11 + i, 0))];
+    final plan = build(const AppSettings(notifReviewTime: LocalTime(21, 0), notifEvent10min: true), queue: [entry('a', now)], recs: recs);
+    expect(plan.length, NotificationPlan.deviceLimit);
+    expect(plan.map((n) => n.at), orderedEquals(<DateTime>[...plan.map((n) => n.at)]..sort()));
+    final all = build(const AppSettings(notifReviewTime: LocalTime(21, 0), notifEvent10min: true), queue: [entry('a', now)], recs: recs, at: now).length;
+    expect(all, 64, reason: '70 instances + 7 reviews → only the 64 soonest survive');
+    expect(plan.last.at.isBefore(DateTime(2026, 10, 9, 12)), isTrue);
+    expect(plan.where((n) => n.id < NotificationPlan.eventIdBase).length, greaterThan(0), reason: 'earlier reviews kept');
   });
 
   test('both on: review and event entries interleave by time', () {

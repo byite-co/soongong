@@ -97,11 +97,28 @@ void main() {
     h.backend.responses['submit-inquiry'] = Exception('offline');
     await send(tester);
     expect(find.text(HelpStrings.sendFailed), findsOneWidget);
-    expect(find.text(HelpStrings.supportEmail), findsOneWidget);
+    expect(find.text(HelpStrings.supportAddressPending), findsOneWidget, reason: 'no fallback address is invented while SUPPORT_EMAIL is unset (S09b)');
     expect(find.text(HelpStrings.resend), findsOneWidget);
     expect(tester.widget<TextField>(find.descendant(of: find.byKey(HelpKeys.body), matching: find.byType(TextField))).controller!.text, '결제가 두 번 됐어요');
     h.backend.responses.remove('submit-inquiry');
     await send(tester);
+    expect(find.text(HelpStrings.sent), findsOneWidget);
+    await h.unmount(tester);
+  });
+
+  testWidgets('offline: sending is disabled with the fact shown, the draft stays; back online → send works (S09b)', (tester) async {
+    h.network.current = false;
+    await openHelp(tester);
+    await type(tester, HelpKeys.body, '오프라인에서 작성');
+    expect(find.byKey(HelpKeys.offline), findsOneWidget);
+    await send(tester);
+    expect(h.backend.calls, isEmpty);
+    h.network.current = true;
+    await tester.pumpAndSettle();
+    expect(find.byKey(HelpKeys.offline), findsNothing);
+    expect(tester.widget<TextField>(find.descendant(of: find.byKey(HelpKeys.body), matching: find.byType(TextField))).controller!.text, '오프라인에서 작성');
+    await send(tester);
+    expect(h.backend.calls.single.name, 'submit-inquiry');
     expect(find.text(HelpStrings.sent), findsOneWidget);
     await h.unmount(tester);
   });

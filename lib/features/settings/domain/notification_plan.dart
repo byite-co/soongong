@@ -1,13 +1,15 @@
-// NotificationPlan (S09, pure Dart): which local notifications the app
-// schedules for the next days — only the two the PRD allows (4.4): the
-// 복습 큐 reminder once a day at the chosen time when something is due, and
-// 10 minutes before a timetable event (recurrence instance or planner event
-// with a start time). Facts only, nothing that urges studying (CLAUDE.md
-// §1). Ids are stable per source so re-planning replaces entries.
+// NotificationPlan (S09 · S09b, pure Dart): which local notifications the
+// app schedules for the next days — only the two the PRD allows (4.4): the
+// 복습 큐 reminder once a day at the chosen time when something is due
+// (premium: the review queue is a premium feature, D18 `entitled`), and 10
+// minutes before a timetable recurrence instance (원본 S09 §4.4-5; plain
+// planner events are not reminded). Facts only, nothing that urges studying
+// (CLAUDE.md §1). Ids are stable per source so re-planning replaces entries.
+// The device keeps at most 64 pending notifications (iOS): the plan is
+// cut to the 64 soonest entries after sorting, reviews and events mixed.
 
 import '../../../core/contracts/notification_gateway.dart';
 import '../../../core/domain/entities/entities.dart';
-import '../../../core/domain/enums.dart';
 import '../../../core/domain/local_date.dart';
 import '../../../core/strings/settings_strings.dart';
 import '../../timetable/domain/recurrence_expander.dart';
@@ -16,27 +18,32 @@ class NotificationPlan {
   const NotificationPlan._();
 
   static const int horizonDays = 7;
+
+  /// iOS keeps at most 64 pending local notifications.
+  static const int deviceLimit = 64;
   static const Duration eventLead = Duration(minutes: 10);
   static const int reviewIdBase = 100;
   static const int eventIdBase = 1000;
 
-  /// [queue] = live review entries (due dates); [events] = planner items of
-  /// the window (only `event` kind with a start time counts); [recurrences]
-  /// = live recurrences. Everything is computed in local time from [now].
+  /// [queue] = live review entries (due dates); [recurrences] = live
+  /// recurrences. [entitled] gates the review reminders (D18). Everything
+  /// is computed in local time from [now]; the result is sorted by time and
+  /// cut to [deviceLimit].
   static List<PlannedNotification> build({
     required DateTime now,
     required AppSettings settings,
+    required bool entitled,
     required Iterable<ReviewEntry> queue,
     required Iterable<Recurrence> recurrences,
-    required Iterable<PlannerItem> events,
     int horizonDays = horizonDays,
+    int limit = deviceLimit,
   }) {
     final out = <PlannedNotification>[];
     final today = LocalDate.of(now);
     final last = today.addDays(horizonDays - 1);
 
     final reviewTime = settings.notifReviewTime;
-    if (reviewTime != null) {
+    if (reviewTime != null && entitled) {
       final dueAts = queue.map((e) => e.dueAt.toLocal()).toList();
       for (var i = 0; i < horizonDays; i++) {
         final day = today.addDays(i);
@@ -58,31 +65,21 @@ class NotificationPlan {
 
     if (settings.notifEvent10min) {
       for (final inst in const RecurrenceExpander().expand(recurrences, from: today, to: last)) {
-        _addEvent(out, now, inst.recurrence.id, inst.date, inst.start, inst.title);
-      }
-      for (final item in events) {
-        if (item.kind != PlannerKind.event || item.isBand) continue;
-        final start = item.startTime;
-        if (start == null || item.date.isBefore(today) || item.date.isAfter(last)) continue;
-        _addEvent(out, now, item.id, item.date, start, item.title);
+        final at = inst.start.on(inst.date).subtract(eventLead);
+        if (!at.isAfter(now)) continue;
+        out.add(
+          PlannedNotification(
+            id: eventId(inst.recurrence.id, inst.date),
+            at: at,
+            title: inst.title,
+            body: SettingsStrings.eventBody(inst.start.key),
+          ),
+        );
       }
     }
 
     out.sort((a, b) => a.at.compareTo(b.at));
-    return out;
-  }
-
-  static void _addEvent(List<PlannedNotification> out, DateTime now, String sourceId, LocalDate date, LocalTime start, String title) {
-    final at = start.on(date).subtract(eventLead);
-    if (!at.isAfter(now)) return;
-    out.add(
-      PlannedNotification(
-        id: eventId(sourceId, date),
-        at: at,
-        title: title,
-        body: SettingsStrings.eventBody(start.key),
-      ),
-    );
+    return out.length > limit ? out.sublist(0, limit) : out;
   }
 
   /// Stable 31-bit id for one event instance (`source|date`), above the

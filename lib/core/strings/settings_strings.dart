@@ -36,6 +36,31 @@ abstract final class SettingsStrings {
   static const String premiumBadge = '프리미엄';
   static String version(String v) => '순공 $v';
 
+  // 앱 정보 (원본 §4.1-1)
+  static const String sectionAppInfo = '앱 정보';
+  static const String versionLabel = '버전';
+  static const String licenses = '오픈소스 라이선스';
+
+  // 계정 화면 (원본 §4.2 · S09b)
+  static const String account = '계정';
+  static const String accountTitle = '계정';
+  static const String consentSection = '동의';
+  static const String consentAccount = '동의 ① · 계정과 기록 저장';
+  static const String consentReading = '동의 ② · 판독 사진 외부 전송';
+  static String consentVersionAt(String version, String at) => '버전 $version · $at';
+  static const String consentNone = '동의 전';
+  static String consentRevokedAt(String at) => '철회함 · $at';
+  static const String consentRevoke = '동의 ② 철회';
+  static const String consentRevokeTitle = '판독 사진 전송 동의를 철회할까요?';
+  static const String consentRevokeBody = '철회하면 사진 판독이 꺼집니다. 저장된 오답 기록은 남습니다.';
+  static const String consentRevokeConfirm = '철회';
+  static const String consentRevoked = '동의 ②를 철회했습니다';
+  static const String syncSection = '동기화';
+  static const String syncLast = '마지막 동기화';
+  static const String syncLastNone = '—';
+  static const String syncNow = '지금 동기화';
+  static const String syncNotConnected = '동기화 미연결';
+
   // Plan labels (facts)
   static const String planFree = '무료 · 순공 측정 · 플래너 · 통계';
   static const String planPremium = '프리미엄';
@@ -73,6 +98,7 @@ abstract final class SettingsStrings {
   static String notifReviewAt(String time) => '복습 $time';
   static const String notifEventShort = '일정';
   static const List<String> notifTimes = <String>['19:00', '20:00', '21:00', '22:00'];
+  static const String notifPickTime = '다른 시각 선택';
   static const String notifDeniedTitle = '기기 알림이 꺼져 있습니다';
   static const String notifDeniedBody =
       '앱 안 설정은 저장됐지만 기기에서 막혀 있어 울리지 않습니다.\n기기 설정에서 켠 뒤 돌아오면 자동으로 반영됩니다.';

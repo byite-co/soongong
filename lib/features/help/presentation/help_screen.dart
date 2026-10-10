@@ -1,8 +1,10 @@
-// HelpScreen (`/settings/help`, S09, PRD 4.4 도움말 · 문의 예외 · prototype
-// N4 · N-문의 전송 실패): FAQ accordion (facts about what the app does) and
-// the inquiry form — kind · body (≤ 2000) · optional reply email. Sending
-// goes through `submit-inquiry`; a failure keeps the draft and shows the
-// support address; the daily limit (10) is reported as a fact.
+// HelpScreen (`/settings/help`, S09 · S09b, PRD 4.4 도움말 · 문의 예외 ·
+// prototype N4 · N-문의 전송 실패 · 원본 §4.6-13): FAQ accordion (facts about
+// what the app does) and the inquiry form — kind · body (≤ 2000) · optional
+// reply email. Sending goes through `submit-inquiry`; offline disables
+// sending and keeps the draft; a failure keeps the draft and names the
+// fallback mailbox only when one is configured (`SUPPORT_EMAIL`), else says
+// it is pending; the daily limit (10) is reported as a fact.
 
 import 'dart:async';
 
@@ -10,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/strings/help_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tokens.dart';
@@ -27,6 +30,7 @@ abstract final class HelpKeys {
   static const Key send = Key('help-send');
   static const Key notice = Key('help-notice');
   static const Key supportEmail = Key('help-support-email');
+  static const Key offline = Key('help-offline');
 }
 
 class HelpScreen extends ConsumerStatefulWidget {
@@ -94,6 +98,7 @@ class _HelpScreenState extends ConsumerState<HelpScreen> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final localOnly = ref.watch(accountInfoProvider).localOnly;
+    final online = ref.watch(networkOnlineProvider).value ?? true;
     return FlowScaffold(
       title: HelpStrings.title,
       onBack: _back,
@@ -196,13 +201,23 @@ class _HelpScreenState extends ConsumerState<HelpScreen> {
             if (_notice == _Notice.failed) ...<Widget>[
               const SizedBox(height: AppSpacing.s8),
               Center(
-                child: SelectableText(
-                  HelpStrings.supportEmail,
-                  key: HelpKeys.supportEmail,
-                  style: AppTypography.withWeight(AppTypography.label, 600).copyWith(color: c.priTx),
-                ),
+                child: AppConfig.hasSupportEmail
+                    ? SelectableText(
+                        HelpStrings.supportAddress(AppConfig.supportEmail),
+                        key: HelpKeys.supportEmail,
+                        style: AppTypography.withWeight(AppTypography.label, 600).copyWith(color: c.priTx),
+                      )
+                    : Text(
+                        HelpStrings.supportAddressPending,
+                        key: HelpKeys.supportEmail,
+                        style: AppTypography.caption.copyWith(color: c.tx3),
+                      ),
               ),
             ],
+          ],
+          if (!online) ...<Widget>[
+            const SizedBox(height: AppSpacing.s12),
+            const AppNotice.error(HelpStrings.offline, key: HelpKeys.offline),
           ],
           const SizedBox(height: AppSpacing.s16),
           AppButton(
@@ -211,10 +226,8 @@ class _HelpScreenState extends ConsumerState<HelpScreen> {
             icon: LucideIcons.send,
             busy: _sending,
             busyLabel: HelpStrings.sending,
-            onPressed: _notice == _Notice.rateLimited ? null : () => unawaited(_send()),
+            onPressed: _notice == _Notice.rateLimited || !online ? null : () => unawaited(_send()),
           ),
-          const SizedBox(height: AppSpacing.s8),
-          Center(child: Text(HelpStrings.replyTime, style: AppTypography.caption.copyWith(color: c.tx3))),
         ],
       ),
     );

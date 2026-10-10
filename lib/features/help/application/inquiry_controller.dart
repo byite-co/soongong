@@ -6,6 +6,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/contracts/providers.dart';
 import '../../../core/domain/local_date.dart';
 import '../../../core/strings/help_strings.dart';
 import '../../../core/utils/time_format.dart';
@@ -86,3 +87,7 @@ class InquiryController {
 /// keepAlive: `send` reads providers after awaiting the summary.
 @Riverpod(keepAlive: true)
 InquiryController inquiryController(Ref ref) => InquiryController(ref, platform: AppConfig.platformLabel);
+
+/// S09b: device network state for the 문의 form (offline → sending disabled).
+@riverpod
+Stream<bool> networkOnline(Ref ref) => ref.watch(networkStatusProvider).online;

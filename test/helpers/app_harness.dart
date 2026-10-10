@@ -40,12 +40,15 @@ class AppHarness {
     FakeSocialSignIn? social,
     FakeCameraPermission? camera,
     FakeNotificationGateway? notifications,
+    FakeNetworkStatus? network,
+    this.photoStore,
     AppDatabase? db,
   })  : clock = FixedClock(now ?? kHarnessNow),
         backend = backend ?? FakeAuthBackend(),
         social = social ?? FakeSocialSignIn(),
         camera = camera ?? FakeCameraPermission(),
         notifications = notifications ?? FakeNotificationGateway(),
+        network = network ?? FakeNetworkStatus(),
         db = db ?? AppDatabase.inMemory(),
         _ownsDb = db == null {
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -60,8 +63,14 @@ class AppHarness {
   /// S09: what the app scheduled on the device (permission scripted here).
   final FakeNotificationGateway notifications;
 
+  /// S09b: device network state (문의 전송), scripted by `current`.
+  final FakeNetworkStatus network;
+
   /// S09: the on-device photo directory (a temp dir, removed on dispose).
   late final Directory photoDir = Directory.systemTemp.createTempSync('soongong-photos-');
+
+  /// S09b: an injected store (e.g. `FailingPhotoStore`), else a plain one on [photoDir].
+  final PhotoStore? photoStore;
 
   /// S09: files handed to the share sheet by 내 기록 내보내기.
   final List<ExportFile> exports = <ExportFile>[];
@@ -85,7 +94,8 @@ class AppHarness {
       syncEngineProvider.overrideWithValue(FakeSyncEngine(delay: Duration.zero)),
       billingGatewayProvider.overrideWithValue(FakeBillingGateway(delay: Duration.zero)),
       notificationGatewayProvider.overrideWithValue(notifications),
-      photoStoreProvider.overrideWithValue(PhotoStore(() async => photoDir)),
+      networkStatusProvider.overrideWithValue(network),
+      photoStoreProvider.overrideWithValue(photoStore ?? PhotoStore(() async => photoDir)),
       shareExportProvider.overrideWithValue((file) async {
         final err = shareError;
         if (err != null) throw err;

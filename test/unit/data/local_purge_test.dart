@@ -1,6 +1,7 @@
-// LocalPurge (S09, 모든 기록 삭제): every record of the user leaves the
-// device — sync tables · photos · outbox · conflicts · snapshot · cursor —
-// the server epoch is stored, and another user's rows are untouched.
+// LocalPurge (S09 · S09b, 모든 기록 삭제): every record of the user leaves
+// the device — sync tables · outbox · conflicts · snapshot · cursor — the
+// server epoch is stored, photo rows are left to PhotoRetention, another
+// user's rows are untouched, and the pending marker round-trips.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/core/domain/enums.dart';
@@ -67,7 +68,7 @@ void main() {
     for (final t in h.db.syncTables) {
       expect(await count(t.actualTableName, userId: 'u1'), 0, reason: t.actualTableName);
     }
-    expect(await count(h.db.photos.actualTableName), 0);
+    expect(await count(h.db.photos.actualTableName), 1, reason: 'photo rows belong to PhotoRetention.wipeAll (failed files keep their row, S09b)');
     expect(await count(h.db.syncOutbox.actualTableName), 0);
     expect(await count(h.db.syncConflicts.actualTableName), 0);
     expect(await count(h.db.sessionSnapshots.actualTableName), 0);
@@ -77,5 +78,18 @@ void main() {
     expect(cursor, isNull);
     expect(await count('subjects', userId: 'u2'), 1, reason: 'other account untouched');
     expect(await h.subjects.getAll(), isEmpty);
+  });
+
+  test('pending marker: markPending stores the epoch + marker, run keeps the epoch, clearPending removes the marker', () async {
+    final purge = LocalPurge(h.db, h.ctx);
+    expect(await purge.pendingEpoch(), isNull);
+    await purge.markPending(5);
+    expect(await purge.pendingEpoch(), 5);
+    expect(await h.writer.purgeEpoch(), 5);
+    await purge.run(epoch: 5);
+    expect(await purge.pendingEpoch(), 5, reason: 'run alone does not close the marker');
+    await purge.clearPending();
+    expect(await purge.pendingEpoch(), isNull);
+    expect(await h.writer.purgeEpoch(), 5);
   });
 }

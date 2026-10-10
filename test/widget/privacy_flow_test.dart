@@ -12,10 +12,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/core/domain/enums.dart';
 import 'package:soongong/core/router/app_router.dart';
 import 'package:soongong/core/strings/billing_strings.dart';
+import 'package:soongong/core/strings/common_strings.dart';
+import 'package:soongong/core/strings/consent_strings.dart';
 import 'package:soongong/core/strings/home_strings.dart';
+import 'package:soongong/core/strings/measure_strings.dart';
 import 'package:soongong/core/strings/privacy_strings.dart';
 import 'package:soongong/data/auth/auth_mode.dart';
 import 'package:soongong/data/repositories/repositories.dart';
+import 'package:soongong/features/measure/domain/away_policy.dart';
 import 'package:soongong/features/measure/domain/segment.dart';
 import 'package:soongong/features/measure/domain/session_snapshot.dart';
 import 'package:soongong/features/privacy/presentation/privacy_screen.dart';
@@ -63,17 +67,30 @@ void main() {
   testWidgets('hero · D14 table · corrections fact · camera toggle', (tester) async {
     await openPrivacy(tester);
     expect(find.byKey(PrivacyKeys.heroOn), findsOneWidget);
-    expect(find.text(PrivacyStrings.storedNeverBody), findsOneWidget);
-    expect(find.text(PrivacyStrings.correctionsStatus(0, true)), findsOneWidget);
+    expect(find.byKey(PrivacyKeys.storedTable), findsOneWidget);
+    for (final (data, _, _) in PrivacyStrings.d14Rows) {
+      expect(find.text(data), findsOneWidget, reason: 'D14 row: $data');
+    }
+    expect(find.text(PrivacyStrings.storedVendorPending), findsOneWidget);
+    expect(find.textContaining('학습 미사용'), findsNothing, reason: 'no vendor promise beyond D14 (S09b)');
+    expect(find.text(PrivacyStrings.correctionsStatus(0, AwayPolicy.thresholdFor(0).inSeconds)), findsOneWidget);
+    for (final line in ConsentStrings.readingLines) {
+      expect(find.text(line), findsOneWidget, reason: 'consent ② wording reused');
+    }
     await tapKey(tester, PrivacyKeys.cameraSwitch);
     expect(find.byKey(PrivacyKeys.heroOff), findsOneWidget);
     expect((await h.container.read(settingsRepositoryProvider).get()).seatDetectionEnabled, isFalse);
+    // §4.5-9 감도 자동 조정 toggle (default on) → setting
+    await tapKey(tester, PrivacyKeys.sensitivitySwitch);
+    expect((await h.container.read(settingsRepositoryProvider).get()).sensitivityAuto, isFalse);
+    await tapKey(tester, PrivacyKeys.corrections);
+    expect(find.text(MeasureStrings.historyTitle), findsOneWidget, reason: 'links to the S06 corrections screen');
     await h.unmount(tester);
   });
 
   testWidgets('reading row (free): 잠금 해제 → paywall', (tester) async {
     await openPrivacy(tester);
-    expect(find.text(PrivacyStrings.readingOffBody), findsOneWidget);
+    expect(find.text(PrivacyStrings.readingStatusOff), findsOneWidget);
     await tapKey(tester, PrivacyKeys.readingAction);
     expect(find.text(BillingStrings.paywallTitle), findsWidgets);
     await h.unmount(tester);
@@ -89,7 +106,8 @@ void main() {
 
     await tapKey(tester, PrivacyKeys.photosOpen);
     expect(find.text(PrivacyStrings.photosSheetTitle), findsOneWidget);
-    expect(find.text(PrivacyStrings.photoUnknownRequest), findsNWidgets(2));
+    expect(find.byKey(PrivacyKeys.photoDelete(a)), findsOneWidget);
+    expect(find.byKey(PrivacyKeys.photoDelete(b)), findsOneWidget);
     expect(find.textContaining(PrivacyStrings.photoExpires(PrivacyStrings.monthDay(11, 1))), findsNWidgets(2));
     await tester.tap(find.byKey(PrivacyKeys.photoDelete(a)));
     await tester.pumpAndSettle();
@@ -174,15 +192,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(PrivacyStrings.title), findsOneWidget);
     await tapKey(tester, PrivacyKeys.deleteAll);
-    expect(find.text(PrivacyStrings.deleteAllTitle), findsOneWidget);
-    expect(find.textContaining(PrivacyStrings.deleteAllItems.first), findsOneWidget);
-    await tester.tap(find.text(PrivacyStrings.deleteAllConfirm).last);
-    await tester.pumpAndSettle();
-    expect(find.text(PrivacyStrings.deleteAllBlocked), findsOneWidget);
+    expect(find.text(PrivacyStrings.deleteAllBlocked), findsOneWidget, reason: 'entry blocked while measuring');
+    expect(find.text(PrivacyStrings.deleteAllTitle), findsNothing);
     expect(await sessions.getAll(), isNotEmpty);
 
     await sessions.clearSnapshot();
     await tapKey(tester, PrivacyKeys.deleteAll);
+    expect(find.text(PrivacyStrings.deleteAllTitle), findsOneWidget, reason: 'delDlg: impact first');
+    expect(find.textContaining(PrivacyStrings.deleteAllItems.first), findsOneWidget);
+    expect(find.textContaining(PrivacyStrings.deleteAllKeeps), findsOneWidget);
+    await tester.tap(find.text(PrivacyStrings.deleteAllNext));
+    await tester.pumpAndSettle();
+    expect(find.text(PrivacyStrings.deleteAllFinalTitle), findsOneWidget, reason: 'delAllDlg: final confirmation');
+    expect(await sessions.getAll(), isNotEmpty, reason: 'nothing deleted before the final step');
+    await tester.tap(find.text(CommonStrings.cancel).last);
+    await tester.pumpAndSettle();
+    expect(await sessions.getAll(), isNotEmpty, reason: 'cancelled at the final step → nothing deleted');
+    await tapKey(tester, PrivacyKeys.deleteAll);
+    await tester.tap(find.text(PrivacyStrings.deleteAllNext));
+    await tester.pumpAndSettle();
     await tester.tap(find.text(PrivacyStrings.deleteAllConfirm).last);
     await tester.pumpAndSettle();
     expect(find.text(PrivacyStrings.deleteAllDone), findsOneWidget);

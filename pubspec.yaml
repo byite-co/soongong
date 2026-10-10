@@ -83,6 +83,7 @@ dependencies:
   # sha256 of the Apple nonce (already a transitive dependency).
   crypto: ^3.0.7
   wakelock_plus: ^1.8.0
+  connectivity_plus: ^7.3.1
 
 dev_dependencies:
   flutter_test:

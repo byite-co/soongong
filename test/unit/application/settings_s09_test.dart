@@ -134,16 +134,25 @@ void main() {
       expect(await c.setWeekStart(DateTime.sunday), isTrue);
       expect(await c.setTheme(ThemeSetting.dark), isTrue);
       expect(await c.setSeatDetection(on: false), isTrue);
-      await seedWrong();
+      await h.container.read(plannerRepositoryProvider).createRecurrence(
+            title: '학원',
+            weekdayMask: 1 << 5 | 1 << 6,
+            startTime: const LocalTime(16, 0),
+            endTime: const LocalTime(17, 0),
+          );
       expect(await c.setNotifReviewTime(const LocalTime(21, 0)), isTrue);
+      expect(await c.setNotifEvent10min(on: true), isTrue);
+      expect(await c.setSensitivityAuto(on: false), isTrue);
       final s = await repo.get();
       expect(s.dailyGoalMinutes, 180);
       expect(s.weekStart, 7);
       expect(s.theme, ThemeSetting.dark);
       expect(s.seatDetectionEnabled, isFalse);
+      expect(s.sensitivityAuto, isFalse);
       expect(s.notifReviewTime, const LocalTime(21, 0));
-      expect(h.notifications.replaceCalls, greaterThan(0));
-      expect(h.notifications.scheduled.map((n) => n.id), contains(100));
+      expect(s.notifEvent10min, isTrue);
+      expect(h.notifications.replaceCalls, greaterThan(0), reason: 'notification writes re-plan');
+      expect(h.notifications.scheduled.map((n) => n.at), contains(DateTime(2026, 10, 3, 15, 50)));
     });
   });
 
@@ -170,7 +179,11 @@ void main() {
       await h.container.read(settingsRepositoryProvider).setNotifReviewTime(const LocalTime(21, 0));
       await h.settle();
       await scheduler.reschedule();
-      expect(h.notifications.scheduled.map((n) => n.id), contains(100));
+      expect(h.notifications.scheduled.map((n) => n.id), isNot(contains(100)), reason: 'free: no review reminder (S09b)');
+      (h.container.read(billingGatewayProvider) as FakeBillingGateway).force(EntitlementStatus.premium);
+      await h.settle(40);
+      await scheduler.reschedule();
+      expect(h.notifications.scheduled.map((n) => n.id), contains(100), reason: 'entitlement change re-plans');
 
       h.notifications.permission = NotificationPermission.denied;
       final before = h.notifications.cancelCalls;
@@ -309,8 +322,9 @@ void main() {
 
     test('delete account: delete-account → photos → local DB wiped; a server failure changes nothing', () async {
       h.backend.responses['delete-account'] = Exception('offline');
-      expect(() => h.container.read(accountControllerProvider).deleteAccount(), throwsException);
+      await expectLater(h.container.read(accountControllerProvider).deleteAccount(), throwsException);
       expect(await h.container.read(subjectRepositoryProvider).getAll(), isNotEmpty);
+      expect(h.backend.callNames, isNot(contains('signOut')));
       h.backend.responses.remove('delete-account');
       await h.container.read(accountControllerProvider).deleteAccount();
       expect(h.backend.callNames, containsAllInOrder(<String>['delete-account', 'signOut']));

@@ -16,6 +16,7 @@ import 'package:soongong/core/domain/local_date.dart';
 import 'package:soongong/core/router/app_router.dart';
 import 'package:soongong/core/strings/auth_strings.dart';
 import 'package:soongong/core/strings/billing_strings.dart';
+import 'package:soongong/core/strings/common_strings.dart';
 import 'package:soongong/core/strings/help_strings.dart';
 import 'package:soongong/core/strings/home_strings.dart';
 import 'package:soongong/core/strings/privacy_strings.dart';
@@ -25,6 +26,7 @@ import 'package:soongong/data/auth/auth_mode.dart';
 import 'package:soongong/data/auth/auth_models.dart';
 import 'package:soongong/data/repositories/repositories.dart';
 import 'package:soongong/features/measure/domain/segment.dart';
+import 'package:soongong/features/settings/presentation/account_screen.dart';
 import 'package:soongong/features/settings/presentation/settings_screen.dart';
 
 import '../helpers/app_harness.dart';
@@ -68,12 +70,21 @@ void main() {
     expect(find.text(SettingsStrings.cameraOn), findsOneWidget);
     expect(find.text(SettingsStrings.readingLocked), findsOneWidget);
     expect(find.text(SettingsStrings.localOnlyTitle), findsOneWidget);
-    expect(find.byKey(SettingsKeys.logout), findsNothing);
     await tester.ensureVisible(find.byKey(SettingsKeys.version));
     await tester.pumpAndSettle();
     expect(find.text(SettingsStrings.notifOff), findsOneWidget);
     expect(find.text(SettingsStrings.planFree), findsOneWidget);
     expect(find.text(SettingsStrings.version('0.1.0')), findsOneWidget);
+    // 원본 §4.1-1 앱 정보: 오픈소스 라이선스
+    await tapRow(tester, SettingsKeys.licensesRow);
+    expect(find.byType(LicensePage), findsOneWidget);
+    h.container.read(appRouterProvider).pop();
+    await tester.pumpAndSettle();
+    // local-only account screen
+    await tapRow(tester, SettingsKeys.accountRow);
+    expect(find.text(SettingsStrings.accountTitle), findsWidgets);
+    expect(find.text(SettingsStrings.localOnlyBody), findsOneWidget);
+    expect(find.byKey(AccountKeys.logout), findsNothing);
     await h.unmount(tester);
   });
 
@@ -183,6 +194,27 @@ void main() {
     await h.unmount(tester);
   });
 
+  testWidgets('알림 sheet: 다른 시각 선택 → typed hour·minute stored as LocalTime (원본 §4.4-5, S09b)', (tester) async {
+    await openSettings(tester);
+    await tapRow(tester, SettingsKeys.notifRow);
+    await tester.tap(find.byKey(SettingsKeys.notifReviewSwitch));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(SettingsKeys.notifPickTime));
+    await tester.pumpAndSettle();
+    final fields = find.descendant(of: find.byType(Dialog), matching: find.byType(TextField));
+    expect(fields, findsNWidgets(2));
+    await tester.enterText(fields.at(0), '7');
+    await tester.enterText(fields.at(1), '45');
+    await tester.tap(find.text(CommonStrings.confirm).last);
+    await tester.pumpAndSettle();
+    expect((await h.container.read(settingsRepositoryProvider).get()).notifReviewTime, const LocalTime(7, 45));
+    expect(find.byKey(SettingsKeys.notifTime('07:45')), findsOneWidget, reason: 'a custom time shows as the selected chip');
+    h.container.read(appRouterProvider).pop();
+    await tester.pumpAndSettle();
+    expect(find.text(SettingsStrings.notifReviewAt('07:45')), findsOneWidget);
+    await h.unmount(tester);
+  });
+
   testWidgets('rows navigate: 과목 관리 · 카메라와 개인정보 · 요금제 · 도움말', (tester) async {
     await openSettings(tester);
     await tapRow(tester, SettingsKeys.subjectsRow);
@@ -211,13 +243,25 @@ void main() {
       );
     });
 
-    testWidgets('card shows email · provider · sync fact; 로그아웃 → gate', (tester) async {
+    Future<void> openAccount(WidgetTester tester) async {
       await openSettings(tester);
       expect(find.text('a@x.io'), findsOneWidget);
-      expect(find.text('A'), findsOneWidget);
-      expect(find.textContaining(SettingsStrings.providerGoogle), findsOneWidget);
       expect(find.text(SettingsStrings.localOnlyTitle), findsNothing);
-      await tapRow(tester, SettingsKeys.logout);
+      await tapRow(tester, SettingsKeys.accountRow);
+      expect(find.text(SettingsStrings.accountTitle), findsWidgets);
+    }
+
+    testWidgets('account screen: email · provider · consent ①·② facts · sync "—" / 미연결; 로그아웃 → gate', (tester) async {
+      await openAccount(tester);
+      expect(find.text('a@x.io'), findsOneWidget);
+      expect(find.text('A'), findsOneWidget);
+      expect(find.text(SettingsStrings.providerGoogle), findsOneWidget);
+      expect(find.text(SettingsStrings.consentVersionAt('2026-10-01', '2026-10-01')), findsOneWidget, reason: '동의 ① version · date');
+      expect(find.text(SettingsStrings.consentNone), findsOneWidget, reason: '동의 ② not granted in this profile');
+      expect(find.byKey(AccountKeys.revoke), findsNothing);
+      expect(find.text(SettingsStrings.syncLastNone), findsOneWidget);
+      expect(find.text(SettingsStrings.syncNotConnected), findsOneWidget);
+      await tapRow(tester, AccountKeys.logout);
       expect(find.text(SettingsStrings.logoutTitle), findsOneWidget);
       await tester.tap(find.text(SettingsStrings.logoutConfirm).last);
       await tester.pumpAndSettle();
@@ -226,10 +270,38 @@ void main() {
       await h.unmount(tester);
     });
 
+    testWidgets('동의 ② active → 철회 → update-consent(granted:false) → fact updated', (tester) async {
+      h.backend.profileRow = <String, dynamic>{
+        ...kProfileRowOnboardingDone,
+        'consent_reading_version': '2026-10-01',
+        'consent_reading_at': '2026-10-02T01:00:00+00:00',
+      };
+      h.backend.responses['update-consent'] = <String, dynamic>{
+        'profile': <String, dynamic>{
+          ...kProfileRowOnboardingDone,
+          'consent_reading_version': '2026-10-01',
+          'consent_reading_at': '2026-10-02T01:00:00+00:00',
+          'consent_reading_revoked_at': '2026-10-03T01:00:00+00:00',
+        },
+      };
+      await openAccount(tester);
+      expect(find.text(SettingsStrings.consentVersionAt('2026-10-01', '2026-10-02')), findsOneWidget);
+      await tapRow(tester, AccountKeys.revoke);
+      expect(find.text(SettingsStrings.consentRevokeTitle), findsOneWidget);
+      await tester.tap(find.text(SettingsStrings.consentRevokeConfirm).last);
+      await tester.pumpAndSettle();
+      final call = h.backend.calls.firstWhere((c) => c.name == 'update-consent');
+      expect(call.body['granted'], isFalse);
+      expect(find.text(SettingsStrings.consentRevoked), findsOneWidget);
+      expect(find.text(SettingsStrings.consentRevokedAt('2026-10-03')), findsOneWidget);
+      expect(find.byKey(AccountKeys.revoke), findsNothing);
+      await h.unmount(tester);
+    });
+
     testWidgets('계정 삭제 → delete-account → gate; a failure keeps the modal with a retry line', (tester) async {
-      await openSettings(tester);
+      await openAccount(tester);
       h.backend.responses['delete-account'] = Exception('offline');
-      await tapRow(tester, SettingsKeys.deleteAccount);
+      await tapRow(tester, AccountKeys.deleteAccount);
       expect(find.text(SettingsStrings.deleteAccountTitle), findsOneWidget);
       await tester.tap(find.text(SettingsStrings.deleteAccountConfirm).last);
       await tester.pumpAndSettle();

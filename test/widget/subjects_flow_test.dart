@@ -165,6 +165,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(SubjectsKeys.delete), findsNothing);
     expect(find.text(SubjectsStrings.defaultCannotDelete), findsOneWidget);
+    expect(find.text(SubjectsStrings.defaultColorLocked), findsOneWidget, reason: '§4.3-4: name only');
+    await tester.tap(find.byKey(SubjectsKeys.color(2)));
+    await tester.pumpAndSettle();
+    await typeName(tester, '그 외');
+    await tester.tap(find.byKey(SubjectsKeys.save));
+    await tester.pumpAndSettle();
+    final renamed = (await repo().get(def.id))!;
+    expect(renamed.name, '그 외');
+    expect(renamed.colorIndex, SubjectRepository.defaultColorIndex, reason: 'colour locked');
+    await tester.tap(find.byKey(SubjectsKeys.row(def.id)));
+    await tester.pumpAndSettle();
     h.container.read(appRouterProvider).pop();
     await tester.pumpAndSettle();
 

@@ -289,17 +289,20 @@ final class ShareExportProvider
 
 String _$shareExportHash() => r'3edf7d72b251b647bcfeb1b125febcae019ea39f';
 
-/// keepAlive: used across async gaps (modal confirm · share sheet).
+/// Rebuilt when the account (write context) changes; the old instance is
+/// disposed so its in-flight work stops.
 
 @ProviderFor(privacyActions)
 final privacyActionsProvider = PrivacyActionsProvider._();
 
-/// keepAlive: used across async gaps (modal confirm · share sheet).
+/// Rebuilt when the account (write context) changes; the old instance is
+/// disposed so its in-flight work stops.
 
 final class PrivacyActionsProvider
     extends $FunctionalProvider<PrivacyActions, PrivacyActions, PrivacyActions>
     with $Provider<PrivacyActions> {
-  /// keepAlive: used across async gaps (modal confirm · share sheet).
+  /// Rebuilt when the account (write context) changes; the old instance is
+  /// disposed so its in-flight work stops.
   PrivacyActionsProvider._()
     : super(
         from: null,
@@ -333,4 +336,4 @@ final class PrivacyActionsProvider
   }
 }
 
-String _$privacyActionsHash() => r'6f6e006891c5cc8d803df80889e6a18b31c71f6e';
+String _$privacyActionsHash() => r'fcff805d1e86969368a2c1f7dd613925b3ea2cdb';

@@ -73,20 +73,23 @@ class SubjectsController {
   }
 
   /// Validates against the live subjects, then creates ([id] null) or
-  /// updates. Never throws.
+  /// updates. The default subject (기타) only renames — its colour is kept
+  /// whatever the draft says (원본 S09 §4.3-4, [S09b]). Never throws.
   Future<SubjectSaveOutcome> save(SubjectDraft draft, {String? id}) async {
     if (_disposed) return SubjectSaveFailed(StateError('controller disposed'));
     try {
       return await subjects.writer.runOwnedTransaction(
         () async {
           final live = await subjects.getAll();
-          final errors = draft.validate(live, editingId: id);
+          final existing = id == null ? null : live.where((s) => s.id == id).firstOrNull;
+          final effective = existing != null && existing.isDefault ? draft.copyWith(colorIndex: existing.colorIndex) : draft;
+          final errors = effective.validate(live, editingId: id);
           if (errors.isNotEmpty) return SubjectSaveInvalid(errors);
           if (id == null) {
-            final created = await subjects.create(name: draft.trimmedName, colorIndex: draft.colorIndex);
+            final created = await subjects.create(name: effective.trimmedName, colorIndex: effective.colorIndex);
             return SubjectSaved(created.id);
           }
-          await subjects.update(id, name: draft.trimmedName, colorIndex: draft.colorIndex);
+          await subjects.update(id, name: effective.trimmedName, colorIndex: effective.colorIndex);
           return SubjectSaved(id);
         },
         alive: () => !_disposed,

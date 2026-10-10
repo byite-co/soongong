@@ -19,32 +19,37 @@ abstract final class PrivacyStrings {
   static const String how3Title = '남는 것은 시간뿐';
   static const String how3Body = '착석·이탈 시각과 길이만 저장됩니다';
 
-  // Stored data table (D14)
+  // Stored data table — D14 rows as decided (data · location · retention)
   static const String storedTitle = '저장되는 데이터';
-  static const String storedFocus = '집중';
-  static const String storedFocusBody = '시작 시각 · 종료 시각 · 과목';
-  static const String storedAway = '이탈';
-  static const String storedAwayBody = '시작 시각 · 종료 시각';
-  static const String storedCorrection = '정정';
-  static const String storedCorrectionBody = '되돌린 구간 · 되돌린 시각';
-  static const String storedReading = '판독';
-  static const String storedReadingBody = '문항별 마크 · 판독 시각 · 사진(기기 30일)';
-  static const String storedAccount = '계정';
-  static const String storedAccountBody = '로그인 이메일 · 구독 상태 · 동기화 시각';
-  static const String storedNever = '저장하지 않는 것';
-  static const String storedNeverBody = '카메라 영상·얼굴 특징 · 위치 · 연락처 · 생년월일';
+  static const String storedColumns = '데이터 · 위치 · 보관·삭제';
+  static const List<(String, String, String)> d14Rows = <(String, String, String)>[
+    ('착석 감지 프레임', '기기 메모리', '처리 즉시 해제 · 파일 저장·외부 전송 없음'),
+    ('착석 샘플(불리언·시각)', '기기 → 계정 동기화', '세션 구간으로만 저장 · 사용자가 지울 때까지'),
+    ('판독 사진·파생 이미지(압축본·크롭)', '기기', '최초 보관일 +30일 · 즉시 삭제·로그아웃 삭제 · 재시도로 연장 없음 · 앱 시작·포그라운드·접근 시 만료분 삭제'),
+    ('판독 사진·파생 이미지', '자사 서버', '처리 종료 직후 삭제 시도 · 실패분 재시도 · 잔여분은 업로드 +24시간 안에 삭제'),
+    ('판독 사진', '외부 AI 벤더', '전송 사실 명시 · 보관·학습 사용·로그 정책은 확정 전(확인 중)'),
+    ('미저장 판독 결과', '서버 → 기기 캐시', '7일 뒤 또는 버리기 시 서버 원문 삭제 · 저장한 확정 마크는 오답 기록의 일부'),
+    ('판독 결과·오답·복습·재풀이', '기기 → 계정 동기화', '사용자가 지울 때까지 · 구독 종료 시 읽기 전용'),
+    ('세션·플래너·과목·설정', '기기 → 계정 동기화', '사용자가 지울 때까지'),
+    ('계정(이메일·로그인 방식·동의 이력)', '서버', '계정 삭제까지 · 생년월일은 어디에도 저장하지 않음'),
+    ('가입 패스', '서버', '소비 시 즉시 삭제 · 미소비는 발급 +10분 뒤 삭제 · 생년월일 미포함'),
+    ('가입 승인 기록', '서버', '계정 삭제 시 삭제 · 연령 확인 결과·승인 시각·로그인 방식만'),
+  ];
+  static const String storedVendorPending = '외부 AI 벤더의 보관·학습·로그 조건은 확정 전입니다(확인 중).';
 
   // Settings rows
   static const String settingsTitle = '설정';
   static const String cameraToggle = '카메라 착석 감지';
   static const String cameraToggleHint = '끄면 수동 타이머로만 기록합니다';
   static const String corrections = '잘못 감지 정정 이력';
-  static String correctionsStatus(int count, bool auto) =>
-      '되돌린 구간 $count건 · ${auto ? '감도 자동 조정' : '감도 수동'}';
+  static String correctionsStatus(int count, int thresholdSeconds) => '되돌린 구간 $count건 · 자리 비움 판정 $thresholdSeconds초';
+  static const String correctionsOpen = '정정 이력 보기';
+  static const String sensitivityAuto = '감도 자동 조정';
+  static const String sensitivityAutoHint = '최근 2주 되돌림 3건마다 한 단계';
   static const String reading = '숙제 사진 · 채점 판독';
   static const String premiumBadge = '프리미엄';
-  static const String readingOnBody = '유일하게 기기 밖으로 나가는 데이터. 외부 AI 전송 · 30일 뒤 삭제 · 학습 미사용';
-  static const String readingOffBody = '꺼져 있음 · 켜면 채점 페이지 사진만 외부 AI로 전송됩니다 (30일 뒤 삭제)';
+  static const String readingStatusOn = '판독 사용 가능';
+  static const String readingStatusOff = '판독 꺼짐 · 프리미엄에서 켤 수 있습니다';
   static const String unlock = '잠금 해제';
   static const String resubscribe = '재구독';
 
@@ -93,8 +98,12 @@ abstract final class PrivacyStrings {
     '· 직접 추가한 과목 · 앱 설정',
   ];
   static const String deleteAllKeeps = '계정의 동기화 기록도 함께 지워집니다 · 구독과 로그인은 유지';
+  static const String deleteAllNext = '다음';
+  static const String deleteAllFinalTitle = '정말 모든 기록을 삭제할까요?';
+  static const String deleteAllFinalBody = '서버와 이 기기의 기록이 지금 지워지며 되돌릴 수 없습니다.\n로그인과 구독 상태는 유지됩니다.';
   static const String deleteAllConfirm = '삭제';
   static const String deleteAllDone = '모든 기록을 삭제했습니다';
+  static String deleteAllPartial(int failed) => '기록은 삭제했습니다 · 사진 $failed장은 삭제하지 못했습니다 · 보관 중 사진에서 다시 시도';
   static const String deleteAllBlocked = '측정 중에는 삭제할 수 없습니다 · 집중을 끝낸 뒤 다시 시도';
   static const String deleteAllFailed = '삭제하지 못했습니다 · 연결을 확인한 뒤 다시 시도';
 

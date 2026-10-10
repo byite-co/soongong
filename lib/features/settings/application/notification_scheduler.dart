@@ -1,17 +1,21 @@
-// NotificationScheduler (S09): keeps the device's pending notifications
-// equal to `NotificationPlan.build(...)` — re-planned when the settings,
-// the review queue, the recurrences or the planner events change, when the
-// app returns to the foreground and at startup. Permission is read from
-// the gateway and exposed for the 알림 sheet (`nfDenied` flow).
+// NotificationScheduler (S09 · S09b): keeps the device's pending
+// notifications equal to `NotificationPlan.build(...)` — re-planned when the
+// settings, the review queue, the recurrences or the entitlement change,
+// when the app returns to the foreground and at startup. Permission is read
+// from the gateway and exposed for the 알림 sheet (`nfDenied` flow).
+//
+// Account boundary ([S09b]): a run captures the account it plans for and
+// abandons itself after any await if the write context moved to another
+// account, so a stale plan never overwrites the next account's schedule.
 
 import 'dart:async';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/contracts/billing_gateway.dart';
 import '../../../core/contracts/notification_gateway.dart';
 import '../../../core/contracts/providers.dart';
 import '../../../core/domain/entities/entities.dart';
-import '../../../core/domain/local_date.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../domain/notification_plan.dart';
@@ -33,6 +37,7 @@ class NotificationScheduler {
     _ref.listen<AsyncValue<AppSettings>>(_settingsProvider, (_, _) => unawaited(reschedule()));
     _ref.listen<AsyncValue<List<Recurrence>>>(_recurrencesProvider, (_, _) => unawaited(reschedule()));
     _ref.listen<AsyncValue<List<ReviewEntry>>>(_queueProvider, (_, _) => unawaited(reschedule()));
+    _ref.listen<AsyncValue<Entitlement>>(_entitlementProvider, (_, _) => unawaited(reschedule()));
     unawaited(reschedule());
   }
 
@@ -57,19 +62,31 @@ class NotificationScheduler {
 
   Future<void> _run() async {
     try {
+      final owner = _ref.read(writeContextProvider).userId;
+      bool stale() => _ref.read(writeContextProvider).userId != owner;
       final gateway = _ref.read(notificationGatewayProvider);
-      final settings = await _ref.read(settingsRepositoryProvider).get();
-      final now = _ref.read(appClockProvider).now();
-      final today = LocalDate.of(now);
+      final settingsRepo = _ref.read(settingsRepositoryProvider);
+      final reviewRepo = _ref.read(reviewRepositoryProvider);
       final planner = _ref.read(plannerRepositoryProvider);
+      final entitled = _ref.read(_entitlementProvider).value?.entitled ?? false;
+
+      final settings = await settingsRepo.get();
+      if (stale()) return;
+      final queue = await reviewRepo.getQueue();
+      if (stale()) return;
+      final recurrences = await planner.getRecurrences();
+      if (stale()) return;
+      final now = _ref.read(appClockProvider).now();
       final plan = NotificationPlan.build(
         now: now,
         settings: settings,
-        queue: await _ref.read(reviewRepositoryProvider).getQueue(),
-        recurrences: await planner.getRecurrences(),
-        events: await planner.getItemsBetween(today, today.addDays(NotificationPlan.horizonDays - 1)),
+        entitled: entitled,
+        queue: queue,
+        recurrences: recurrences,
       );
-      if (await gateway.permissionStatus() == NotificationPermission.denied || plan.isEmpty) {
+      final permission = await gateway.permissionStatus();
+      if (stale()) return;
+      if (permission == NotificationPermission.denied || plan.isEmpty) {
         await gateway.cancelAll();
       } else {
         await gateway.replaceAll(plan);
@@ -88,6 +105,9 @@ Stream<List<Recurrence>> _recurrences(Ref ref) => ref.watch(plannerRepositoryPro
 
 @riverpod
 Stream<List<ReviewEntry>> _queue(Ref ref) => ref.watch(reviewRepositoryProvider).watchQueue();
+
+@riverpod
+Stream<Entitlement> _entitlement(Ref ref) => ref.watch(billingGatewayProvider).entitlement;
 
 @Riverpod(keepAlive: true)
 NotificationScheduler notificationScheduler(Ref ref) => NotificationScheduler(ref);

@@ -128,6 +128,45 @@ final class _QueueProvider
 
 String _$_queueHash() => r'89f77d26405229c59ccf81c6a93b6586a7b97c27';
 
+@ProviderFor(_entitlement)
+final _entitlementProvider = _EntitlementProvider._();
+
+final class _EntitlementProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<Entitlement>,
+          Entitlement,
+          Stream<Entitlement>
+        >
+    with $FutureModifier<Entitlement>, $StreamProvider<Entitlement> {
+  _EntitlementProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'_entitlementProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$_entitlementHash();
+
+  @$internal
+  @override
+  $StreamProviderElement<Entitlement> $createElement(
+    $ProviderPointer pointer,
+  ) => $StreamProviderElement(pointer);
+
+  @override
+  Stream<Entitlement> create(Ref ref) {
+    return _entitlement(ref);
+  }
+}
+
+String _$_entitlementHash() => r'9936e2aa1809d585f218324881b4ddcb9b948298';
+
 @ProviderFor(notificationScheduler)
 final notificationSchedulerProvider = NotificationSchedulerProvider._();
 
