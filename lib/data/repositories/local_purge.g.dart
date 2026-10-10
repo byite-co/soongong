@@ -8,20 +8,24 @@ part of 'local_purge.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
+/// keepAlive: watched by the keepAlive `privacyActionsProvider`.
 
 @ProviderFor(localPurge)
 final localPurgeProvider = LocalPurgeProvider._();
 
+/// keepAlive: watched by the keepAlive `privacyActionsProvider`.
+
 final class LocalPurgeProvider
     extends $FunctionalProvider<LocalPurge, LocalPurge, LocalPurge>
     with $Provider<LocalPurge> {
+  /// keepAlive: watched by the keepAlive `privacyActionsProvider`.
   LocalPurgeProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
         name: r'localPurgeProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -48,4 +52,4 @@ final class LocalPurgeProvider
   }
 }
 
-String _$localPurgeHash() => r'76066fb51ba80b0f3b74a3f628f123d262b9e5f2';
+String _$localPurgeHash() => r'667db3a29d6ad2d58e6ed75dc93ddd0bfe1396d2';

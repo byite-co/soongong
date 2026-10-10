@@ -66,5 +66,6 @@ class LocalPurge {
       db.into(db.syncMeta).insertOnConflictUpdate(SyncMetaCompanion.insert(key: key, value: value));
 }
 
-@riverpod
+/// keepAlive: watched by the keepAlive `privacyActionsProvider`.
+@Riverpod(keepAlive: true)
 LocalPurge localPurge(Ref ref) => LocalPurge(ref.watch(appDatabaseProvider), ref.watch(writeContextProvider));
