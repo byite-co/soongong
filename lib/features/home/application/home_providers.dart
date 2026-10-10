@@ -8,6 +8,7 @@ import '../../../core/contracts/providers.dart';
 import '../../../core/domain/entities/entities.dart';
 import '../../../core/domain/ids.dart';
 import '../../../core/domain/local_date.dart';
+import '../../../core/lifecycle/calendar_day.dart';
 import '../../../core/strings/subjects_strings.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../measure/domain/session_snapshot.dart';
@@ -17,8 +18,9 @@ import '../domain/streak_calculator.dart';
 
 part 'home_providers.g.dart';
 
+/// Today, refreshed at midnight and on app resume ([S08b] `CalendarDay`).
 @riverpod
-LocalDate homeToday(Ref ref) => LocalDate.of(ref.watch(appClockProvider).now());
+LocalDate homeToday(Ref ref) => ref.watch(calendarDayProvider);
 
 @riverpod
 Stream<List<StudySession>> homeRecentSessions(Ref ref) {

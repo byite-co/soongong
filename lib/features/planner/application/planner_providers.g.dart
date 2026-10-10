@@ -8,13 +8,17 @@ part of 'planner_providers.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
+/// Today, refreshed at midnight and on app resume ([S08b] `CalendarDay`).
 
 @ProviderFor(plannerToday)
 final plannerTodayProvider = PlannerTodayProvider._();
 
+/// Today, refreshed at midnight and on app resume ([S08b] `CalendarDay`).
+
 final class PlannerTodayProvider
     extends $FunctionalProvider<LocalDate, LocalDate, LocalDate>
     with $Provider<LocalDate> {
+  /// Today, refreshed at midnight and on app resume ([S08b] `CalendarDay`).
   PlannerTodayProvider._()
     : super(
         from: null,
@@ -48,7 +52,7 @@ final class PlannerTodayProvider
   }
 }
 
-String _$plannerTodayHash() => r'f1a44ab4139f87045068eb90e31b03ecf50d4003';
+String _$plannerTodayHash() => r'6c7b1b3062f076d5fd174ae5ac0c89b3cd33fa81';
 
 @ProviderFor(plannerSettings)
 final plannerSettingsProvider = PlannerSettingsProvider._();

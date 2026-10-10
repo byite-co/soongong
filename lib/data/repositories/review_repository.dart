@@ -80,6 +80,14 @@ class ReviewRepository {
             .map(retryRecordOf),
       );
 
+  /// Every live retry of the user, oldest first (S08 statistics: 재풀이 수
+  /// inside a date range; voided ones are included and flagged).
+  Stream<List<RetryRecord>> watchAllRetries() => (db.select(_r)
+        ..where((t) => t.userId.equals(ctx.userId) & t.deletedAt.isNull())
+        ..orderBy([(t) => OrderingTerm.asc(t.at)]))
+      .watch()
+      .map((rows) => liveOnly(rows.map(retryRecordOf)));
+
   Future<List<RetryRecord>> getAllRetries() async => liveOnly(
         (await (db.select(_r)
                   ..where((t) => t.userId.equals(ctx.userId) & t.deletedAt.isNull())
