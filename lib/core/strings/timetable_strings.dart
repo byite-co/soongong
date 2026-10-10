@@ -34,10 +34,14 @@ abstract final class TimetableStrings {
       '$title · $start–$end · 반복 일정';
   static String daySemantics(String date, String hm) => '$date · 순공 $hm';
 
-  // Empty state (prototype `ttEmpty`)
+  // Empty state (prototype `ttEmpty`) — wording follows the shown week:
+  // the current week invites the next action, another week states the fact.
   static const String emptyTitle = '이번 주 기록이 아직 없습니다';
   static const String emptyBody =
       '집중을 시작하면 순공 블록이 요일·시간 자리에 그려집니다.\n학원·수업은 플래너에서 반복 일정으로 넣어 두세요.';
+  static const String emptyTitleOtherWeek = '선택한 주에는 기록이 없습니다';
+  static const String emptyBodyOtherWeek =
+      '이 주에 저장된 순공 기록이 없습니다.\n학원·수업은 플래너에서 반복 일정으로 넣어 두세요.';
   static const String emptyStart = '집중 시작';
   static const String emptyAddRecurrence = '반복 일정 추가';
 

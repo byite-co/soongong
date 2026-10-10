@@ -321,4 +321,47 @@ void main() {
     expect(find.text(TimetableStrings.weekRange(10, 5, 10, 11)), findsOneWidget);
     await h.unmount(tester);
   });
+
+  testWidgets('[S08c] empty-state wording follows the shown week: 이번 주 only for the current week, 선택한 주 elsewhere (grid + no-record row, empty card)', (tester) async {
+    await seedSession(id: 'today', start: DateTime(2026, 10, 3, 9), end: DateTime(2026, 10, 3, 10));
+    final r = await h.container.read(plannerRepositoryProvider).createRecurrence(
+          title: '토요 수업',
+          weekdayMask: Recurrence.maskOf(const <int>[6]),
+          startTime: const LocalTime(16, 0),
+          endTime: const LocalTime(17, 0),
+        );
+    await openTimetable(tester);
+    expect(find.byKey(TimetableKeys.noRecord), findsNothing, reason: 'the current week has a record');
+    expect(find.text(TimetableStrings.emptyTitle), findsNothing);
+
+    // next week: recurrence instance only → grid + no-record row, not "이번 주"
+    await tester.tap(find.byKey(TimetableKeys.next));
+    await tester.pumpAndSettle();
+    expect(find.text(TimetableStrings.weekRange(10, 5, 10, 11)), findsOneWidget);
+    expect(find.byKey(TimetableKeys.grid), findsOneWidget);
+    expect(find.byKey(TimetableKeys.recurrenceBlock(r.id, const LocalDate(2026, 10, 10))), findsOneWidget);
+    expect(find.byKey(TimetableKeys.noRecord), findsOneWidget);
+    expect(find.text(TimetableStrings.emptyTitleOtherWeek), findsOneWidget);
+    expect(find.text(TimetableStrings.emptyTitle), findsNothing);
+
+    // previous week: nothing at all (the recurrence starts today) → empty card, not "이번 주"
+    await tester.tap(find.byKey(TimetableKeys.thisWeek));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TimetableKeys.prev));
+    await tester.pumpAndSettle();
+    expect(find.text(TimetableStrings.weekRange(9, 21, 9, 27)), findsOneWidget);
+    expect(find.byKey(TimetableKeys.empty), findsOneWidget);
+    expect(find.text(TimetableStrings.emptyTitleOtherWeek), findsOneWidget);
+    expect(find.text(TimetableStrings.emptyBodyOtherWeek), findsOneWidget);
+    expect(find.text(TimetableStrings.emptyTitle), findsNothing);
+
+    // back to the current week with a recurrence-only state: "이번 주" wording
+    await h.container.read(sessionRepositoryProvider).softDelete('today');
+    await tester.tap(find.byKey(TimetableKeys.thisWeek));
+    await tester.pumpAndSettle();
+    expect(find.byKey(TimetableKeys.noRecord), findsOneWidget);
+    expect(find.text(TimetableStrings.emptyTitle), findsOneWidget);
+    expect(find.text(TimetableStrings.emptyTitleOtherWeek), findsNothing);
+    await h.unmount(tester);
+  });
 }

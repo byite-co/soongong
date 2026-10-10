@@ -337,6 +337,8 @@ class _WeekPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(timetableWeekProvider(weekStart.key));
+    // "이번 주" only when the shown week holds today ([S08c]).
+    final currentWeek = today >= weekStart && today <= weekStart.addDays(6);
     switch (state) {
       case TimetableWeekLoading():
         return const StatePanel.loading();
@@ -358,10 +360,10 @@ class _WeekPage extends ConsumerWidget {
                 onTapBlock: onTapBlock,
                 onTapRecurrence: onEditRecurrence,
               )
-            : _EmptyCard(onStart: onStartFocus, onAdd: onAddRecurrence);
+            : _EmptyCard(currentWeek: currentWeek, onStart: onStartFocus, onAdd: onAddRecurrence);
         final noRecord = week.hasBlocks || !week.hasRecurrences
             ? null
-            : _NoRecordRow(onStart: onStartFocus, onAdd: onAddRecurrence);
+            : _NoRecordRow(currentWeek: currentWeek, onStart: onStartFocus, onAdd: onAddRecurrence);
         final side = _RecurrenceSection(
           recurrences: recurrences,
           subjects: subjects,
@@ -813,8 +815,10 @@ class _Legend extends StatelessWidget {
 }
 
 class _EmptyCard extends StatelessWidget {
-  const _EmptyCard({required this.onStart, required this.onAdd});
+  const _EmptyCard({required this.currentWeek, required this.onStart, required this.onAdd});
 
+  /// The shown week holds today: 이번 주 wording; otherwise 선택한 주.
+  final bool currentWeek;
   final VoidCallback onStart;
   final VoidCallback onAdd;
 
@@ -834,9 +838,17 @@ class _EmptyCard extends StatelessWidget {
         children: <Widget>[
           LucideIcon(LucideIcons.table, size: AppIcon.sizeLarge, color: c.tx3),
           const SizedBox(height: AppSpacing.s14),
-          Text(TimetableStrings.emptyTitle, textAlign: TextAlign.center, style: AppTypography.heading.copyWith(color: c.tx)),
+          Text(
+            currentWeek ? TimetableStrings.emptyTitle : TimetableStrings.emptyTitleOtherWeek,
+            textAlign: TextAlign.center,
+            style: AppTypography.heading.copyWith(color: c.tx),
+          ),
           const SizedBox(height: AppSpacing.s6),
-          Text(TimetableStrings.emptyBody, textAlign: TextAlign.center, style: AppTypography.label.copyWith(color: c.tx2)),
+          Text(
+            currentWeek ? TimetableStrings.emptyBody : TimetableStrings.emptyBodyOtherWeek,
+            textAlign: TextAlign.center,
+            style: AppTypography.label.copyWith(color: c.tx2),
+          ),
           const SizedBox(height: AppSpacing.s20),
           Wrap(
             spacing: AppSpacing.s10,
@@ -868,8 +880,9 @@ class _EmptyCard extends StatelessWidget {
 /// Under the grid of a week that has recurrences but no 순공: the empty
 /// card's facts and next actions in one row ([S08b]).
 class _NoRecordRow extends StatelessWidget {
-  const _NoRecordRow({required this.onStart, required this.onAdd});
+  const _NoRecordRow({required this.currentWeek, required this.onStart, required this.onAdd});
 
+  final bool currentWeek;
   final VoidCallback onStart;
   final VoidCallback onAdd;
 
@@ -882,7 +895,10 @@ class _NoRecordRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(TimetableStrings.emptyTitle, style: AppTypography.withWeight(AppTypography.label, 600).copyWith(color: c.tx)),
+          Text(
+            currentWeek ? TimetableStrings.emptyTitle : TimetableStrings.emptyTitleOtherWeek,
+            style: AppTypography.withWeight(AppTypography.label, 600).copyWith(color: c.tx),
+          ),
           const SizedBox(height: AppSpacing.s8),
           Wrap(
             spacing: AppSpacing.s10,
