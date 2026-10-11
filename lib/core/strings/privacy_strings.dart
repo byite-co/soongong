@@ -19,14 +19,16 @@ abstract final class PrivacyStrings {
   static const String how3Title = '남는 것은 시간뿐';
   static const String how3Body = '착석·이탈 시각과 길이만 저장됩니다';
 
-  // Stored data table — D14 rows as decided (data · location · retention)
+  // Stored data table — the D14 table as decided, every row (data · location
+  // · retention); `test/unit/domain/d14_table_test.dart` compares it with
+  // docs/decisions.md.
   static const String storedTitle = '저장되는 데이터';
   static const String storedColumns = '데이터 · 위치 · 보관·삭제';
   static const List<(String, String, String)> d14Rows = <(String, String, String)>[
     ('착석 감지 프레임', '기기 메모리', '처리 즉시 해제 · 파일 저장·외부 전송 없음'),
     ('착석 샘플(불리언·시각)', '기기 → 계정 동기화', '세션 구간으로만 저장 · 사용자가 지울 때까지'),
     ('판독 사진·파생 이미지(압축본·크롭)', '기기', '최초 보관일 +30일 · 즉시 삭제·로그아웃 삭제 · 재시도로 연장 없음 · 앱 시작·포그라운드·접근 시 만료분 삭제'),
-    ('판독 사진·파생 이미지', '자사 서버', '처리 종료 직후 삭제 시도 · 실패분 재시도 · 잔여분은 업로드 +24시간 안에 삭제'),
+    ('판독 사진·파생 이미지', '자사 서버', '처리 종료 직후 삭제 시도 · 실패분은 5분마다 재시도 · 잔여분은 업로드 +24시간 안에 삭제'),
     ('판독 사진', '외부 AI 벤더', '전송 사실 명시 · 보관·학습 사용·로그 정책은 확정 전(확인 중)'),
     ('미저장 판독 결과', '서버 → 기기 캐시', '7일 뒤 또는 버리기 시 서버 원문 삭제 · 저장한 확정 마크는 오답 기록의 일부'),
     ('판독 결과·오답·복습·재풀이', '기기 → 계정 동기화', '사용자가 지울 때까지 · 구독 종료 시 읽기 전용'),
@@ -34,6 +36,12 @@ abstract final class PrivacyStrings {
     ('계정(이메일·로그인 방식·동의 이력)', '서버', '계정 삭제까지 · 생년월일은 어디에도 저장하지 않음'),
     ('가입 패스', '서버', '소비 시 즉시 삭제 · 미소비는 발급 +10분 뒤 삭제 · 생년월일 미포함'),
     ('가입 승인 기록', '서버', '계정 삭제 시 삭제 · 연령 확인 결과·승인 시각·로그인 방식만'),
+    ('구독 상태', '서버 → 기기', '계정 삭제 시 삭제'),
+    ('구독 전환 이력', '서버', '계정 삭제 시 삭제 · 익명 합산 지표는 유지'),
+    ('계측(활동일 · 복습 예정 수 · 주간 지표)', '기기 → 서버 · 서버 · 서버(익명 합산)', '1년 뒤 삭제'),
+    ('동기화 영수증 · 삭제 표식', '서버', '계정 삭제까지 · 영수증은 처리 결과만 남고 기록 원문은 남지 않음 · 삭제 표식에 내용 없음'),
+    ('판독 작업 · 사진 삭제 큐', '서버', '종료 후 7일'),
+    ('문의 내용·답장 이메일', '서버', '처리 완료 후 90일 · 미처리는 접수 후 180일까지'),
   ];
   static const String storedVendorPending = '외부 AI 벤더의 보관·학습·로그 조건은 확정 전입니다(확인 중).';
 
@@ -103,9 +111,21 @@ abstract final class PrivacyStrings {
   static const String deleteAllFinalBody = '서버와 이 기기의 기록이 지금 지워지며 되돌릴 수 없습니다.\n로그인과 구독 상태는 유지됩니다.';
   static const String deleteAllConfirm = '삭제';
   static const String deleteAllDone = '모든 기록을 삭제했습니다';
-  static String deleteAllPartial(int failed) => '기록은 삭제했습니다 · 사진 $failed장은 삭제하지 못했습니다 · 보관 중 사진에서 다시 시도';
+  static String deleteAllPartial(int failed) => '기록은 삭제했습니다 · 사진 파일 $failed개는 삭제하지 못했습니다 · 다음 실행 때 다시 시도합니다';
   static const String deleteAllBlocked = '측정 중에는 삭제할 수 없습니다 · 집중을 끝낸 뒤 다시 시도';
   static const String deleteAllFailed = '삭제하지 못했습니다 · 연결을 확인한 뒤 다시 시도';
+  static const String deleteAllUnconfirmed = '서버의 삭제 결과를 아직 확인하지 못했습니다 · 연결되면 자동으로 확인합니다';
+
+  // Recovery of a delete left open (S09c)
+  static const String recoveryChecking = '모든 기록 삭제 · 서버의 삭제 결과를 확인하는 중입니다 · 확인될 때까지 새 기록은 저장되지 않습니다';
+  static const String recoveryBlocked = '모든 기록 삭제 · 측정 중인 기록을 마무리하거나 버리면 이어서 삭제합니다';
+  static const String recoveryFailed = '모든 기록 삭제를 마무리하지 못했습니다';
+  static const String recoveryRetry = '다시 시도';
+  static const String recoveryDone = '모든 기록 삭제를 마무리했습니다';
+  static String sweepPending(int n) => '삭제하지 못한 사진 파일 $n개';
+  static const String sweepRetry = '다시 시도';
+  static const String sweepDone = '사진 파일을 모두 삭제했습니다';
+  static const String writeBlocked = '모든 기록 삭제가 진행 중입니다 · 마무리된 뒤 다시 시도';
 
   // Footer
   static const String footer =

@@ -3,12 +3,15 @@
 // that is still running on the cached profile re-reads it from the server.
 // The launch itself is counted by the startup tasks. Errors are logged only.
 
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/auth/auth_gate.dart';
 import '../../data/repositories/repositories.dart';
 import '../../features/privacy/application/photo_retention.dart';
+import '../../features/privacy/application/purge_recovery.dart';
 import '../../features/settings/application/notification_scheduler.dart';
 import '../domain/local_date.dart';
 import '../logging/app_logger.dart';
@@ -57,6 +60,9 @@ class _ForegroundActivityHookState extends ConsumerState<ForegroundActivityHook>
       appLog.w('photo expiry failed', error: e, stackTrace: st);
       return 0;
     });
+    // S09c: a 모든 기록 삭제 left open (server answer unknown · blocked ·
+    // failed) is continued on return.
+    unawaited(ref.read(purgeRecoveryProvider).resume());
     ref.read(notificationPermissionStateProvider.notifier).refresh().then((_) {
       return ref.read(notificationSchedulerProvider).reschedule();
     }).catchError((Object e, StackTrace st) {
@@ -65,5 +71,15 @@ class _ForegroundActivityHookState extends ConsumerState<ForegroundActivityHook>
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    // [S09c] Riverpod 3 pauses the `ref.listen` subscriptions a provider
+    // created while that provider has no active listener of its own. The
+    // two background services below react to streams (settings · review
+    // queue · entitlement · session snapshot · network · auth gate) through
+    // such subscriptions, so the root of the widget tree — always visible —
+    // keeps them active.
+    ref.watch(notificationSchedulerProvider);
+    ref.watch(purgeRecoveryProvider);
+    return widget.child;
+  }
 }

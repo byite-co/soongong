@@ -50,14 +50,16 @@ class AccountController {
   void dispose() => _disposed = true;
 
   bool get _signedInAsOwner => backend.currentSession?.userId == userId;
+  bool _alive() => !_disposed && _signedInAsOwner;
 
-  /// Throws [PhotoWipeFailed] when a photo could not be deleted (nothing
-  /// else happens) and [StateError] when the account changed meanwhile.
+  /// Throws [PhotoWipeFailed] when a photo file could not be deleted (rows
+  /// and the sweep marker stay; nothing else happens) and [StateError] when
+  /// the account changed meanwhile (the wipe stops at that point, [S09c]).
   Future<void> logout() async {
     _guard();
-    final result = await photos.wipeAll();
-    if (result.failed.isNotEmpty) throw PhotoWipeFailed(result.failed.length);
+    final result = await photos.wipeAll(alive: _alive);
     _guard();
+    if (!result.allDone) throw PhotoWipeFailed(result.failedCount);
     await auth.signOut();
   }
 
@@ -66,12 +68,12 @@ class AccountController {
   /// bound to this account (the owned transaction refuses otherwise).
   Future<void> deleteAccount() async {
     _guard();
-    final result = await photos.wipeAll();
-    if (result.failed.isNotEmpty) throw PhotoWipeFailed(result.failed.length);
+    final result = await photos.wipeAll(alive: _alive);
     _guard();
+    if (!result.allDone) throw PhotoWipeFailed(result.failedCount);
     await auth.deleteAccount(forUserId: userId);
     try {
-      await writer.runOwnedTransaction(db.wipeAll);
+      await writer.runOwnedTransaction(db.wipeAll, purgeWork: true);
     } on StateError {
       // Another account is bound to the database by now: its data is not
       // ours to wipe; the server-side deletion already succeeded.

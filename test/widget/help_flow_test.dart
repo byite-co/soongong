@@ -4,11 +4,13 @@
 // 다시 보내기.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/core/strings/help_strings.dart';
 import 'package:soongong/core/strings/home_strings.dart';
 import 'package:soongong/data/auth/auth_mode.dart';
 import 'package:soongong/data/auth/auth_models.dart';
+import 'package:soongong/features/help/application/inquiry_controller.dart';
 import 'package:soongong/features/help/presentation/help_screen.dart';
 import 'package:soongong/features/settings/presentation/settings_screen.dart';
 
@@ -103,6 +105,49 @@ void main() {
     h.backend.responses.remove('submit-inquiry');
     await send(tester);
     expect(find.text(HelpStrings.sent), findsOneWidget);
+    await h.unmount(tester);
+  });
+
+  testWidgets('configured SUPPORT_EMAIL: 메일 앱으로 보내기 opens mailto with subject + body; a launcher failure is shown and retried (S09c)', (tester) async {
+    final launched = <Uri>[];
+    var opens = false;
+    final unused = h;
+    addTearDown(unused.dispose);
+    h = AppHarness(
+      mode: AuthMode.localOnly,
+      extraOverrides: <Override>[
+        supportEmailProvider.overrideWithValue('help@example.test'),
+        launchMailProvider.overrideWithValue((uri) async {
+          launched.add(uri);
+          return opens;
+        }),
+      ],
+    );
+    await openHelp(tester);
+    await type(tester, HelpKeys.body, '결제가 두 번 됐어요');
+    h.backend.responses['submit-inquiry'] = Exception('offline');
+    await send(tester);
+    expect(find.text(HelpStrings.sendFailed), findsOneWidget);
+    expect(find.text(HelpStrings.supportAddress('help@example.test')), findsOneWidget);
+    expect(find.text(HelpStrings.supportAddressPending), findsNothing);
+
+    await tester.ensureVisible(find.byKey(HelpKeys.supportMail));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(HelpKeys.supportMail));
+    await tester.pumpAndSettle();
+    expect(launched.length, 1);
+    expect(launched.single.scheme, 'mailto');
+    expect(launched.single.path, 'help@example.test');
+    expect(launched.single.queryParameters['subject'], HelpStrings.supportMailSubject('오류'));
+    expect(launched.single.queryParameters['body'], contains('[오류] 결제가 두 번 됐어요'));
+    expect(find.text(HelpStrings.supportOpenMailFailed), findsOneWidget, reason: 'no handler took the URL → shown, address kept');
+    expect(tester.widget<TextField>(find.descendant(of: find.byKey(HelpKeys.body), matching: find.byType(TextField))).controller!.text, '결제가 두 번 됐어요');
+
+    opens = true;
+    await tester.tap(find.byKey(HelpKeys.supportMail));
+    await tester.pumpAndSettle();
+    expect(launched.length, 2);
+    expect(find.text(HelpStrings.supportOpenMailFailed), findsNothing);
     await h.unmount(tester);
   });
 

@@ -6,7 +6,10 @@
 // the device photos (list · delete one / all, 30-day rule), 내 기록
 // 내보내기 (CSV · JSON share) and 모든 기록 삭제 (two confirmations, nothing
 // deleted before the last one; entry blocked while measuring). Expired
-// photos are purged when the screen opens.
+// photos are purged when the screen opens. S09c: a delete left open
+// (server answer unknown · blocked by a measurement · a local step
+// failed) is shown at the top with "다시 시도" (`PurgeRecovery`), and photo
+// files a wipe could not delete are listed with their own retry.
 
 import 'dart:async';
 
@@ -28,6 +31,7 @@ import '../../measure/domain/away_policy.dart';
 import '../../settings/application/settings_providers.dart';
 import '../application/photo_retention.dart';
 import '../application/privacy_providers.dart';
+import '../application/purge_recovery.dart';
 
 /// S06 정정 이력 화면 (`measure_routes.dart`).
 const String kCorrectionsPath = '/measure/corrections';
@@ -50,6 +54,10 @@ abstract final class PrivacyKeys {
   static const Key exportJson = Key('privacy-export-json');
   static const Key exportError = Key('privacy-export-error');
   static const Key deleteAll = Key('privacy-delete-all');
+  static const Key recoveryNotice = Key('privacy-recovery-notice');
+  static const Key recoveryRetry = Key('privacy-recovery-retry');
+  static const Key sweepNotice = Key('privacy-sweep-notice');
+  static const Key sweepRetry = Key('privacy-sweep-retry');
 }
 
 class PrivacyScreen extends ConsumerStatefulWidget {
@@ -63,6 +71,8 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
   bool _cameraBusy = false;
   bool _sensitivityBusy = false;
   bool _photosBusy = false;
+  bool _recoveryBusy = false;
+  bool _sweepBusy = false;
 
   @override
   void initState() {
@@ -133,7 +143,50 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
   /// delDlg (impact: the five groups + what stays) → delAllDlg (final) →
   /// execute. Nothing is deleted before the final confirmation; a running
   /// measurement blocks the entry (PRD 4.4 측정 중에는 진입 불가).
+  /// "다시 시도" of a delete left open: the same `resume()` the startup and
+  /// the foreground use. Facts only.
+  Future<void> _retryRecovery() async {
+    if (_recoveryBusy) return;
+    setState(() => _recoveryBusy = true);
+    DeleteAllOutcome? outcome;
+    try {
+      outcome = await ref.read(purgeRecoveryProvider).resume();
+    } finally {
+      if (mounted) setState(() => _recoveryBusy = false);
+    }
+    if (!mounted) return;
+    ref.invalidate(pendingPhotoFilesProvider);
+    switch (outcome) {
+      case null || DeleteAllDone():
+        showAppToast(context, message: PrivacyStrings.recoveryDone);
+      case DeleteAllPartial(:final failedPhotos):
+        showAppToast(context, message: PrivacyStrings.deleteAllPartial(failedPhotos));
+      case DeleteAllBlocked():
+        showAppToast(context, message: PrivacyStrings.recoveryBlocked);
+      case DeleteAllUnconfirmed():
+        showAppToast(context, message: PrivacyStrings.deleteAllUnconfirmed);
+      case DeleteAllFailed():
+        showAppToast(context, message: PrivacyStrings.deleteAllFailed);
+    }
+  }
+
+  /// Retries the row-less files a wipe left behind.
+  Future<void> _retrySweep() async {
+    if (_sweepBusy) return;
+    setState(() => _sweepBusy = true);
+    int left;
+    try {
+      left = await ref.read(photoRetentionProvider).retryPendingSweep();
+    } finally {
+      if (mounted) setState(() => _sweepBusy = false);
+    }
+    if (!mounted) return;
+    ref.invalidate(pendingPhotoFilesProvider);
+    showAppToast(context, message: left == 0 ? PrivacyStrings.sweepDone : PrivacyStrings.sweepPending(left));
+  }
+
   Future<void> _deleteAll() async {
+    if (ref.read(purgeRecoveryStatusProvider) is! PurgeRecoveryIdle) return _retryRecovery();
     if (await ref.read(sessionRepositoryProvider).readSnapshot() != null) {
       if (mounted) showAppToast(context, message: PrivacyStrings.deleteAllBlocked);
       return;
@@ -169,13 +222,17 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
       case DeleteAllDone():
         showAppToast(context, message: PrivacyStrings.deleteAllDone);
       case DeleteAllPartial(:final failedPhotos):
+        ref.invalidate(pendingPhotoFilesProvider);
         showAppToast(context, message: PrivacyStrings.deleteAllPartial(failedPhotos));
       case DeleteAllBlocked():
         showAppToast(context, message: PrivacyStrings.deleteAllBlocked);
+      case DeleteAllUnconfirmed():
+        showAppToast(context, message: PrivacyStrings.deleteAllUnconfirmed);
       case DeleteAllFailed():
       case null:
         break;
     }
+    if (mounted) unawaited(ref.read(purgeRecoveryProvider).resume());
   }
 
   @override
@@ -185,6 +242,8 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     final entitled = ref.watch(privacyEntitlementProvider).value?.entitled ?? false;
     final corrections = ref.watch(recentCorrectionsProvider).value ?? 0;
     final rows = ref.watch(photoRowsProvider) ?? const <PhotoRow>[];
+    final recovery = ref.watch(purgeRecoveryStatusProvider);
+    final pendingFiles = ref.watch(pendingPhotoFilesProvider).value ?? 0;
 
     return FlowScaffold(
       title: PrivacyStrings.title,
@@ -193,6 +252,35 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
         AsyncData(:final value) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
+              if (recovery is! PurgeRecoveryIdle) ...<Widget>[
+                _RetryNotice(
+                  key: PrivacyKeys.recoveryNotice,
+                  text: switch (recovery) {
+                    PurgeRecoveryChecking() => PrivacyStrings.recoveryChecking,
+                    PurgeRecoveryBlocked() => PrivacyStrings.recoveryBlocked,
+                    PurgeRecoveryFailed() => PrivacyStrings.recoveryFailed,
+                    PurgeRecoveryIdle() => '',
+                  },
+                  error: recovery is PurgeRecoveryFailed,
+                  retryKey: PrivacyKeys.recoveryRetry,
+                  retryLabel: PrivacyStrings.recoveryRetry,
+                  busy: _recoveryBusy,
+                  onRetry: () => unawaited(_retryRecovery()),
+                ),
+                const SizedBox(height: AppSpacing.s16),
+              ],
+              if (pendingFiles > 0) ...<Widget>[
+                _RetryNotice(
+                  key: PrivacyKeys.sweepNotice,
+                  text: PrivacyStrings.sweepPending(pendingFiles),
+                  error: true,
+                  retryKey: PrivacyKeys.sweepRetry,
+                  retryLabel: PrivacyStrings.sweepRetry,
+                  busy: _sweepBusy,
+                  onRetry: () => unawaited(_retrySweep()),
+                ),
+                const SizedBox(height: AppSpacing.s16),
+              ],
               _Hero(on: value.seatDetectionEnabled),
               const SizedBox(height: AppSpacing.s20),
               const _SectionTitle(PrivacyStrings.howTitle),
@@ -293,6 +381,42 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
       },
     );
   }
+}
+
+/// A factual notice with a "다시 시도" button under it (S09c).
+class _RetryNotice extends StatelessWidget {
+  const _RetryNotice({
+    super.key,
+    required this.text,
+    required this.error,
+    required this.retryKey,
+    required this.retryLabel,
+    required this.busy,
+    required this.onRetry,
+  });
+
+  final String text;
+  final bool error;
+  final Key retryKey;
+  final String retryLabel;
+  final bool busy;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          error ? AppNotice.error(text) : AppNotice(text),
+          const SizedBox(height: AppSpacing.s8),
+          AppButton.secondary(
+            key: retryKey,
+            label: retryLabel,
+            size: AppButtonSize.small,
+            busy: busy,
+            onPressed: busy ? null : onRetry,
+          ),
+        ],
+      );
 }
 
 class _Hero extends StatelessWidget {

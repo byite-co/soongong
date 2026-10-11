@@ -152,9 +152,11 @@ int? goalSuggestionMinutes(Ref ref) {
 // Writes
 
 /// Built per account (the repository is captured); every write commits
-/// inside `SyncWriter.runOwnedTransaction` with this controller's liveness,
-/// so a write queued behind an account switch is refused instead of landing
-/// in the next account's database ([S06d] · [S09b]).
+/// inside `SyncWriter.runOwnedTransaction` with this controller's liveness
+/// and the purge generation it started under, so a write queued behind an
+/// account switch or behind 모든 기록 삭제 is refused instead of landing in
+/// the next account's database or under the new epoch ([S06d] · [S09b] ·
+/// [S09c]).
 class SettingsController {
   SettingsController(this.repo, {required this.onNotificationChanged});
 
@@ -166,8 +168,9 @@ class SettingsController {
 
   Future<bool> _run(Future<void> Function() write, {bool reschedule = false}) async {
     if (_disposed) return false;
+    final generation = repo.writer.purgeGeneration; // [S09c] captured at action start
     try {
-      await repo.writer.runOwnedTransaction(write, alive: () => !_disposed);
+      await repo.writer.runOwnedTransaction(write, alive: () => !_disposed, generation: generation);
       if (reschedule) await onNotificationChanged();
       return true;
     } on Object {

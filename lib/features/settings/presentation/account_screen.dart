@@ -15,6 +15,7 @@ import '../../../core/domain/local_date.dart';
 import '../../../core/strings/settings_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tokens.dart';
+import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../../data/auth/auth_models.dart';
 import '../../auth/domain/auth_redirect.dart';
@@ -30,6 +31,12 @@ abstract final class AccountKeys {
   static const Key revoke = Key('account-revoke');
   static const Key syncLast = Key('account-sync-last');
   static const Key syncNow = Key('account-sync-now');
+}
+
+/// `yyyy-MM-dd HH:mm` in the device time zone.
+String consentStamp(DateTime at) {
+  final local = at.toLocal();
+  return '${LocalDate.of(local).key} ${formatClock(local)}';
 }
 
 class AccountScreen extends ConsumerStatefulWidget {
@@ -75,7 +82,8 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     if (ok && mounted) showAppToast(context, message: SettingsStrings.consentRevoked);
   }
 
-  static String _date(DateTime at) => LocalDate.of(at.toLocal()).key;
+  /// Local date and time of a UTC timestamp (원본 §4.2: 버전과 일시, S09c).
+  static String _date(DateTime at) => consentStamp(at);
 
   String _consentAccountFact(ProfileSnapshot? p) {
     final at = p?.consentAccountAt;

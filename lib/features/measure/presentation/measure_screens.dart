@@ -807,18 +807,20 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
     // the restart settlement (D22) owns whatever is left then.
     final container = ProviderScope.containerOf(context, listen: false);
     final owner = repo.ctx.userId;
+    final generation = repo.writer.purgeGeneration; // [S09c]
     bool sameAccount() => container.read(currentUserIdProvider) == owner;
     Timer(const Duration(seconds: 5), () async {
       if (!sameAccount()) return;
       try {
-        // Ownership is re-checked inside the transaction ([S06d]).
+        // Ownership and the purge generation are re-checked inside the
+        // transaction ([S06d] · [S09c]).
         await repo.writer.runOwnedTransaction(() async {
           final row = await repo.get(id);
           final until = row?.stamp.pendingDeleteUntil;
           if (until != null && !repo.ctx.clock.now().isBefore(until)) {
             await repo.commitDelete(id);
           }
-        });
+        }, generation: generation);
       } on Object {
         if (mounted) setState(() => deleteFailed = true);
       }
@@ -829,7 +831,7 @@ class _DetailState extends ConsumerState<SessionDetailScreen> {
       onUndo: () async {
         if (!sameAccount()) return;
         try {
-          await repo.writer.runOwnedTransaction(() => repo.undoDelete(id));
+          await repo.writer.runOwnedTransaction(() => repo.undoDelete(id), generation: generation);
           if (mounted) setState(() => deleted = false);
         } on Object {
           if (mounted) setState(() => deleteFailed = true);

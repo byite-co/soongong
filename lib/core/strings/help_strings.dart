@@ -78,6 +78,9 @@ abstract final class HelpStrings {
   static const String offline = '인터넷 연결이 없어 지금은 보낼 수 없습니다 · 작성한 내용은 남아 있습니다';
   static const String supportAddressPending = '대체 메일 주소는 확정 전입니다';
   static String supportAddress(String email) => '메일 앱에서 보낼 수 있는 주소: $email';
+  static const String supportOpenMail = '메일 앱으로 보내기';
+  static const String supportOpenMailFailed = '메일 앱을 열지 못했습니다 · 위 주소로 직접 보낼 수 있습니다';
+  static String supportMailSubject(String kind) => '[순공 문의] $kind';
   static const String sendRateLimited = '오늘 보낼 수 있는 문의 수(10건)를 넘었습니다 · 내일 다시 보낼 수 있습니다';
   static String summaryLine(int sessions, String seated, String platform, String version) =>
       '최근 7일 · 세션 $sessions회 · 순공 $seated · $platform · 순공 $version';

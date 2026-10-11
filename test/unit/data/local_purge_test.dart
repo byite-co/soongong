@@ -69,7 +69,8 @@ void main() {
       expect(await count(t.actualTableName, userId: 'u1'), 0, reason: t.actualTableName);
     }
     expect(await count(h.db.photos.actualTableName), 1, reason: 'photo rows belong to PhotoRetention.wipeAll (failed files keep their row, S09b)');
-    expect(await count(h.db.syncOutbox.actualTableName), 0);
+    final outboxLeft = await h.outbox();
+    expect(outboxLeft.map((o) => o.rowId), <String>['other-1'], reason: 'only the purged rows lose their outbox entry (S09c); the other account keeps its own');
     expect(await count(h.db.syncConflicts.actualTableName), 0);
     expect(await count(h.db.sessionSnapshots.actualTableName), 0);
     expect(await h.sessions.readSnapshot(), isNull);
@@ -78,6 +79,45 @@ void main() {
     expect(cursor, isNull);
     expect(await count('subjects', userId: 'u2'), 1, reason: 'other account untouched');
     expect(await h.subjects.getAll(), isEmpty);
+  });
+
+  test('epoch-aware run: a row written after the server epoch was stored (new generation) survives, older rows go', () async {
+    final purge = LocalPurge(h.db, h.ctx);
+    final old = await h.subjects.create(name: '수학', colorIndex: 1);
+    await purge.markPending(9); // purge_epoch = 9 from here on
+    final fresh = await h.subjects.create(name: '영어', colorIndex: 2); // stamped 9 (the resolved recovery session is the real case)
+    expect((await h.raw('subjects', fresh.id))!['purge_epoch'], 9);
+    await purge.run(epoch: 9);
+    expect(await h.subjects.get(old.id), isNull);
+    expect((await h.subjects.get(fresh.id))?.name, '영어');
+    expect(await h.outboxRow('subjects', old.id), isNull);
+    expect(await h.outboxRow('subjects', fresh.id), isNotNull, reason: 'its outbox entry stays with it');
+  });
+
+  test('generation + stages: every stage change bumps purge_generation and the gate mirror; requested → pending → cleared', () async {
+    final purge = LocalPurge(h.db, h.ctx);
+    expect((await purge.state()).stage, PurgeStage.none);
+    expect(h.db.purgeGate.generation, isNull, reason: 'nothing read yet in this process');
+    await purge.markRequested();
+    var s = await purge.state();
+    expect(s.stage, PurgeStage.requested);
+    expect(s.generation, 1);
+    expect(h.db.purgeGate.generation, 1);
+    await purge.markPending(5);
+    s = await purge.state();
+    expect(s.stage, PurgeStage.pending);
+    expect(s.requested, isFalse, reason: 'the answer arrived');
+    expect(s.generation, 2);
+    await purge.run(epoch: 5);
+    await purge.clearPending();
+    s = await purge.state();
+    expect(s.stage, PurgeStage.none);
+    expect(s.generation, 4);
+    expect(h.db.purgeGate.generation, 4);
+    await purge.markRequested();
+    await purge.clearRequested();
+    expect((await purge.state()).stage, PurgeStage.none);
+    expect(await h.writer.refreshPurgeGeneration(), 6);
   });
 
   test('pending marker: markPending stores the epoch + marker, run keeps the epoch, clearPending removes the marker', () async {

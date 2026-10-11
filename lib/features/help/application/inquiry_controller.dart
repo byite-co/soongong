@@ -4,6 +4,7 @@
 // free text of records). Failure keeps the draft on screen (PRD 4.4).
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/contracts/providers.dart';
@@ -35,8 +36,28 @@ class InquiryFailed extends InquiryOutcome {
   final Object error;
 }
 
+/// S09c: the fallback mailbox (`SUPPORT_EMAIL` dart-define, empty = not
+/// decided). Tests override it.
+@Riverpod(keepAlive: true)
+String supportEmail(Ref ref) => AppConfig.supportEmail.trim();
+
+/// Opens the mail app with a `mailto:` URL; true when a handler took it.
+/// Tests override it.
+typedef LaunchMail = Future<bool> Function(Uri uri);
+
+@Riverpod(keepAlive: true)
+LaunchMail launchMail(Ref ref) => launchUrl;
+
 class InquiryController {
   InquiryController(this._ref, {required this.platform});
+
+  /// `mailto:` for the fallback mailbox — subject with the kind, body as
+  /// sent to `submit-inquiry` (kind line + summary).
+  static Uri mailUri({required String email, required String kind, required String body}) => Uri(
+        scheme: 'mailto',
+        path: email,
+        query: 'subject=${Uri.encodeComponent(HelpStrings.supportMailSubject(kind))}&body=${Uri.encodeComponent(body)}',
+      );
 
   final Ref _ref;
   final String platform;

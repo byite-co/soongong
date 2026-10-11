@@ -41,7 +41,7 @@ final class AuthGateProvider
   }
 }
 
-String _$authGateHash() => r'0a3a78f30f7ca4c2dc0b8cb29965c156544b5e82';
+String _$authGateHash() => r'12ff66f4398447f44d78afc08a07abdb76b13ad7';
 
 abstract class _$AuthGate extends $Notifier<AuthGateState> {
   AuthGateState build();

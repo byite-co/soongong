@@ -256,7 +256,8 @@ void main() {
       expect(find.text('a@x.io'), findsOneWidget);
       expect(find.text('A'), findsOneWidget);
       expect(find.text(SettingsStrings.providerGoogle), findsOneWidget);
-      expect(find.text(SettingsStrings.consentVersionAt('2026-10-01', '2026-10-01')), findsOneWidget, reason: '동의 ① version · date');
+      expect(find.text(SettingsStrings.consentVersionAt('2026-10-01', consentStamp(DateTime.parse('2026-10-01T00:00:00+00:00')))), findsOneWidget, reason: '동의 ① version · local date-time of the UTC value (S09c)');
+      expect(find.textContaining('2026-10-01T00:00'), findsNothing, reason: 'never the raw UTC string');
       expect(find.text(SettingsStrings.consentNone), findsOneWidget, reason: '동의 ② not granted in this profile');
       expect(find.byKey(AccountKeys.revoke), findsNothing);
       expect(find.text(SettingsStrings.syncLastNone), findsOneWidget);
@@ -285,7 +286,7 @@ void main() {
         },
       };
       await openAccount(tester);
-      expect(find.text(SettingsStrings.consentVersionAt('2026-10-01', '2026-10-02')), findsOneWidget);
+      expect(find.text(SettingsStrings.consentVersionAt('2026-10-01', consentStamp(DateTime.parse('2026-10-02T01:00:00+00:00')))), findsOneWidget);
       await tapRow(tester, AccountKeys.revoke);
       expect(find.text(SettingsStrings.consentRevokeTitle), findsOneWidget);
       await tester.tap(find.text(SettingsStrings.consentRevokeConfirm).last);
@@ -293,7 +294,7 @@ void main() {
       final call = h.backend.calls.firstWhere((c) => c.name == 'update-consent');
       expect(call.body['granted'], isFalse);
       expect(find.text(SettingsStrings.consentRevoked), findsOneWidget);
-      expect(find.text(SettingsStrings.consentRevokedAt('2026-10-03')), findsOneWidget);
+      expect(find.text(SettingsStrings.consentRevokedAt(consentStamp(DateTime.parse('2026-10-03T01:00:00+00:00')))), findsOneWidget);
       expect(find.byKey(AccountKeys.revoke), findsNothing);
       await h.unmount(tester);
     });

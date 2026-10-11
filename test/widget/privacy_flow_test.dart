@@ -18,10 +18,13 @@ import 'package:soongong/core/strings/home_strings.dart';
 import 'package:soongong/core/strings/measure_strings.dart';
 import 'package:soongong/core/strings/privacy_strings.dart';
 import 'package:soongong/data/auth/auth_mode.dart';
+import 'package:soongong/data/repositories/local_purge.dart';
 import 'package:soongong/data/repositories/repositories.dart';
+import 'package:soongong/data/startup/startup_tasks.dart';
 import 'package:soongong/features/measure/domain/away_policy.dart';
 import 'package:soongong/features/measure/domain/segment.dart';
 import 'package:soongong/features/measure/domain/session_snapshot.dart';
+import 'package:soongong/features/privacy/application/purge_recovery.dart';
 import 'package:soongong/features/privacy/presentation/privacy_screen.dart';
 import 'package:soongong/features/privacy/privacy_routes.dart';
 import 'package:soongong/features/settings/presentation/settings_screen.dart';
@@ -153,6 +156,51 @@ void main() {
     await tester.pumpAndSettle();
     expect(h.exports.length, 2);
     expect(h.exports.last.mimeType, 'application/json');
+    await h.unmount(tester);
+  });
+
+  testWidgets('a delete left pending behind a measurement: notice + 다시 시도 while blocked; resolving the snapshot finishes it (S09c)', (tester) async {
+    final sessions = h.container.read(sessionRepositoryProvider);
+    final subjects = h.container.read(subjectRepositoryProvider);
+    await subjects.create(name: '수학', colorIndex: 0);
+    await sessions.writeSnapshot(
+      SessionSnapshot(
+        sessionId: 'live',
+        mode: SessionMode.manual,
+        kind: SessionKind.self,
+        startedAt: kHarnessNow,
+        segments: const <Segment>[],
+        openKind: SegmentKind.manual,
+        openStart: kHarnessNow,
+        savedAt: kHarnessNow,
+        sensitivity: 0,
+      ),
+    );
+    await h.container.read(localPurgeProvider).markPending(9); // server purged · app killed before the local steps
+    await h.container.read(userStartupTasksProvider).ensureRunFor('local'); // bootstrap: PurgeRecovery.start() + resume() → blocked by the snapshot
+    await h.pumpApp(tester);
+    expect(h.container.read(purgeRecoveryStatusProvider), isA<PurgeRecoveryBlocked>());
+    unawaited(h.container.read(appRouterProvider).push(privacyPath));
+    await tester.pumpAndSettle();
+    expect(find.byKey(PrivacyKeys.recoveryNotice), findsOneWidget);
+    expect(find.text(PrivacyStrings.recoveryBlocked), findsOneWidget);
+    await tapKey(tester, PrivacyKeys.recoveryRetry);
+    expect(find.text(PrivacyStrings.recoveryBlocked), findsWidgets, reason: 'still blocked → the fact again');
+    expect((await subjects.getAll()).map((s) => s.name), contains('수학'));
+    await tapKey(tester, PrivacyKeys.deleteAll);
+    expect(find.text(PrivacyStrings.deleteAllTitle), findsNothing, reason: 'the row continues the open delete instead of starting a new one');
+
+    await sessions.clearSnapshot(); // 마무리 / 버리기 → the snapshot trigger continues the purge
+    // drift re-runs its stream queries on zero timers; in the fake-async
+    // zone each needs a pump with elapsed time.
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.pumpAndSettle();
+    expect(h.container.read(purgeRecoveryStatusProvider), isA<PurgeRecoveryIdle>());
+    expect(find.byKey(PrivacyKeys.recoveryNotice), findsNothing);
+    expect((await subjects.getAll()).map((s) => s.isDefault), [true]);
+    expect(await h.container.read(localPurgeProvider).pendingEpoch(), isNull);
     await h.unmount(tester);
   });
 

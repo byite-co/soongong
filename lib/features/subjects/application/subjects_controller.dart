@@ -93,6 +93,7 @@ class SubjectsController {
           return SubjectSaved(id);
         },
         alive: () => !_disposed,
+        generation: subjects.writer.purgeGeneration,
       );
     } on Object catch (e) {
       return SubjectSaveFailed(e);
@@ -103,7 +104,11 @@ class SubjectsController {
   Future<PendingSubjectDelete> delete(String id) async {
     if (_disposed) throw StateError('controller disposed');
     final now = subjects.ctx.clock.now();
-    await subjects.writer.runOwnedTransaction(() => subjects.softDelete(id), alive: () => !_disposed);
+    await subjects.writer.runOwnedTransaction(
+      () => subjects.softDelete(id),
+      alive: () => !_disposed,
+      generation: subjects.writer.purgeGeneration,
+    );
     late final Timer timer;
     timer = Timer(undoWindow, () async {
       _timers.remove(timer);
@@ -112,6 +117,7 @@ class SubjectsController {
         await subjects.writer.runOwnedTransaction(
           () => _commitIfDue(id, notBefore: now.add(undoWindow)),
           alive: () => !_disposed,
+          generation: subjects.writer.purgeGeneration,
         );
       } on Object {
         // Left pending: the restart settlement commits it (D22).
@@ -131,6 +137,7 @@ class SubjectsController {
             return true;
           },
           alive: () => !_disposed,
+          generation: subjects.writer.purgeGeneration,
         );
       } on Object {
         return false;

@@ -11,7 +11,7 @@ import 'package:soongong/core/strings/settings_strings.dart';
 
 void main() {
   test('privacy strings: D14 rows present, vendor terms pending, no claims beyond D14', () {
-    expect(PrivacyStrings.d14Rows.length, 11);
+    expect(PrivacyStrings.d14Rows.length, 17, reason: 'the whole D14 table (S09c)');
     final vendor = PrivacyStrings.d14Rows.firstWhere((r) => r.$2.contains('외부 AI'));
     expect(vendor.$3, contains('확정 전'));
     final all = <String>[

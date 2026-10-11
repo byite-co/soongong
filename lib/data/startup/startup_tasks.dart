@@ -9,7 +9,8 @@
 //   3. D23 unfinished-session detection (logged; the home sheet asks)
 // It runs from ONE listener on the auth gate — a restored session
 // (Loading → signedIn) and a manual login (`PostLoginRoutine`) both reach the
-// same function; the second caller for the same user is a no-op.
+// same function; the second caller for the same user only re-runs the
+// 모든 기록 삭제 recovery (`PurgeRecovery.resume`, [S09c] — not a one-shot).
 // A failure is logged and never blocks the app.
 
 import 'dart:async';
@@ -24,7 +25,7 @@ import '../../core/domain/local_date.dart';
 import '../../core/logging/app_logger.dart';
 import '../../features/home/domain/recovery_candidate.dart';
 import '../../features/privacy/application/photo_retention.dart';
-import '../../features/privacy/application/privacy_providers.dart';
+import '../../features/privacy/application/purge_recovery.dart';
 import '../../features/settings/application/notification_scheduler.dart';
 import '../auth/auth_gate.dart';
 import '../repositories/repositories.dart';
@@ -61,7 +62,11 @@ class UserStartupTasks {
   /// Runs the per-user tasks once for [userId]; later calls return the same
   /// future (while running) or null (already done).
   Future<StartupReport?> ensureRunFor(String userId) {
-    if (_done.contains(userId)) return Future<StartupReport?>.value();
+    if (_done.contains(userId)) {
+      // [S09c] A purge left open (blocked · unconfirmed · failed) is retried
+      // on every call, not only on the first one of the run.
+      return _ref.read(purgeRecoveryProvider).resume().then((_) => null);
+    }
     final running = _inFlight[userId];
     if (running != null) return running;
     // Block body on purpose: returning the removed Future from whenComplete
@@ -76,11 +81,13 @@ class UserStartupTasks {
   Future<StartupReport?> _run(String userId) async {
     _done.add(userId);
     try {
+      await _ref.read(syncWriterProvider).refreshPurgeGeneration(); // [S09c] barrier mirror
       final settled = await _ref.read(deleteSettlerProvider).settle();
-      // S09: expired photos (D14 row 3) and the notification plan; S09b: a
-      // local purge left pending (server already purged) is completed.
+      // S09: expired photos (D14 row 3) and the notification plan; S09b ·
+      // S09c: a 모든 기록 삭제 left open is continued (`PurgeRecovery`).
       final expiredPhotos = await _ref.read(photoRetentionProvider).purgeExpired();
-      final pendingPurge = await _ref.read(privacyActionsProvider).completePending();
+      final recovery = _ref.read(purgeRecoveryProvider)..start();
+      final pendingPurge = await recovery.resume();
       if (pendingPurge != null) appLog.i('startup · pending local purge → ${pendingPurge.runtimeType}');
       _ref.read(notificationSchedulerProvider).start();
       final today = LocalDate.of(_ref.read(appClockProvider).now());

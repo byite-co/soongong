@@ -88,6 +88,7 @@ class PlannerController {
       final id = await planner.writer.runOwnedTransaction(
         () => _write(draft, target),
         alive: () => !_disposed,
+        generation: planner.writer.purgeGeneration,
       );
       return PlannerSaved(id);
     } on Object catch (e) {
@@ -165,12 +166,14 @@ class PlannerController {
     return planner.writer.runOwnedTransaction(
       () => subjects.create(name: n, colorIndex: colorIndex % AppSubjectColors.count),
       alive: () => !_disposed,
+      generation: planner.writer.purgeGeneration,
     );
   }
 
   Future<void> setDone(String id, {required bool done}) => planner.writer.runOwnedTransaction(
         () => planner.setDone(id, done: done),
         alive: () => !_disposed,
+        generation: planner.writer.purgeGeneration,
       );
 
   // ---------------------------------------------------------------------
@@ -184,6 +187,7 @@ class PlannerController {
     await planner.writer.runOwnedTransaction(
       () => _softDelete(target),
       alive: () => !_disposed,
+      generation: planner.writer.purgeGeneration,
     );
     // Commit only after the window elapsed, and only if the entry is still
     // pending (the undo clears `pending_delete_until`). The restart
@@ -196,6 +200,7 @@ class PlannerController {
         await planner.writer.runOwnedTransaction(
           () => _commitIfDue(target, notBefore: now.add(undoWindow)),
           alive: () => !_disposed,
+          generation: planner.writer.purgeGeneration,
         );
       } on Object {
         // Left pending: the restart settlement commits it (D22).
@@ -210,6 +215,7 @@ class PlannerController {
         return await planner.writer.runOwnedTransaction(
           () => _undo(target),
           alive: () => !_disposed,
+          generation: planner.writer.purgeGeneration,
         );
       } on Object {
         return false;

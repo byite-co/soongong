@@ -22,6 +22,7 @@ import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../core/logging/app_logger.dart';
+import '../photos/photo_store.dart';
 import '../repositories/repository_providers.dart';
 import 'account_binding.dart';
 import 'auth_mode.dart';
@@ -161,7 +162,14 @@ class AuthGate extends _$AuthGate {
     _refreshTimer?.cancel();
     try {
       // A different account wipes the database (and with it the cache) first.
-      await ref.read(accountBindingProvider).bind(userId);
+      final wiped = await ref.read(accountBindingProvider).bind(userId);
+      // [S09c] The previous account's photo files (rows just wiped) must not
+      // stay on the device: the new account has no rows yet, so every file
+      // under the store is an orphan.
+      if (wiped) {
+        final left = await ref.read(photoStoreProvider).sweep();
+        if (left.isNotEmpty) appLog.w('auth gate: ${left.length} photo file(s) of the previous account could not be deleted');
+      }
     } on Object catch (e, st) {
       appLog.e('auth gate: account binding failed', error: e, stackTrace: st);
     }

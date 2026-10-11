@@ -3,8 +3,10 @@
 // what the app does) and the inquiry form — kind · body (≤ 2000) · optional
 // reply email. Sending goes through `submit-inquiry`; offline disables
 // sending and keeps the draft; a failure keeps the draft and names the
-// fallback mailbox only when one is configured (`SUPPORT_EMAIL`), else says
-// it is pending; the daily limit (10) is reported as a fact.
+// fallback mailbox only when one is configured (`SUPPORT_EMAIL`) — with
+// "메일 앱으로 보내기" (`mailto:` through `url_launcher`, failure shown with
+// the address kept for copying, S09c) — else says it is pending; the daily
+// limit (10) is reported as a fact.
 
 import 'dart:async';
 
@@ -12,7 +14,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/config/app_config.dart';
 import '../../../core/strings/help_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tokens.dart';
@@ -30,6 +31,7 @@ abstract final class HelpKeys {
   static const Key send = Key('help-send');
   static const Key notice = Key('help-notice');
   static const Key supportEmail = Key('help-support-email');
+  static const Key supportMail = Key('help-support-mail');
   static const Key offline = Key('help-offline');
 }
 
@@ -42,6 +44,8 @@ class HelpScreen extends ConsumerStatefulWidget {
 
 enum _Notice { none, sent, rateLimited, failed, bodyEmpty, emailInvalid }
 
+enum _MailState { idle, opening, failed }
+
 class _HelpScreenState extends ConsumerState<HelpScreen> {
   final TextEditingController _body = TextEditingController();
   final TextEditingController _email = TextEditingController();
@@ -49,6 +53,7 @@ class _HelpScreenState extends ConsumerState<HelpScreen> {
   int _openFaq = -1;
   bool _sending = false;
   _Notice _notice = _Notice.none;
+  _MailState _mail = _MailState.idle;
 
   @override
   void dispose() {
@@ -94,11 +99,27 @@ class _HelpScreenState extends ConsumerState<HelpScreen> {
     });
   }
 
+  /// Fallback after a failed send: the same text goes to the mail app.
+  Future<void> _openMail(String email) async {
+    if (_mail == _MailState.opening) return;
+    setState(() => _mail = _MailState.opening);
+    var ok = false;
+    try {
+      final controller = ref.read(inquiryControllerProvider);
+      final body = '${HelpStrings.bodyWithKind(HelpStrings.kinds[_kind], _body.text.trim())}\n\n— ${await controller.summaryLine()}';
+      ok = await ref.read(launchMailProvider)(InquiryController.mailUri(email: email, kind: HelpStrings.kinds[_kind], body: body));
+    } on Object {
+      ok = false;
+    }
+    if (mounted) setState(() => _mail = ok ? _MailState.idle : _MailState.failed);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final localOnly = ref.watch(accountInfoProvider).localOnly;
     final online = ref.watch(networkOnlineProvider).value ?? true;
+    final supportEmail = ref.watch(supportEmailProvider);
     return FlowScaffold(
       title: HelpStrings.title,
       onBack: _back,
@@ -200,19 +221,35 @@ class _HelpScreenState extends ConsumerState<HelpScreen> {
             },
             if (_notice == _Notice.failed) ...<Widget>[
               const SizedBox(height: AppSpacing.s8),
-              Center(
-                child: AppConfig.hasSupportEmail
-                    ? SelectableText(
-                        HelpStrings.supportAddress(AppConfig.supportEmail),
-                        key: HelpKeys.supportEmail,
-                        style: AppTypography.withWeight(AppTypography.label, 600).copyWith(color: c.priTx),
-                      )
-                    : Text(
-                        HelpStrings.supportAddressPending,
-                        key: HelpKeys.supportEmail,
-                        style: AppTypography.caption.copyWith(color: c.tx3),
-                      ),
-              ),
+              if (supportEmail.isNotEmpty) ...<Widget>[
+                Center(
+                  child: SelectableText(
+                    HelpStrings.supportAddress(supportEmail),
+                    key: HelpKeys.supportEmail,
+                    style: AppTypography.withWeight(AppTypography.label, 600).copyWith(color: c.priTx),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.s8),
+                AppButton.secondary(
+                  key: HelpKeys.supportMail,
+                  label: HelpStrings.supportOpenMail,
+                  icon: LucideIcons.mail,
+                  size: AppButtonSize.small,
+                  busy: _mail == _MailState.opening,
+                  onPressed: () => unawaited(_openMail(supportEmail)),
+                ),
+                if (_mail == _MailState.failed) ...<Widget>[
+                  const SizedBox(height: AppSpacing.s8),
+                  const AppNotice.error(HelpStrings.supportOpenMailFailed),
+                ],
+              ] else
+                Center(
+                  child: Text(
+                    HelpStrings.supportAddressPending,
+                    key: HelpKeys.supportEmail,
+                    style: AppTypography.caption.copyWith(color: c.tx3),
+                  ),
+                ),
             ],
           ],
           if (!online) ...<Widget>[

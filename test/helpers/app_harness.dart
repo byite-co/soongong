@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/app.dart';
 import 'package:soongong/core/contracts/fakes/fakes.dart';
@@ -43,6 +44,7 @@ class AppHarness {
     FakeNetworkStatus? network,
     this.photoStore,
     AppDatabase? db,
+    this.extraOverrides = const <Override>[],
   })  : clock = FixedClock(now ?? kHarnessNow),
         backend = backend ?? FakeAuthBackend(),
         social = social ?? FakeSocialSignIn(),
@@ -71,6 +73,9 @@ class AppHarness {
 
   /// S09b: an injected store (e.g. `FailingPhotoStore`), else a plain one on [photoDir].
   final PhotoStore? photoStore;
+
+  /// S09c: further provider overrides (e.g. `supportEmailProvider`).
+  final List<Override> extraOverrides;
 
   /// S09: files handed to the share sheet by 내 기록 내보내기.
   final List<ExportFile> exports = <ExportFile>[];
@@ -101,6 +106,7 @@ class AppHarness {
         if (err != null) throw err;
         exports.add(file);
       }),
+      ...extraOverrides,
     ],
   );
 
