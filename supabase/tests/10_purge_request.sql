@@ -7,9 +7,9 @@ select plan(13);
 
 insert into auth.users (id, email) values ('aaaaaaaa-0000-4000-8000-00000000000d', 'd@x.io');
 insert into public.profiles (user_id, onboarding_done) values ('aaaaaaaa-0000-4000-8000-00000000000d', true);
-insert into public.subjects (id, user_id, created_at, client_updated_at, device_id, server_seq, name, color_index)
+insert into public.subjects (id, user_id, created_at, client_updated_at, device_id, server_seq, name, color_index, sort_order, is_default)
   values ('70000000-0000-4000-8000-000000000001', 'aaaaaaaa-0000-4000-8000-00000000000d', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z', 'dev-d',
-          public.next_server_seq('aaaaaaaa-0000-4000-8000-00000000000d'), '수학', 1);
+          public.next_server_seq('aaaaaaaa-0000-4000-8000-00000000000d'), '수학', 1, 0, false);
 
 select has_column('public', 'profiles', 'purge_request_id', 'profiles.purge_request_id exists');
 select is((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -25,9 +25,9 @@ select is((select purge_request_id from public.profiles where user_id = 'aaaaaaa
   '90000000-0000-4000-8000-000000000001'::uuid, 'R1 remembered on the profile');
 
 -- a row written after R1 (new epoch) then R1 again → replay: nothing deleted, epoch unchanged ------
-insert into public.subjects (id, user_id, created_at, client_updated_at, device_id, server_seq, name, color_index, purge_epoch)
+insert into public.subjects (id, user_id, created_at, client_updated_at, device_id, server_seq, name, color_index, sort_order, is_default, purge_epoch)
   values ('70000000-0000-4000-8000-000000000002', 'aaaaaaaa-0000-4000-8000-00000000000d', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z', 'dev-d',
-          public.next_server_seq('aaaaaaaa-0000-4000-8000-00000000000d'), '영어', 2, 1);
+          public.next_server_seq('aaaaaaaa-0000-4000-8000-00000000000d'), '영어', 2, 0, false, 1);
 select results_eq(
   $$select epoch, replayed, jsonb_array_length(object_paths) from jsonb_to_record(public.purge_all('aaaaaaaa-0000-4000-8000-00000000000d', '90000000-0000-4000-8000-000000000001')) as x(epoch int, replayed bool, object_paths jsonb)$$,
   $$values (1, true, 0)$$, 'R1 again → replayed, epoch stays 1');
