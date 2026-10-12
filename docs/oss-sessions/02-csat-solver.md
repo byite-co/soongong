@@ -1,5 +1,7 @@
 # EXT-02 — 수능 문제풀이
 
+> 구현 상태 갱신: 이 문서는 사전 계획이다. 순차 적용된 코드·한계는 [EXT-02 인계](../handoff/EXT-02.md), 최신 검증은 [EXT-FINAL](../handoff/EXT-FINAL.md) 참조.
+
 이전: [EXT-01](01-handwriting-ocr.md) · 다음: [EXT-03](03-gaze-inference.md)
 
 ## 세션 시작 지시문

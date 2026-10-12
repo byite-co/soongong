@@ -11,3 +11,5 @@
 - EXT-02는 확정 document id/revision/text만 전달한다. 원본 사진을 다시 요구하지 않는다. 기존 S13 동기화가 Fake라는 한계는 유지한다.
 
 변경 공용 파일: AppDatabase(schema v3), LocalPurge, ExportService, reading routes, Supabase config, 신규 계약·worker·gateway·UI 및 회귀 테스트. 운영 배포 없음.
+
+추가 경계: image_picker의 자동 리사이즈/압축을 끄고 반환된 앱 임시 파일을 읽은 뒤 삭제한다(숨은 원본/파생 캐시 중복 방지). 4MB 초과는 거절한다. 삭제 실패는 메모리 입력을 비우고 UI에 표시한다. OS/plugin이 픽커 완료 전에 프로세스를 종료한 경우의 고아 캐시 복구, Android lost-data 복구 및 모든 삭제 동작과의 실기기 연동은 출시 전 잔여 항목이다. 이 경로를 “기기 디스크에 사진이 전혀 쓰이지 않는다”고 설명하지 않는다.

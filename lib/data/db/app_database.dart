@@ -1,6 +1,7 @@
-// AppDatabase (S02) — drift, schema v1. Offline-first: the server is only a
+// AppDatabase (S02 + EXT) — drift, local schema v3. Offline-first: the server is only a
 // sync target (CLAUDE.md §2). Single file + `user_id` column; the whole file
-// is wiped on account switch / logout / purge / epoch mismatch (D27 · D2).
+// is wiped on account switch / purge / epoch mismatch. Logout preserves DB
+// records and the device encryption key (the current S09 implementation).
 //
 // Schema changes: never edit an existing migration — bump [schemaVersion],
 // add a step in [migration] and mark the PR `SCHEMA-CHANGE` (D27).
@@ -55,7 +56,7 @@ class AppDatabase extends _$AppDatabase {
 
   AppDatabase(super.executor);
 
-  /// On-device database (sqlite3 via native assets, drift_flutter).
+  /// On-device encrypted database (sqlite3mc native assets, background Drift).
   AppDatabase.open({required String flavor})
       : super(encryptedDatabase(databaseNameFor(flavor)));
 

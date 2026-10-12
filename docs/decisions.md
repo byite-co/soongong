@@ -583,3 +583,14 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **[S09e] 로컬 epoch 단조**: `LocalPurge.markPending(epoch)`은 `max(저장값, epoch)`를 저장하고 **저장한 값을 반환**, 로컬 단계는 그 값을 쓴다 — replay/superseded 답이 현재 epoch를 싣더라도 로컬 세대가 뒤로 가지 않는다(`local_purge_test`).
 - **[S09e] 바뀐 기존 기대**: S09c `request stage` 2건(오프라인/프로필 불가 → 재전송 수렴 · 프로필이 새 epoch → `GatedAuthBackend`로 호출 뒤 프로필 갱신) · S09d 정산 2건(복구 1회당 재전송 1회 · 151초 뒤에도 유지) · `settings_s09` 백엔드 삭제 1건. 재현은 `s09e_regressions_test`(9: 수정 전 1/9) · pgTAP(수정 전 P1-1 시나리오 2/4 실패).
 - **[S09e] 사진 경로 테스트(P3)**: `photo_retention_test`의 `fileFor` 기대는 문자열이 아니라 `package:path`의 `p.equals`(정규화·플랫폼 구분자)로 비교한다. 루트 이탈 거부 의미는 그대로. Windows 독립 실행 116건 중 남은 1건이 이것(GPT 보고).
+
+
+## EXT-01~04 통합 결정 (2026-10-13, 사용자 순차 적용 요청)
+
+- 사용자 요청 순서대로 OCR, 수학 풀이, 시선 관측, DB 전체 암호화를 하나의 통합 PR #9에 구현했다. S09 PR #8의 검토된 HEAD를 통합 브랜치에 포함했으며 main은 미병합이다. 별도 세션은 단계별 커밋/인계로 구분한다. GPT 직접 구현·단일 최종 PR은 사용자의 명시적 요청에 따른 역할/PR 규칙 예외다.
+- CONTRACT-CHANGE: 전사/풀이 v1 계약을 신규 추가, 기존 채점 Mark·ReadingEngine·SeatEngine·S13 wire 계약과 분리. 로컬 스키마 v3의 study_documents는 local-only이며 export/purge/account wipe에 포함한다. 확정 원문 revision 변경은 기존 풀이를 무효화한다.
+- 초기 추론은 기본 OFF + 사용자 allowlist의 동기 pilot이다. 사진 서버 보관·서버 job 테이블을 만들지 않는다. Edge는 인증/동의/epoch/입출력 경계, 무거운 추론은 별도 제한된 worker다. 기존 판독 quota는 차감하지 않으며 일반 공개 과금/사용량 정책은 출시 전 별도 구현 대상이다.
+- 문제풀이 수치 검증은 요청자가 제공한 별도 정답과의 동치만 의미한다. 정답이 없으면 inconclusive. 임의 Python 실행은 금지하고 제한된 수식 AST만 격리 CAS에서 계산한다. 한국어/수능 모델 평가 완료를 의미하지 않는다.
+- PRINCIPLE-CONFLICT: 사용자가 요청한 시선 관측은 dev 실험 경로로 분리해 원래 얼굴 존재 여부 원칙의 예외로 기록한다. 좌표/영상 저장·전송, 정신적 집중 등급, 시간 집계 변경은 없다.
+- 암호화 범위는 기기의 전체 SQLite 파일이다. sqlite3mc + 256-bit 기기 키, 검증된 사본 교체와 중단 복구를 사용한다. 키/codec 오류 시 평문이나 빈 DB로 후퇴하지 않는다. 암호화 이후 복구 릴리스는 roll-forward다. OS 백업/기기 이전은 제외하고 S13 실제 동기화가 아직 없음을 고지한다.
+- 실제 구현·검증 증거·남은 실기기/모델/인프라 조건은 docs/handoff/EXT-FINAL.md에 정리한다. 자동 CI 통과를 운영 활성화 승인으로 간주하지 않는다.

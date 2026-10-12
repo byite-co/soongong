@@ -46,7 +46,9 @@ class _ProblemSolverScreenState extends ConsumerState<ProblemSolverScreen> {
       final generation = await repo.writer.refreshPurgeGeneration();
       final document = await repo.get(widget.documentId);
       if (document == null) throw StateError('document_unavailable');
-      final epoch = (await LocalPurge.readState(repo.db)).epoch;
+      final before = await LocalPurge.readState(repo.db);
+      if (before.inProgress || before.generation != generation) return;
+      final epoch = before.epoch;
       if (!mounted || op != _operation) return;
       _generation = generation;
       final reference = _reference.text.trim();

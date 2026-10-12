@@ -1,5 +1,7 @@
 # EXT-01 — 손글씨 OCR
 
+> 구현 상태 갱신: 이 문서는 사전 계획이다. 순차 적용된 코드·한계는 [EXT-01 인계](../handoff/EXT-01.md), 최신 검증은 [EXT-FINAL](../handoff/EXT-FINAL.md) 참조.
+
 [전체 순서](README.md) · 다음: [EXT-02](02-csat-solver.md)
 
 ## 세션 시작 지시문

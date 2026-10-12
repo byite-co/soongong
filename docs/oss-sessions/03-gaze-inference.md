@@ -1,5 +1,7 @@
 # EXT-03 — 시선 기반 집중 판독
 
+> 구현 상태 갱신: 이 문서는 사전 계획이다. 순차 적용된 코드·한계는 [EXT-03 인계](../handoff/EXT-03.md), 최신 검증은 [EXT-FINAL](../handoff/EXT-FINAL.md) 참조.
+
 이전: [EXT-02](02-csat-solver.md) · 다음: [EXT-04](04-database-encryption.md)
 
 ## 세션 시작 지시문

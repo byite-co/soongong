@@ -37,6 +37,7 @@ Future<void> bootstrap() async {
     return true;
   };
 
+  runApp(const ProviderScope(child: DatabasePreparingApp()));
   try {
     await prepareDeviceDatabase(databaseNameFor(AppConfig.flavor.name));
   } on DatabaseProtectionException {

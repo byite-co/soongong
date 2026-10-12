@@ -1,5 +1,7 @@
 # EXT-04 — DB 전체 암호화
 
+> 구현 상태 갱신: 이 문서는 사전 계획이다. 순차 적용된 코드·한계는 [EXT-04 인계](../handoff/EXT-04.md), 최신 검증은 [EXT-FINAL](../handoff/EXT-FINAL.md) 참조.
+
 이전: [EXT-03](03-gaze-inference.md) · 다음: [최종 통합 점검](05-final-integration.md)
 
 ## 세션 시작 지시문

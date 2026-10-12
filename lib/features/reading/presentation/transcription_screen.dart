@@ -70,7 +70,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       if (!mounted || operation != _operation || ref.read(currentUserIdProvider) != owner) { bytes.fillRange(0, bytes.length, 0); return; }
       setState(() {
         _image?.fillRange(0, _image!.length, 0);
-        _image = bytes; _transcription = null; _saved = null; _agreed = false; _text.clear(); _operation++;
+        _image = bytes; _transcription = null; _saved = null; _agreed = false; _text.clear();
       });
     } on Object {
       if (mounted && ref.read(currentUserIdProvider) == owner) setState(() => _message = StudyStrings.error);
@@ -83,11 +83,13 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
             if (await file.exists()) await file.delete();
           }
         } on Object {
-          _image?.fillRange(0, _image!.length, 0);
-          if (mounted) setState(() { _image = null; _transcription = null; _message = StudyStrings.cacheCleanupFailed; });
+          if (mounted && operation == _operation && ref.read(currentUserIdProvider) == owner) {
+            _image?.fillRange(0, _image!.length, 0);
+            setState(() { _image = null; _transcription = null; _message = StudyStrings.cacheCleanupFailed; });
+          }
         }
       }
-      if (mounted) setState(() => _busy = false);
+      if (mounted && operation == _operation) setState(() => _busy = false);
     }
   }
 
@@ -105,7 +107,9 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
     setState(() { _busy = true; _message = null; });
     try {
       final generation = await writer.refreshPurgeGeneration();
-      final epoch = (await LocalPurge.readState(writer.db)).epoch;
+      final before = await LocalPurge.readState(writer.db);
+      if (before.inProgress || before.generation != generation) return;
+      final epoch = before.epoch;
       if (!mounted || op != _operation) return;
       _generation = generation;
       final result = await engine.transcribe(_image!, _kind, epoch: epoch);

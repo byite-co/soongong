@@ -1,8 +1,10 @@
 # 공개 코드 통합 현황 — S14
 
+> EXT 후속 적용: 아래 원장은 최초 S14 시점의 평가를 보존한다. PaddleOCR/UniMERNet OCR 어댑터, Qwen 방식의 제한된 도구 루프 + SymPy/Math-Verify, MediaPipe 네이티브 시선 실험 + One Euro 수식, sqlite3mc 전체 로컬 DB 암호화가 순차 구현되었다. 현재 적용/미검증 상태는 [EXT-FINAL](handoff/EXT-FINAL.md)을 우선한다.
+
 기준: 2026-10-12, main `c5723529c11c225032f9f9b0038fe05255e1c903` (S08 병합 후).
 
-후속 준비(2026-10-13 KST): [손글씨 OCR → 수능 풀이 → 시선 판독 → DB 암호화의 세션별 지시문](oss-sessions/README.md). 정합성·검증·최종 일괄 병합 절차를 정리했으며 네 기능은 아직 구현 전이다.
+후속 준비(2026-10-13 KST): [손글씨 OCR → 수능 풀이 → 시선 판독 → DB 암호화의 세션별 지시문](oss-sessions/README.md). 준비 후 네 단계 코드가 순차 적용되었으며 모델 배포/평가와 실기기 검증은 별도 진행 대상이다.
 
 이 문서는 2026-10-10 두 조사 보고서의 후보를 현재 코드와 대조한 적용 원장이다. **전 후보 적용 완료를 뜻하지 않는다.** 구현·기존 사용·미적용을 구분하며, 미적용 항목은 숨기거나 설치만으로 완료 처리하지 않는다. 현행 제품 결정(D9·D10·D14 등)을 유지한다. 사용자가 이번 Work 세션에서 GPT에 직접 구현을 지시했으므로 CLAUDE.md §8의 기존 역할 분담과 다른 점은 PR에도 명시한다.
 
@@ -27,7 +29,7 @@
 | D3 | [Skeletonizer](https://github.com/Milad-Akarie/skeletonizer) | MIT | 미적용: 현재 StatePanel/스켈레톤이 있음. 화면 단위 대체 이득·접근성 비교 필요. |
 | D4 | [FL Chart](https://github.com/imaNNeo/fl_chart) | MIT | 미적용: S08 CustomPainter와 중복. 현행 순공 집계·차트 의미를 그대로 보존한다. |
 | S1 | [flutter_secure_storage + Supabase 저장 어댑터](https://github.com/juliansteenbakker/flutter_secure_storage) | BSD-3-Clause / Supabase MIT | 구현: 기존 secure_storage 11.2.0 + Supabase 2.18.0 확장점으로 세션·PKCE 보안 저장, 검증 후 이전, 작업 직렬화. |
-| S2 | [Drift + SQLite3MultipleCiphers](https://github.com/utelle/SQLite3MultipleCiphers) | 주요 레포 MIT; 내장 구성요소 별도 확인 | 미적용: 평문 DB→암호화 DB의 원자적 이전·복구·키 소실 정책 및 Android/iOS 바이너리 검증 필요. |
+| S2 | [Drift + SQLite3MultipleCiphers](https://github.com/utelle/SQLite3MultipleCiphers) | 주요 레포 MIT; 내장 구성요소 별도 확인 | EXT-04 구현: sqlite3mc native asset, 기기 키, 전체 파일 검증 이전·중단 복구. 실기기 release/백업/복구 검증 필요. |
 | S3 | [local_auth](https://github.com/flutter/packages) | BSD-3-Clause | 미적용: 생체 인증 잠금/복구 UX와 지원 기기 fallback이 아직 없다. |
 | S4 | [screen_protector](https://github.com/prongbang/screen_protector) | Apache-2.0 | 미적용: 캡처 방지 범위와 iOS/Android별 동작·앱 전환 복구 정책 필요. |
 | P1 | [Drift 선택 조회·집계 스트림](https://github.com/simolus3/drift) | MIT | 구현: ExportService의 사용자·삭제 조건을 Drift SQL 조회로 이동. CSV 연결 조회도 계정 범위 제한. |
@@ -44,9 +46,9 @@
 | ID | 후보·원본 | 적용 상태 |
 |---|---|---|
 | F1 | [byite-co/focus-engine](https://github.com/byite-co/focus-engine/blob/main/android/focus-engine/engine/src/main/kotlin/co/byite/focus/engine/pipeline/scene/SceneGrid.kt) | 기존 부분 참조 유지. 이번에는 SceneGrid/HeadPose 신규 이식 없음. 품질 기준 실측·공개 재배포 권리 확인 필요. |
-| F2 | [google-ai-edge/mediapipe-samples](https://github.com/google-ai-edge/mediapipe-samples/blob/main/examples/face_landmarker/android/app/src/main/java/com/google/mediapipe/examples/facelandmarker/FaceLandmarkerHelper.kt) | 미적용: 플랫폼 브리지·모델 조건·실기기 성능 비교 필요. 랜드마크는 정신적 집중의 정답이 아님. |
+| F2 | [google-ai-edge/mediapipe-samples](https://github.com/google-ai-edge/mediapipe-samples/blob/main/examples/face_landmarker/android/app/src/main/java/com/google/mediapipe/examples/facelandmarker/FaceLandmarkerHelper.kt) | EXT-03 구현: MediaPipe SDK의 Android/iOS 브리지와 dev 관측 화면. 모델 해시/라이선스 고정. 정신적 집중 판정은 아니며 실기기 평가 필요. |
 | F3 | [google_mlkit_pose_detection](https://github.com/flutter-ml/google_ml_kit_flutter/blob/develop/packages/google_mlkit_pose_detection/lib/src/pose_detector.dart) | 미적용: 얼굴 검출 대체 성능이 확인되지 않음. 현행 PresenceDetector boolean 계약의 비교 실험 필요. |
-| F4 | [casiez/OneEuroFilter](https://github.com/casiez/OneEuroFilter/blob/main/python/OneEuroFilter/OneEuroFilter.py) | 미적용: 현재 입력은 boolean. 연속 좌표가 없는 상태에서 추가할 실행 경로가 없음. |
+| F4 | [casiez/OneEuroFilter](https://github.com/casiez/OneEuroFilter/blob/main/python/OneEuroFilter/OneEuroFilter.py) | EXT-03 구현: 별도 눈 좌표 신호에 One Euro 수식 독립 구현. 기존 boolean 착석 계약은 유지. |
 | F5 | [emilianavt/OpenSeeFace](https://github.com/emilianavt/OpenSeeFace/blob/master/tracker.py) | 미적용: 데스크톱 Python 추적기이며 모바일 이식·모델 검증 필요. UDP 전송 경로는 채택하지 않음. |
 | P1 | [flutter_calendar_view](https://github.com/SimformSolutionsPvtLtd/flutter_calendar_view/blob/master/lib/src/event_arrangers/side_event_arranger.dart) | 부분 차용 구현: 겹침 연결 그룹/열 재사용 배치를 순수 Dart로 재구성. 반복 일정과 세션을 함께 배치. LICENSE/NOTICE 포함. |
 | P2 | [JonasWanke/rrule](https://github.com/JonasWanke/rrule/blob/main/lib/src/recurrence_rule.dart) | 미적용: 현재 주간 반복 규칙에 충분한 자체 expander가 있음. rrule 확장은 DB/제품 계약 변경 필요. |
@@ -55,7 +57,7 @@
 | I2 | [hnvn/flutter_image_cropper](https://github.com/hnvn/flutter_image_cropper/blob/master/image_cropper/lib/src/cropper.dart) | 미적용: S10 원본/파생 이미지 수명·취소 동작·출처 연결 필요. |
 | I3 | [Udayraj123/OMRChecker](https://github.com/Udayraj123/OMRChecker) | 미적용: 정형 OMR용이며 자유 필기/표시 판독과 다름. PyMuPDF 등 의존 라이선스 별도 검토 필요. |
 | I4 | [simpleclub/flutter_math](https://github.com/simpleclub/flutter_math) | 미적용: 현재 모델에 교정된 LaTeX/해설 필드가 없음. 수식 표시 계약과 함께 도입. |
-| L1 | [flutter_local_notifications + timezone](https://github.com/MaikuB/flutter_local_notifications/blob/master/flutter_local_notifications/example/lib/main.dart) | 기존 SDK 유지. timezone/예약 구현은 열려 있는 S09 PR #8 소유; 이번 브랜치에서 복제·덮어쓰기 없음. |
+| L1 | [flutter_local_notifications + timezone](https://github.com/MaikuB/flutter_local_notifications/blob/master/flutter_local_notifications/example/lib/main.dart) | S09 PR #8 HEAD를 통합 브랜치에 반영해 timezone/예약 구현 포함. main에는 별도 병합하지 않음. |
 | L2 | [fluttercommunity/flutter_workmanager](https://github.com/fluttercommunity/flutter_workmanager/blob/main/workmanager/README.md) | 미적용: D10 전경 동기화 정책과 별개 후속 기능. 계정/epoch 재검증·OS 중단 복구 작업 필요. |
 | L3 | [RevenueCat/purchases-flutter](https://github.com/RevenueCat/purchases-flutter/blob/main/lib/purchases_flutter.dart) | 기존 SDK 유지. S12 실제 BillingGateway/상품/서버 webhook 연결은 이번 변경에서 구현하지 않음. |
 | O1 | [leancodepl/patrol](https://github.com/leancodepl/patrol) | 미적용: 실제 기기·에뮬레이터 CI/권한 시나리오 연결 필요. widget test를 OS 권한 검증으로 간주하지 않음. |
@@ -65,17 +67,17 @@
 
 ## 손글씨·수식·문제풀이 8개 후보
 
-모두 **미적용**이다. 현행 ReadingEngine은 채점 표시 판독 계약이며 서버 엔진 호출이 501 placeholder다. 문제 원문/LaTeX 교정 → 풀이 작업 → 검증 → 사용자 확정 저장의 새 데이터/API 계약과 모델 실행 환경이 필요하다. 현재 구현에 이를 연결했다고 주장하지 않는다.
+EXT-01/02에서 별도 전사·풀이 계약, 교정/확정/저장 UI, 서버 gateway/worker를 구현했다. 기존 Mark 판독 엔진은 계속 별도이며 실제 OCR/풀이 모델 서비스는 미배포다. 아래는 후보별 현재 상태다.
 
-| 후보 | 실제 연결 전 필요한 작업 |
+| 후보 | 현재 적용 및 남은 작업 |
 |---|---|
-| [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) | 모델 선택·고정, 한국 손글씨 평가, 서버 추론 자원/사진 즉시 삭제 계약 |
-| [UniMERNet](https://github.com/opendatalab/UniMERNet) | 수식 crop→LaTeX 어댑터, 모델/가중치 조건·실패 표현·교정 UI |
+| [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) | PaddleOCR 3.7.0 worker 어댑터 구현. 로컬 모델 SHA manifest 검사·사진 메모리 처리. 모델 선정/호스팅/한국 손글씨 평가 남음 |
+| [UniMERNet](https://github.com/opendatalab/UniMERNet) | UniMERNet 0.2.3 worker 어댑터 + 수식/교정 UI 구현. 실제 가중치 배포·권리/정확도 검증 남음 |
 | [ko-hand-ocr](https://github.com/jysvai/ko-hand-ocr) | PROVENANCE의 글꼴 권리 확인과 학생 필기 정확도 검증 |
 | [ML Kit Digital Ink](https://github.com/flutter-ml/google_ml_kit_flutter/tree/develop/packages/google_mlkit_digital_ink_recognition) | 사진이 아닌 획 x/y/time 입력 화면과 모델 다운로드/삭제 처리 |
-| [Qwen-Agent](https://github.com/QwenLM/Qwen-Agent) | 연결 모델/작업 큐/자원 제한 계산 환경; 예제의 unsandboxed exec 실행기 노출 금지 |
-| [SymPy](https://github.com/sympy/sympy) | 허용 수학 연산만 받는 구조화 API·입력 크기/시간 제한·별도 계산 프로세스 |
-| [Math-Verify](https://github.com/huggingface/Math-Verify) | 기준 정답/파서/타임아웃 계약; 동치 검증과 풀이 논리 검증 구분 |
+| [Qwen-Agent](https://github.com/QwenLM/Qwen-Agent) | 구조화 도구 루프 패턴 참고 구현. Qwen-Agent 패키지/임의 Python 실행기는 미도입. HTTPS 모델 호스팅 설정 필요 |
+| [SymPy](https://github.com/sympy/sympy) | SymPy 1.14.0 적용: 허용 AST·수치/깊이 제한·CPU/메모리/벽시계 제한 별도 프로세스 |
+| [Math-Verify](https://github.com/huggingface/Math-Verify) | Math-Verify 0.9.0 적용: 주어진 수치 정답과 비교. 기준 정답 없음은 inconclusive, 해설 논리 검증과 구분 |
 | [KCSAT-ML](https://github.com/naver-ai/KCSAT-ML) | 평가 체계 참고만. AGPL 코드와 비상업 학술 시험 콘텐츠 조건 때문에 제품 데이터에 복사하지 않음 |
 
 ## 그 외 보류·보조 참고
@@ -99,7 +101,7 @@
 - Drift 조회 API와 Flutter `compute` API를 사용한 자체 구현. 예제 자산·로고·화면·전체 서비스 복사 없음.
 - 새 Deno 의존성: `zod@4.6.6`(MIT), 테스트 전용 import `fast-check@4.10.2`(MIT), 전이 `pure-rand@8.0.0`(MIT). `deno.json` 정확 버전과 `deno.lock` integrity 기록. npm 공식 metadata와 tarball SHA-512를 대조하여 추가했으며 CI에서 다시 확인한다.
 - `plpgsql_check`는 CI 테스트 DB 전용 extension. 공식 active-mode API를 호출하며 제품 DB migration에는 추가하지 않는다. 경고 및 checker_exception을 숨기지 않는 진단 단계이며 검토한 동적 record 2건 외 error/checker_exception은 CI를 실패시킨다. 기존 pgTAP도 계속 실행한다.
-- 신규 Flutter 패키지 없음. 기존 `pubspec.lock` 버전 유지.
+- 기존 Flutter 패키지 버전은 유지. sqlite3 3.5.2를 direct 의존성으로 올리고 native asset을 sqlite3mc로 선택. MediaPipe는 Android/iOS 네이티브 의존성으로 추가. worker 패키지/모델 상태는 EXT 인계 참조.
 
 ## 검증·한계
 
@@ -107,4 +109,4 @@
 - 실기기 확인 필요: Android/iOS secure storage 이전/재설치/백업 복원/잠금 상태, PKCE 외부 로그인 복귀, 타임테이블 좁은 열 탭, 대용량 export UI 응답성과 메모리.
 - 로컬 Flutter 실행은 클라우드 메타데이터 접근 시도가 자동 승인 검토에서 거절되어 중지했다. 이를 우회하지 않고 기존 GitHub Actions에서 검증한다.
 - 로컬 Deno의 JSR/npm 직접 조회가 실패하여 테스트 실행 미완료. 공식 registry tarball 무결성 확인과 CI 실행 결과는 서로 구분한다.
-- S09 PR #8의 설정·알림·개인정보 파일을 덮어쓰지 않았으며 병합 전 최신 main 재검토가 필요하다.
+- S09 PR #8의 검토된 HEAD를 추가 부모로 통합했다. main은 미병합이며 최종 병합 전 최신 main을 다시 검토한다.

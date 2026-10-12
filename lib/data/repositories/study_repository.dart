@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 
+import '../../core/contracts/problem_solver.dart';
 import '../../core/contracts/transcription_engine.dart';
 import '../db/app_database.dart';
 import 'local_purge.dart';
@@ -67,8 +68,10 @@ class StudyRepository {
     writer.runOwnedTransaction(() async {
       final current = await get(id);
       if (current == null || current.revision != revision) throw StateError('document_changed');
+      final parsed = ProblemSolution.fromJson(Map<String, dynamic>.from(solution));
+      if (parsed.documentId != id || parsed.revision != revision) throw StateError('solution_document_mismatch');
       await db.customStatement('UPDATE study_documents SET solution_json=? WHERE id=? AND user_id=?',
-        [jsonEncode(solution), id, writer.ctx.userId]);
+        [jsonEncode(parsed.toJson()), id, writer.ctx.userId]);
     }, generation: generation);
 
   static StudyDocument _document(QueryRow row) => StudyDocument(

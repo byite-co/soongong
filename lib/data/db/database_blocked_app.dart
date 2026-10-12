@@ -23,3 +23,14 @@ class _DatabaseBlockedAppState extends State<DatabaseBlockedApp> {
     ])),
   )));
 }
+
+
+class DatabasePreparingApp extends StatelessWidget {
+  const DatabasePreparingApp({super.key});
+  @override
+  Widget build(BuildContext context) => const MaterialApp(home: Scaffold(body: SafeArea(
+    child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      CircularProgressIndicator(), SizedBox(height: 24), Text(DatabaseStrings.preparing),
+    ])),
+  )));
+}

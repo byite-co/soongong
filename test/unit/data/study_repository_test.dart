@@ -6,6 +6,11 @@ import 'package:soongong/data/repositories/sync_writer.dart';
 
 import 'db_test_helpers.dart';
 
+Map<String, Object?> solution(String id, int revision) => {
+  'schema_version': 1, 'document_id': id, 'revision': revision, 'answer': '2',
+  'explanation': 'fixture', 'model': 'fixture', 'verification': 'inconclusive', 'reference_provided': false,
+};
+
 void main() {
   late TestHarness h;
   late StudyRepository repo;
@@ -18,11 +23,12 @@ void main() {
   test('confirmed revision invalidates previous solution and rejects stale edits', () async {
     final generation = await h.writer.refreshPurgeGeneration();
     final first = await repo.save(transcription: transcription, text: 'x+1', generation: generation);
-    await repo.saveSolution(first.id, first.revision, {'answer': '2'}, generation);
+    await repo.saveSolution(first.id, first.revision, solution(first.id, 1), generation);
+    await expectLater(repo.saveSolution(first.id, 1, solution('another-document', 1), generation), throwsStateError);
     final second = await repo.save(transcription: transcription, text: 'x+2', generation: generation, id: first.id, expectedRevision: 1);
     expect(second.revision, 2);
     expect((await repo.get(first.id))!.solution, isNull);
-    await expectLater(repo.saveSolution(first.id, 1, {'answer': '2'}, generation), throwsStateError);
+    await expectLater(repo.saveSolution(first.id, 1, solution(first.id, 1), generation), throwsStateError);
   });
   test('purge barrier refuses late OCR and local-only documents are purged', () async {
     final generation = await h.writer.refreshPurgeGeneration();
