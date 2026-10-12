@@ -9,6 +9,7 @@ import 'dart:convert';
 
 import 'package:archive/archive.dart';
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../core/domain/clock.dart';
@@ -75,16 +76,24 @@ class ExportService {
 
   Future<ExportFile> buildJson() async {
     final map = await exportMap();
-    final text = const JsonEncoder.withIndent('  ').convert(map);
+    // Only a detached value snapshot crosses the isolate boundary. Neither
+    // the database, a provider, nor the authenticated client is captured.
+    final bytes = await compute(_encodeJson, map);
     return ExportFile(
       name: 'soongong-${_stamp()}.json',
-      bytes: Uint8List.fromList(utf8.encode(text)),
+      bytes: bytes,
       mimeType: 'application/json',
     );
   }
 
   Future<List<Map<String, Object?>>> _liveRows(TableInfo<Table, Object?> t) async {
-    final rows = await db.select(t).get();
+    final owner = t.$columns.singleWhere((c) => c.$name == 'user_id') as GeneratedColumn<String>;
+    final deleted = t.$columns.singleWhere((c) => c.$name == 'deleted_at');
+    Expression<bool> live = owner.equals(userId) & deleted.isNull();
+    for (final column in t.$columns) {
+      if (column.$name == 'pending_delete_until') live = live & column.isNull();
+    }
+    final rows = await (db.select(t)..where((_) => live)).get();
     final out = <Map<String, Object?>>[];
     for (final r in rows) {
       final json = Map<String, Object?>.of((r as DataClass).toJson());
@@ -104,16 +113,18 @@ class ExportService {
 
   Future<ExportFile> buildCsvZip() async {
     final subjects = <String, String>{
-      for (final s in await db.select(db.subjects).get())
+      for (final s in await (db.select(db.subjects)..where((s) => s.userId.equals(userId))).get())
         if (s.deletedAt == null && s.name != null) s.id: s.name!,
     };
-    final archive = Archive()
-      ..addFile(ArchiveFile.bytes('sessions.csv', _csvBytes(await sessionsCsv(subjects))))
-      ..addFile(ArchiveFile.bytes('planner.csv', _csvBytes(await plannerCsv(subjects))))
-      ..addFile(ArchiveFile.bytes('wrongs.csv', _csvBytes(await wrongsCsv(subjects))));
+    final payload = <String, String>{
+      'sessions.csv': await sessionsCsv(subjects),
+      'planner.csv': await plannerCsv(subjects),
+      'wrongs.csv': await wrongsCsv(subjects),
+    };
+    final bytes = await compute(_encodeCsvZip, payload);
     return ExportFile(
       name: 'soongong-${_stamp()}.zip',
-      bytes: ZipEncoder().encodeBytes(archive),
+      bytes: bytes,
       mimeType: 'application/zip',
     );
   }
@@ -182,11 +193,11 @@ class ExportService {
           ..orderBy([(w) => OrderingTerm.asc(w.createdAt), (w) => OrderingTerm.asc(w.number)]))
         .get();
     final entries = <String, ReviewEntryRow>{
-      for (final e in await (db.select(db.reviewEntries)..where((e) => e.deletedAt.isNull())).get())
+      for (final e in await (db.select(db.reviewEntries)..where((e) => e.userId.equals(userId) & e.deletedAt.isNull())).get())
         e.wrongItemId: e,
     };
     final retries = <String, int>{};
-    for (final r in await (db.select(db.retryRecords)..where((r) => r.deletedAt.isNull())).get()) {
+    for (final r in await (db.select(db.retryRecords)..where((r) => r.userId.equals(userId) & r.deletedAt.isNull())).get()) {
       if (r.voided ?? false) continue;
       retries[r.wrongItemId] = (retries[r.wrongItemId] ?? 0) + 1;
     }
@@ -241,6 +252,17 @@ class ExportService {
   }
 
   static String csvLine(List<Object?> cells) => cells.map(csvEscape).join(',');
+}
+
+Uint8List _encodeJson(Map<String, Object?> value) =>
+    Uint8List.fromList(utf8.encode(const JsonEncoder.withIndent('  ').convert(value)));
+
+Uint8List _encodeCsvZip(Map<String, String> csv) {
+  final archive = Archive();
+  for (final entry in csv.entries) {
+    archive.addFile(ArchiveFile.bytes(entry.key, ExportService._csvBytes(entry.value)));
+  }
+  return ZipEncoder().encodeBytes(archive);
 }
 
 @Riverpod(keepAlive: true)

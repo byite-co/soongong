@@ -4,7 +4,9 @@
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "npm:@supabase/supabase-js@2.49.4": "2.49.4",
-    "npm:jose@5.9.6": "5.9.6"
+    "npm:fast-check@4.10.2": "4.10.2",
+    "npm:jose@5.9.6": "5.9.6",
+    "npm:zod@4.6.6": "4.6.6"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -83,8 +85,17 @@
         "@types/node"
       ]
     },
+    "fast-check@4.10.2": {
+      "integrity": "sha512-iK2f+YrcmoeGqk6fA0ea2bptcu/itMIm4NfEozq6N25+aG6h7s5HZbB/k1aV7b5w5sFLMCbbtRUsTVR+BgC3xw==",
+      "dependencies": [
+        "pure-rand"
+      ]
+    },
     "jose@5.9.6": {
       "integrity": "sha512-AMlnetc9+CV9asI19zHmrgS/WYsWUwCn2R7RzlbJWD7F9eWYUTGyBmU9o6PxngtLGOiDGPRu+Uc4fhKzbpteZQ=="
+    },
+    "pure-rand@8.0.0": {
+      "integrity": "sha512-7rgWlxG2gAvFPIQfUreo1XYlNvrQ9VnQPFWdncPkdl3icucLK0InOxsaafbvxGTnI6Bk/Rxmslg0lQlRCuzOXw=="
     },
     "tr46@0.0.3": {
       "integrity": "sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw=="
@@ -104,13 +115,18 @@
     },
     "ws@8.22.0": {
       "integrity": "sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg=="
+    },
+    "zod@4.6.6": {
+      "integrity": "sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA=="
     }
   },
   "workspace": {
     "dependencies": [
       "jsr:@std/assert@1",
       "npm:@supabase/supabase-js@2.49.4",
-      "npm:jose@5.9.6"
+      "npm:fast-check@4.10.2",
+      "npm:jose@5.9.6",
+      "npm:zod@4.6.6"
     ]
   }
 }

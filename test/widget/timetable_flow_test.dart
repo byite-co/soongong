@@ -130,6 +130,29 @@ void main() {
     await h.unmount(tester);
   });
 
+  testWidgets('[S14] overlapping recurrence and session stay visible and independently tappable', (tester) async {
+    final r = await seedRecurrence();
+    await seedSession(id: 'overlap', start: DateTime(2026, 10, 3, 16, 15), end: DateTime(2026, 10, 3, 17));
+    await openTimetable(tester);
+    final session = find.byKey(TimetableKeys.block('overlap', const LocalDate(2026, 10, 3), 0));
+    final recurrence = find.byKey(TimetableKeys.recurrenceBlock(r.id, const LocalDate(2026, 10, 3)));
+    final sessionRect = tester.getRect(session);
+    final recurrenceRect = tester.getRect(recurrence);
+    expect(sessionRect.overlaps(recurrenceRect), isFalse);
+    expect(sessionRect.width, greaterThan(0));
+    expect(recurrenceRect.width, greaterThan(0));
+    expect(find.text(TimetableStrings.weekSeated('45분')), findsOneWidget);
+    await tester.tap(session);
+    await tester.pumpAndSettle();
+    expect(find.text(MeasureStrings.detail), findsWidgets);
+    h.container.read(appRouterProvider).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(recurrence);
+    await tester.pumpAndSettle();
+    expect(find.text(PlannerStrings.sheetEditRecurrence), findsOneWidget);
+    await h.unmount(tester);
+  });
+
   testWidgets('week navigation: swipe, 이번 주, arrows; week start setting moves the range', (tester) async {
     await openTimetable(tester);
     await tester.drag(find.byKey(TimetableKeys.pager), const Offset(-400, 0));
