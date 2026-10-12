@@ -45,20 +45,22 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
   }
 
   Future<void> _pick(ImageSource source) async {
-    if (_busy) return;
+    if (_busy || (source == ImageSource.camera && ref.read(measureControllerProvider).isLive)) return;
+    final operation = ++_operation;
+    final owner = ref.read(currentUserIdProvider);
     setState(() { _busy = true; _message = null; });
     XFile? picked;
     try {
       // ImagePicker-created app cache files are removed below. A user's
       // original outside our temporary directory is never deleted.
       picked = await ImagePicker().pickImage(source: source, maxWidth: 2000, imageQuality: 90, requestFullMetadata: false);
-      if (picked == null || !mounted) return;
+      if (picked == null || !mounted || operation != _operation || ref.read(currentUserIdProvider) != owner) return;
       if (await picked.length() > 4 * 1024 * 1024) {
         if (mounted) setState(() => _message = StudyStrings.tooLarge);
         return;
       }
       final bytes = await picked.readAsBytes();
-      if (!mounted) { bytes.fillRange(0, bytes.length, 0); return; }
+      if (!mounted || operation != _operation || ref.read(currentUserIdProvider) != owner) { bytes.fillRange(0, bytes.length, 0); return; }
       setState(() {
         _image?.fillRange(0, _image!.length, 0);
         _image = bytes; _transcription = null; _saved = null; _agreed = false; _text.clear(); _operation++;

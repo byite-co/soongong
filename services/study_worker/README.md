@@ -39,6 +39,7 @@ Do not enable request-body/access logging in an ingress proxy.
 
 Edge configuration: `STUDY_AI_ENABLED=true`, `STUDY_AI_USER_IDS` (comma-separated
 explicit pilot users), `STUDY_WORKER_URL=https://<private-host>/infer`, and
+`STUDY_MATH_OCR_WORKER_URL=https://<math-ocr-host>/infer`, and
 `STUDY_WORKER_SECRET`. Missing configuration fails closed. No secrets belong in
 the Flutter environment. Deploy Edge and the worker explicitly; committing
 this code does not deploy it. Consent and purge epoch are rechecked after

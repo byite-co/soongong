@@ -83,7 +83,7 @@ class AppDatabase extends _$AppDatabase {
             await customStatement(sql);
           }
         },
-        onUpgrade: (m, from, to) async {
+        onUpgrade: (m, from, to) => transaction(() async {
           if (from < 3) await customStatement(createStudyDocuments);
           if (from < 2) {
             // drift runs onUpgrade outside a transaction; dedupe and index
@@ -97,7 +97,7 @@ class AppDatabase extends _$AppDatabase {
               }
             });
           }
-        },
+        }),
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = OFF');
           await customStatement('PRAGMA journal_mode = WAL');
