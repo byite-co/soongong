@@ -379,6 +379,8 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: AppSpacing.s12),
+              const AppNotice(PrivacyStrings.deviceBackup),
               Text(PrivacyStrings.footer, style: AppTypography.caption.copyWith(color: c.tx3, height: 1.6)),
             ],
           ),

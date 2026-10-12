@@ -54,3 +54,5 @@ Android 네이티브 시선 빌드는 `0ffbebe`에서 통과했다. 같은 실�
 `python3 tool/fetch_gaze_model.py` → `flutter pub get` → 기존 analyze-test 명령. 모델 SHA 검증 실패는 빌드 중단. worker 테스트는 `services/study_worker/README.md` 참고. 새 key/원문/사진을 로그나 PR에 남기지 않는다.
 
 최종 병합은 최신 main/PR #8 변동을 재확인하고, 이 문서의 미검증 조건을 해소한 뒤 **PR #9 한 번으로** 진행한다. 암호화 이후 이전 평문 전용 앱으로 되돌리거나 키를 재생성하지 않는다. 복구는 호환 버전으로 roll-forward한다.
+
+후속 iOS 빌드: 최소 버전 수정 이후 Pods_Runner framework 연결 실패를 확인했다. 명시적 iOS 15.5 Podfile, dev/prod의 Debug/Profile/Release 구성 매핑, workspace의 Pods 프로젝트 참조를 고정하고 재검증한다. 개인정보 화면에는 OS 백업/기기 이전 제외와 내보내기 안내를 추가했다.

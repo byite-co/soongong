@@ -86,6 +86,7 @@ abstract final class PrivacyStrings {
   static const String photosRetry = '다시 시도';
 
   // Export
+  static const String deviceBackup = '기기 기록은 암호화되어 있으며 OS 백업이나 기기 이전으로 복원되지 않습니다. 필요한 기록은 내보내기로 보관해주세요.';
   static const String export = '내 기록 내보내기';
   static const String exportCsv = 'CSV로 내보내기';
   static const String exportJson = 'JSON으로 내보내기';
