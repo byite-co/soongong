@@ -52,9 +52,15 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
     setState(() { _busy = true; _message = null; });
     XFile? picked;
     try {
+      final writer = ref.read(syncWriterProvider);
+      final generation = await writer.refreshPurgeGeneration();
+      final purge = await LocalPurge.readState(writer.db);
+      if (!mounted || operation != _operation || purge.inProgress || ref.read(currentUserIdProvider) != owner) return;
+      _generation = generation;
+      // No picker resize/compression: it may leave an undisclosed original copy.
       // ImagePicker-created app cache files are removed below. A user's
       // original outside our temporary directory is never deleted.
-      picked = await ImagePicker().pickImage(source: source, maxWidth: 2000, imageQuality: 90, requestFullMetadata: false);
+      picked = await ImagePicker().pickImage(source: source, requestFullMetadata: false);
       if (picked == null || !mounted || operation != _operation || ref.read(currentUserIdProvider) != owner) return;
       if (await picked.length() > 4 * 1024 * 1024) {
         if (mounted) setState(() => _message = StudyStrings.tooLarge);
@@ -67,7 +73,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
         _image = bytes; _transcription = null; _saved = null; _agreed = false; _text.clear(); _operation++;
       });
     } on Object {
-      if (mounted) setState(() => _message = StudyStrings.error);
+      if (mounted && ref.read(currentUserIdProvider) == owner) setState(() => _message = StudyStrings.error);
     } finally {
       if (picked != null) {
         try {
@@ -76,7 +82,10 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
             final file = File(picked.path);
             if (await file.exists()) await file.delete();
           }
-        } on Object { /* The OS cache remains subject to app cache cleanup. */ }
+        } on Object {
+          _image?.fillRange(0, _image!.length, 0);
+          if (mounted) setState(() { _image = null; _transcription = null; _message = StudyStrings.cacheCleanupFailed; });
+        }
       }
       if (mounted) setState(() => _busy = false);
     }

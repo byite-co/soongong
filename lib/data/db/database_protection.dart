@@ -86,17 +86,17 @@ String databaseFingerprint(Database db) {
       while (cursor.moveNext()) {
         final row = cursor.current;
         final values = row.values.map((v) => switch (v) {
-          Uint8List bytes => ['blob', base64Encode(bytes)],
-          int n => ['int', n.toString()],
-          double n => ['real', n.toString()],
-          String s => ['text', s],
+          final Uint8List bytes => ['blob', base64Encode(bytes)],
+          final int n => ['int', n.toString()],
+          final double n => ['real', n.toString()],
+          final String s => ['text', s],
           null => ['null'],
           _ => throw const DatabaseProtectionException('unsupported_value'),
         }).toList();
         sum = (sum + BigInt.parse(sha256.convert(utf8.encode(jsonEncode(values))).toString(), radix: 16)) % (BigInt.one << 256);
         count++;
       }
-    } finally { statement.dispose(); }
+    } finally { statement.close(); }
     state.add([count, sum.toRadixString(16)]);
   }
   return sha256.convert(utf8.encode(jsonEncode(state))).toString();
@@ -139,7 +139,7 @@ class DatabaseProtection {
     if (!file.existsSync() || file.lengthSync() == 0) {
       final db = sqlite3.open(file.path);
       try { configureDatabaseCipher(db, key); db.execute('VACUUM'); _integrity(db); }
-      finally { db.dispose(); }
+      finally { db.close(); }
       _verify(file);
       return;
     }
@@ -165,11 +165,11 @@ class DatabaseProtection {
         target.execute('PRAGMA journal_mode = DELETE');
         configureDatabaseCipher(target, key, rekey: true);
         _integrity(target);
-      } finally { target.dispose(); }
+      } finally { target.close(); }
       if (_verify(candidate) != digest || databaseFingerprint(source) != digest) throw const DatabaseProtectionException('copy_mismatch');
       final durable = candidate.openSync(mode: FileMode.append);
       try { durable.flushSync(); } finally { durable.closeSync(); }
-    } finally { source.dispose(); }
+    } finally { source.close(); }
     _writeMarker({'version': 1, 'stage': 'verified', 'digest': digest});
     checkpoint?.call('verified');
     _promote(digest);
@@ -185,7 +185,7 @@ class DatabaseProtection {
       _integrity(db);
       return databaseFingerprint(db);
     }
-    finally { db.dispose(); }
+    finally { db.close(); }
   }
 
   void _promote(String digest) {

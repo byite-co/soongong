@@ -2,8 +2,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'package:soongong/data/db/database_protection.dart';
+import 'package:sqlite3/sqlite3.dart';
 
 class _Keys implements DatabaseKeyStore {
   String? value;
@@ -32,7 +32,7 @@ void main() {
       db.execute('INSERT INTO sync_outbox VALUES(1, ?, ?)', ['private-pending-payload', Uint8List.fromList([0, 255, 31])]);
       db.execute("INSERT INTO study_documents VALUES('doc', '손글씨 원문')");
       return databaseFingerprint(db);
-    } finally { db.dispose(); }
+    } finally { db.close(); }
   }
 
   test('keys persist, are reused, and are never replaced for existing ciphertext', () async {
@@ -52,10 +52,10 @@ void main() {
     expect(String.fromCharCodes(file.readAsBytesSync()), isNot(contains('private-pending-payload')));
     final encrypted = sqlite3.open(file.path);
     try { configureDatabaseCipher(encrypted, key); expect(databaseFingerprint(encrypted), before); }
-    finally { encrypted.dispose(); }
+    finally { encrypted.close(); }
     final plain = sqlite3.open(file.path);
     try { expect(() => plain.select('SELECT * FROM sqlite_master'), throwsA(isA<SqliteException>())); }
-    finally { plain.dispose(); }
+    finally { plain.close(); }
     expect(File('${file.path}.plaintext').existsSync(), isFalse);
     expect(File('${file.path}.encrypting').existsSync(), isFalse);
     expect(File('${file.path}.encryption.json').existsSync(), isFalse);
@@ -78,7 +78,7 @@ void main() {
       DatabaseProtection(file, key).prepare();
       final db = sqlite3.open(file.path);
       try { configureDatabaseCipher(db, key); expect(databaseFingerprint(db), before); }
-      finally { db.dispose(); }
+      finally { db.close(); }
       expect(File('${file.path}.encryption.json').existsSync(), isFalse);
       expect(File('${file.path}.plaintext').existsSync(), isFalse);
     });
@@ -95,12 +95,12 @@ void main() {
     writer.execute("INSERT INTO sync_outbox(id,payload) VALUES(2,'pending-in-wal')");
     final before = databaseFingerprint(writer);
     expect(File('${file.path}-wal').lengthSync(), greaterThan(0));
-    writer.dispose();
+    writer.close();
     expect(File('${file.path}-wal').lengthSync(), greaterThan(0));
     DatabaseProtection(file, key).prepare();
     final db = sqlite3.open(file.path);
     try { configureDatabaseCipher(db, key); expect(databaseFingerprint(db), before); }
-    finally { db.dispose(); }
+    finally { db.close(); }
   });
 
   test('fresh database is encrypted before schema creation', () {
@@ -108,6 +108,6 @@ void main() {
     expect(isPlainDatabase(file), isFalse);
     final db = sqlite3.open(file.path);
     try { configureDatabaseCipher(db, key); db.execute('CREATE TABLE first_write(id INTEGER)'); }
-    finally { db.dispose(); }
+    finally { db.close(); }
   });
 }

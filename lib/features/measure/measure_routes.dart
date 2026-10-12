@@ -1,8 +1,8 @@
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
-import '../../core/dev/seat_lab/seat_lab_screen.dart';
 import '../../core/dev/gaze_lab_screen.dart';
+import '../../core/dev/seat_lab/seat_lab_screen.dart';
 import '../auth/domain/auth_redirect.dart';
 import 'presentation/measure_screens.dart';
 

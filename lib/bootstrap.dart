@@ -15,8 +15,8 @@ import 'core/logging/app_logger.dart';
 import 'core/utils/device_id.dart';
 import 'data/auth/supabase_init.dart';
 import 'data/db/app_database.dart';
-import 'data/db/database_protection.dart';
 import 'data/db/database_blocked_app.dart';
+import 'data/db/database_protection.dart';
 import 'data/db/encrypted_database.dart';
 import 'data/startup/startup_tasks.dart';
 
@@ -40,7 +40,7 @@ Future<void> bootstrap() async {
   try {
     await prepareDeviceDatabase(databaseNameFor(AppConfig.flavor.name));
   } on DatabaseProtectionException {
-    runApp(DatabaseBlockedApp(retry: bootstrap));
+    runApp(const ProviderScope(child: DatabaseBlockedApp(retry: bootstrap)));
     return;
   }
 

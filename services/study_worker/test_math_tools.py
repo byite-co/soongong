@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from math_tools import calculate, expression, numeric, verify_answer
-from solver import solve
+from solver import bounded_cas, solve
 
 
 class MathTests(unittest.TestCase):
@@ -22,6 +22,10 @@ class MathTests(unittest.TestCase):
         self.assertEqual(verify_answer("1/2", "0.5"), "verified")
         self.assertEqual(verify_answer("2", "3"), "contradicted")
         self.assertEqual(verify_answer("x^2", "2"), "unsupported")
+
+    def test_real_isolated_cas_process(self):
+        self.assertEqual(bounded_cas("verify", ("1/2", "0.5")), "verified")
+        self.assertEqual(bounded_cas("calculate", {"action": "simplify", "expression": {"number": "2"}}), "2")
 
     @patch("solver.bounded_cas", return_value="verified")
     @patch("solver.complete", return_value={"answer": "2", "explanation": "1+1=2", "tools": []})

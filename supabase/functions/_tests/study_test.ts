@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
-import { boundedJson, requireStudyProfile, studyRequest, transcriptionResponse } from "../_shared/study.ts";
+import { boundedJson, requireStudyProfile, studyRequest, solutionResponse, transcriptionResponse } from "../_shared/study.ts";
 import { HttpError } from "../_shared/http.ts";
 
 Deno.test("study ownership generation and consent fail closed", () => {
@@ -18,4 +18,14 @@ Deno.test("transcription coordinates, score, and total text are bounded", () => 
   const value = { schema_version: 1, kind: "text", engine: "fixture", blocks: [{ text: "손글씨", box: [0, 0, 1, 1], confidence: 0.6 }] };
   assertEquals(transcriptionResponse.safeParse(value).success, true);
   assertEquals(transcriptionResponse.safeParse({ ...value, blocks: [{ ...value.blocks[0], box: [1, 0, 0, 1] }] }).success, false);
+});
+
+Deno.test("solution verification needs a supplied reference and versioned document", () => {
+  const response = { schema_version: 1, document_id: "550e8400-e29b-41d4-a716-446655440000", revision: 1,
+    answer: "2", explanation: "1+1", model: "fixture", verification: "verified", reference_provided: true };
+  assertEquals(solutionResponse.safeParse(response).success, true);
+  assertEquals(solutionResponse.safeParse({ ...response, reference_provided: false }).success, false);
+  assertEquals(solutionResponse.safeParse({ ...response, revision: 0 }).success, false);
+  assertEquals(studyRequest.safeParse({ schema_version: 1, operation: "solve", document_id: response.document_id,
+    revision: 1, text: "1+1", reference_answer: null, purge_epoch: 0, consent_version: "study-2026-10-13" }).success, true);
 });

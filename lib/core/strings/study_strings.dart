@@ -21,6 +21,7 @@ abstract final class StudyStrings {
   static const readingConsent = '설정에서 판독 데이터 전송 동의도 활성화해 주세요.';
   static const unavailable = '텍스트 인식 서버가 아직 연결되지 않았습니다.';
   static const error = '처리하지 못했습니다. 입력은 유지됩니다. 다시 시도해 주세요.';
+  static const cacheCleanupFailed = '사진 임시 파일을 정리하지 못했습니다. 다시 시도하기 전에 앱의 임시 저장공간을 확인해주세요.';
   static const tooLarge = '사진은 4MB 이하로 선택해 주세요.';
   static const review = '사진과 대조해 인식된 내용을 교정해 주세요.';
   static const saved = '이 기기에 저장되었습니다.';

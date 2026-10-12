@@ -19,7 +19,7 @@ export const solutionResponse = z.object({
   answer: z.string().max(200), explanation: z.string().max(16000), model: z.string().min(1).max(200),
   verification: z.enum(["verified", "contradicted", "inconclusive", "unsupported"]),
   reference_provided: z.boolean(),
-}).strict();
+}).strict().refine(v => v.verification !== "verified" || v.reference_provided);
 
 export const transcriptionResponse = z.object({
   schema_version: z.literal(1), kind: z.enum(["text", "math"]), engine: z.string().min(1).max(200),
