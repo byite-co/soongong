@@ -144,6 +144,9 @@ class SupabaseAuthBackend implements AuthBackend {
   }
 
   @override
+  String? get currentProvider => _auth.currentUser?.appMetadata['provider'] as String?;
+
+  @override
   Stream<AuthSession?> get sessions => _auth.onAuthStateChange.map((state) {
         final s = state.session;
         return s == null ? null : AuthSession(userId: s.user.id, email: s.user.email);

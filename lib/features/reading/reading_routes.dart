@@ -1,7 +1,6 @@
 import 'package:go_router/go_router.dart';
 
-import '../../core/router/placeholder_screen.dart';
-import '../../core/strings/reading_strings.dart';
+import 'presentation/transcription_screen.dart';
 
 /// Routes owned by the `reading` feature.
 ///
@@ -17,7 +16,7 @@ final List<RouteBase> readingRoutes = <RouteBase>[
   GoRoute(
     path: readingCapturePath,
     name: 'capture',
-    builder: (_, _) => const PlaceholderScreen(title: ReadingStrings.captureTitle),
+    builder: (_, state) => TranscriptionScreen(plannerItemId: state.uri.queryParameters['itemId']),
   ),
 ];
 

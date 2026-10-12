@@ -62,3 +62,6 @@ verify_jwt = true
 verify_jwt = true
 [functions.reading-update-marks]
 verify_jwt = true
+
+[functions.study-infer]
+verify_jwt = true

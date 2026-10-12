@@ -67,3 +67,8 @@ app.*.map.json
 
 # FVM
 .fvm/
+
+# Python inference workers
+__pycache__/
+*.pyc
+.venv/

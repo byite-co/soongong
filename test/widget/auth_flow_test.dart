@@ -174,7 +174,7 @@ void main() {
     await h.pumpApp(tester);
     expect(find.text(AuthStrings.consentAccountTitle), findsOneWidget);
     await h.unmount(tester);
-    await h.dispose();
+    await h.disposeInTest(tester);
 
     h = AppHarness(
       backend: FakeAuthBackend(

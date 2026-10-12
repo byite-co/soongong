@@ -13,6 +13,8 @@ import 'package:uuid/uuid.dart';
 // The generated part references the wire enums and converters directly.
 import '../../core/domain/enums.dart';
 import 'converters.dart';
+import 'purge_gate.dart';
+import 'study_schema.dart';
 import 'tables.dart';
 
 export 'converters.dart';
@@ -48,6 +50,9 @@ String databaseNameFor(String flavor) => 'soongong_$flavor';
   ],
 )
 class AppDatabase extends _$AppDatabase {
+  /// S09c: in-memory mirror of `sync_meta.purge_generation` (see `PurgeGate`).
+  final PurgeGate purgeGate = PurgeGate();
+
   AppDatabase(super.executor);
 
   /// On-device database (sqlite3 via native assets, drift_flutter).
@@ -60,7 +65,7 @@ class AppDatabase extends _$AppDatabase {
   /// v1 — S02 tables. v2 — S02c: partial unique index on
   /// `review_entries(wrong_item_id) WHERE deleted_at IS NULL` (SCHEMA-CHANGE).
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   /// Partial unique indexes (drift `@TableIndex` cannot express `WHERE`).
   /// Same statements in the S03 DDL (docs/data-model.md §4).
@@ -73,11 +78,13 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async {
           await m.createAll();
+          await customStatement(createStudyDocuments);
           for (final sql in partialUniqueIndexes) {
             await customStatement(sql);
           }
         },
         onUpgrade: (m, from, to) async {
+          if (from < 3) await customStatement(createStudyDocuments);
           if (from < 2) {
             // drift runs onUpgrade outside a transaction; dedupe and index
             // creation must commit or roll back together (S02c), so an
@@ -152,6 +159,7 @@ class AppDatabase extends _$AppDatabase {
   /// Deletes every row of every table (account switch · logout · purge-all ·
   /// epoch mismatch, D27 · D2). Photo files are deleted by the caller.
   Future<void> wipeAll() => transaction(() async {
+        await customStatement('DELETE FROM study_documents');
         for (final t in allTables) {
           await delete(t).go();
         }

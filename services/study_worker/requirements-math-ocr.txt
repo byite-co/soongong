@@ -1,0 +1,4 @@
+# Optional model deployment profile. Freeze/hash the resolved dependency set
+# and model files before activating a worker. Models are not auto-downloaded.
+unimernet==0.2.3
+Pillow==12.3.0

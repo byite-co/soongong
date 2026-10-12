@@ -406,4 +406,24 @@ class ReadingRepository {
   /// Removes photo rows entirely (logout / purge).
   Future<void> purgePhotoRows(Iterable<String> ids) =>
       (db.delete(_p)..where((p) => p.id.isIn(ids.toList()))).go();
+
+  // ---------------------------------------------------------------------
+  // Photo sweep marker (S09c): a full wipe that did not finish (killed,
+  // a file that could not be deleted) leaves the account id here so the
+  // next start / foreground retries the row-less files.
+
+  static const String photoSweepPendingKey = 'photo_sweep_pending';
+
+  Future<void> markPhotoSweepPending() => db.into(db.syncMeta).insertOnConflictUpdate(
+        SyncMetaCompanion.insert(key: photoSweepPendingKey, value: ctx.userId),
+      );
+
+  Future<void> clearPhotoSweepPending() =>
+      (db.delete(db.syncMeta)..where((m) => m.key.equals(photoSweepPendingKey))).go();
+
+  /// true when a wipe of this account's photos is still to be finished.
+  Future<bool> photoSweepPending() async {
+    final row = await (db.select(db.syncMeta)..where((m) => m.key.equals(photoSweepPendingKey))).getSingleOrNull();
+    return row?.value == ctx.userId;
+  }
 }

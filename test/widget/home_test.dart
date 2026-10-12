@@ -9,6 +9,7 @@ import 'package:soongong/core/domain/local_date.dart';
 import 'package:soongong/core/strings/common_strings.dart';
 import 'package:soongong/core/strings/home_strings.dart';
 import 'package:soongong/core/strings/measure_strings.dart';
+import 'package:soongong/core/strings/settings_strings.dart';
 import 'package:soongong/core/theme/app_theme.dart';
 import 'package:soongong/data/auth/auth_mode.dart';
 import 'package:soongong/data/repositories/repositories.dart';
@@ -50,7 +51,7 @@ void main() {
     await tester.tap(find.byTooltip(HomeStrings.settings));
     await tester.pumpAndSettle();
     expect(find.text(CommonStrings.settingsTitle), findsWidgets);
-    expect(find.text(CommonStrings.placeholderPreparing), findsOneWidget);
+    expect(find.text(SettingsStrings.sectionStudy), findsOneWidget, reason: 'S09 settings screen replaced the placeholder');
     await h.unmount(tester);
   });
 

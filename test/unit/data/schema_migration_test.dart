@@ -92,7 +92,7 @@ void main() {
 
     final db = AppDatabase(NativeDatabase(file));
     addTearDown(db.close);
-    expect(await userVersion(db), 2);
+    expect(await userVersion(db), 3);
     expect(await indexNames(db), contains('review_entries_live_wrong_item'));
     final entries = await db.select(db.reviewEntries).get();
     expect(entries.map((e) => e.id), containsAll(<String>['e1', 'e2']));
@@ -150,7 +150,7 @@ void main() {
     await inspect.close();
     final db = AppDatabase(NativeDatabase(file));
     addTearDown(db.close);
-    expect(await userVersion(db), 2);
+    expect(await userVersion(db), 3);
     expect(await indexNames(db), contains('review_entries_live_wrong_item'));
     final live = (await db.select(db.reviewEntries).get()).where((r) => r.deletedAt == null);
     expect(live.map((r) => r.id), <String>['newest']);
@@ -170,7 +170,7 @@ void main() {
 
     final db = AppDatabase(NativeDatabase(file));
     addTearDown(db.close);
-    expect(await userVersion(db), 2);
+    expect(await userVersion(db), 3);
     expect(await indexNames(db), contains('review_entries_live_wrong_item'));
 
     final rows = await db.select(db.reviewEntries).get();

@@ -62,6 +62,10 @@ class ExportService {
           ..where((p) => p.userId.equals(userId) & p.deletedAt.isNull())
           ..orderBy([(p) => OrderingTerm.asc(p.takenAt)]))
         .get();
+    tables['study_documents'] = (await db.customSelect(
+      'SELECT id,revision,kind,text,solution_json,planner_item_id,updated_at FROM study_documents WHERE user_id=?',
+      variables: [Variable(userId)],
+    ).get()).map((r) => r.data).toList();
     tables['photos'] = <Map<String, Object?>>[
       for (final p in photos) (Map<String, Object?>.of(p.toJson())..remove('local_path')),
     ];

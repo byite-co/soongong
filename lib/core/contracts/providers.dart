@@ -12,6 +12,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderListenableS
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../data/engines/seat_engine_impl.dart';
+import '../../data/network/connectivity_network_status.dart';
+import '../../data/notifications/local_notification_gateway.dart';
 import '../config/app_config.dart';
 import '../dev/dev_fake_settings.dart';
 import 'contracts.dart';
@@ -77,6 +79,12 @@ BillingGateway billingGateway(Ref ref) {
   return fake;
 }
 
+/// S09: the device notification gateway. The real plugin-backed gateway is
+/// the default (dev builds on devices get real notifications); widget tests
+/// override this provider with `FakeNotificationGateway`.
+@Riverpod(keepAlive: true)
+NotificationGateway notificationGateway(Ref ref) => LocalNotificationGateway();
+
 @Riverpod(keepAlive: true)
 SyncEngine syncEngine(Ref ref) {
   final fake = FakeSyncEngine();
@@ -92,3 +100,8 @@ SyncEngine syncEngine(Ref ref) {
   ref.onDispose(fake.dispose);
   return fake;
 }
+
+/// S09b: device network state (문의 전송 비활성). Tests override with
+/// `FakeNetworkStatus`.
+@Riverpod(keepAlive: true)
+NetworkStatus networkStatus(Ref ref) => ConnectivityNetworkStatus();
