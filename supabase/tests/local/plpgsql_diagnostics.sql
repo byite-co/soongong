@@ -2,7 +2,8 @@
 -- baseline, not a replacement for pgTAP's ownership / ledger / epoch tests.
 -- Run ONLY against the disposable test database, after migrations and pgTAP.
 -- Dynamic SQL / polymorphic records can require runtime context. Diagnostics
--- are visible in CI; do not suppress existing findings to fabricate a clean gate.
+-- are visible in CI. Fail on new errors; retain two reviewed dynamic-record
+-- findings in the output (exact baseline below, documented in S14 handoff).
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check;
 CREATE TEMP TABLE static_diagnostics (
@@ -44,4 +45,18 @@ BEGIN
 END $$;
 SELECT * FROM static_diagnostics ORDER BY routine, line, level;
 SELECT level, count(*) FROM static_diagnostics GROUP BY level ORDER BY level;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT FROM static_diagnostics
+    WHERE level IN ('error', 'checker_exception')
+      AND NOT COALESCE((
+        routine = 'sync_pull(integer,bigint,integer)'
+        AND line IN (36, 37) AND sqlstate = '55000'
+        AND message = 'record "rec" is not assigned yet'
+      ), false)
+  ) THEN
+    RAISE EXCEPTION 'Unexpected PL/pgSQL static errors; inspect diagnostics above';
+  END IF;
+END $$;
 ROLLBACK; -- no extension/schema changes survive the diagnostics

@@ -32,16 +32,25 @@ Deno.test("string boundary preserves null, empty, spaces and UTF-16 length behav
 
 Deno.test("property: Zod boundaries preserve the pre-integration JSON contracts", () => {
   fc.assert(
-    fc.property(fc.jsonValue(), fc.integer({ min: 1, max: 100 }), (v, max) => {
-      const objectBefore = v !== null && typeof v === "object" && !Array.isArray(v);
-      assertEquals(jsonObjectSchema.safeParse(v).success, objectBefore);
-      const requiredBefore = typeof v === "string" && v.length > 0 && v.length <= max;
-      if (requiredBefore) assertEquals(requireString({ v }, "v", max), v);
-      else assertThrows(() => requireString({ v }, "v", max), HttpError);
-      const optionalBefore = v === null || (typeof v === "string" && v.length <= max);
-      if (optionalBefore) assertEquals(optionalString({ v }, "v", max), v);
-      else assertThrows(() => optionalString({ v }, "v", max), HttpError);
-    }),
+    fc.property(
+      fc.oneof(
+        fc.jsonValue(),
+        fc.array(fc.constantFrom("a", "한", "😀", "\ud800", "\u0301", " "), { maxLength: 110 }).map(
+          (v) => v.join(""),
+        ),
+      ),
+      fc.integer({ min: 1, max: 100 }),
+      (v, max) => {
+        const objectBefore = v !== null && typeof v === "object" && !Array.isArray(v);
+        assertEquals(jsonObjectSchema.safeParse(v).success, objectBefore);
+        const requiredBefore = typeof v === "string" && v.length > 0 && v.length <= max;
+        if (requiredBefore) assertEquals(requireString({ v }, "v", max), v);
+        else assertThrows(() => requireString({ v }, "v", max), HttpError);
+        const optionalBefore = v === null || (typeof v === "string" && v.length <= max);
+        if (optionalBefore) assertEquals(optionalString({ v }, "v", max), v);
+        else assertThrows(() => optionalString({ v }, "v", max), HttpError);
+      },
+    ),
     { seed: 20261012, numRuns: 1500 },
   );
 });
@@ -50,7 +59,9 @@ Deno.test("photo path schema retains the existing Edge boundary (SQL validates o
   for (const paths of [[""], ["x".repeat(512)], Array(20).fill("user/request/p.jpg")]) {
     assert(photoPathsSchema.safeParse(paths).success);
   }
-  for (const paths of [[], null, {}, [12], ["x".repeat(513)], Array(21).fill("p")]) {
+  for (
+    const paths of [[], null, {}, [12], ["x".repeat(513)], ["😀".repeat(257)], Array(21).fill("p")]
+  ) {
     assert(!photoPathsSchema.safeParse(paths).success);
   }
   fc.assert(

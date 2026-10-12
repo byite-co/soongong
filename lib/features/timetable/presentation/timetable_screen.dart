@@ -33,8 +33,8 @@ import '../../planner/application/planner_providers.dart';
 import '../../planner/domain/planner_draft.dart';
 import '../../planner/presentation/planner_item_sheet.dart';
 import '../application/timetable_providers.dart';
-import '../domain/recurrence_expander.dart';
 import '../domain/overlap_layout.dart';
+import '../domain/recurrence_expander.dart';
 import '../domain/week_timetable.dart';
 
 /// Widget keys for tests.

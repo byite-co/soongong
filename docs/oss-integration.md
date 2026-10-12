@@ -33,7 +33,7 @@
 | P3 | [Flutter background_isolate_channels 예제](https://github.com/flutter/samples) | 해당 Dart 코드 BSD 계열; 자산 별도 | 패턴 적용: Flutter compute로 JSON/ZIP 인코딩 분리. DB/client를 보내지 않고 값 snapshot만 전달. 예제 소스 복사 없음. |
 | P4 | [flutter_image_compress](https://github.com/fluttercandies/flutter_image_compress) | MIT | 미적용: OCR용 원본 보존·캐시 기한·최소 해상도 및 압축 정확도 벤치마크 필요. |
 | B1 | [Zod](https://github.com/colinhacks/zod) | MIT | 구현: Zod 4.6.6으로 공통 HTTP 경계/reading-submit 경로 검증. SQL 인가/원장은 그대로 권위 유지. |
-| B2 | [plpgsql_check](https://github.com/okbob/plpgsql_check) | LICENSE 본문 MIT 계열 | 진단 연결: PostgreSQL 16 CI 임시 DB에서 plpgsql_check 실행. 경고·컨텍스트 의존 오류를 출력하는 비차단 baseline; pgTAP 대체 아님. |
+| B2 | [plpgsql_check](https://github.com/okbob/plpgsql_check) | LICENSE 본문 MIT 계열 | 진단 연결: PostgreSQL 16 CI 임시 DB에서 plpgsql_check 실행. 경고·컨텍스트 의존 오류를 출력하는 기존 2건을 명시한 baseline + 신규 오류 차단; pgTAP 대체 아님. |
 | B3 | [pg_jsonschema](https://github.com/supabase/pg_jsonschema) | Apache-2.0 | 미적용: 현행 SQL 검증과 중복. JSON schema를 단일 계약으로 관리하는 방식/마이그레이션 필요. |
 | B4 | [fast-check](https://github.com/dubzzz/fast-check) | MIT | 구현: fast-check 4.10.2로 JSON·문자열·경로 기존 입력 계약에 2,000회 고정 seed 속성 검증. 원장 전체 검증을 의미하지 않음. |
 
@@ -96,7 +96,7 @@
 - 보안 저장: [Supabase Flutter 2.18.0 LocalStorage](https://github.com/supabase/supabase-flutter/blob/supabase_flutter-v2.18.0/packages/supabase_flutter/lib/src/local_storage.dart) 확장 API 사용. 기존 의존성의 API 연결이며 SDK 구현 복제 없음.
 - Drift 조회 API와 Flutter `compute` API를 사용한 자체 구현. 예제 자산·로고·화면·전체 서비스 복사 없음.
 - 새 Deno 의존성: `zod@4.6.6`(MIT), 테스트 전용 import `fast-check@4.10.2`(MIT), 전이 `pure-rand@8.0.0`(MIT). `deno.json` 정확 버전과 `deno.lock` integrity 기록. npm 공식 metadata와 tarball SHA-512를 대조하여 추가했으며 CI에서 다시 확인한다.
-- `plpgsql_check`는 CI 테스트 DB 전용 extension. 공식 active-mode API를 호출하며 제품 DB migration에는 추가하지 않는다. 경고 및 checker_exception을 숨기지 않는 진단 단계이고 현재 blocking gate는 기존 pgTAP이다.
+- `plpgsql_check`는 CI 테스트 DB 전용 extension. 공식 active-mode API를 호출하며 제품 DB migration에는 추가하지 않는다. 경고 및 checker_exception을 숨기지 않는 진단 단계이며 검토한 동적 record 2건 외 error/checker_exception은 CI를 실패시킨다. 기존 pgTAP도 계속 실행한다.
 - 신규 Flutter 패키지 없음. 기존 `pubspec.lock` 버전 유지.
 
 ## 검증·한계
