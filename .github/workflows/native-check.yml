@@ -36,7 +36,11 @@ jobs:
           cache: true
       - run: python3 tool/fetch_gaze_model.py
       - run: flutter pub get
-      - run: flutter build ios --simulator --debug --flavor dev --no-codesign --dart-define-from-file=env/app.dev.example.json --verbose
+      - name: Build iOS simulator with bounded diagnostic output
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter build ios --simulator --debug --flavor dev --no-codesign --dart-define-from-file=env/app.dev.example.json --verbose 2>&1 | tee /tmp/soongong-ios-build.log | grep -E 'Error \(Xcode\)|error:|warning:|Built |Xcode build done|Failed to build|EXCLUDED_ARCHS|Skipping implicit dependency|ignoring implicit dependency|TARGET_BUILD_DIR =|CONFIGURATION_BUILD_DIR ='
       - name: Diagnose iOS dependency linkage on failure
         if: failure()
         run: |

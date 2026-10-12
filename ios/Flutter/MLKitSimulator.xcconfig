@@ -1,0 +1,5 @@
+// MLKitVision 10.0.0 excludes arm64 simulators in its official podspec.
+// Keep this AFTER Generated.xcconfig: a cold Flutter build generates that file
+// before pod install can expose transitive architecture restrictions.
+// Device arm64 remains supported; simulators require an x86_64 runtime.
+EXCLUDED_ARCHS[sdk=iphonesimulator*] = $(inherited) i386 arm64

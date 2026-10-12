@@ -56,3 +56,5 @@ Android 네이티브 시선 빌드는 `0ffbebe`에서 통과했다. 같은 실�
 최종 병합은 최신 main/PR #8 변동을 재확인하고, 이 문서의 미검증 조건을 해소한 뒤 **PR #9 한 번으로** 진행한다. 암호화 이후 이전 평문 전용 앱으로 되돌리거나 키를 재생성하지 않는다. 복구는 호환 버전으로 roll-forward한다.
 
 후속 iOS 빌드: 최소 버전 수정 이후 Pods_Runner framework 연결 실패를 확인했다. 명시적 iOS 15.5 Podfile, dev/prod의 Debug/Profile/Release 구성 매핑, workspace의 Pods 프로젝트 참조를 고정하고 재검증한다. 개인정보 화면에는 OS 백업/기기 이전 제외와 내보내기 안내를 추가했다.
+
+첫 iOS 시뮬레이터 빌드 제한: MLKitVision 10.0.0의 공식 podspec은 arm64 simulator를 제외한다. Flutter 3.47.5는 Pods가 없는 첫 빌드에서 Generated.xcconfig를 pod install 전에 생성하므로, 이 제한을 보지 못해 앱/Pods의 architecture가 어긋날 수 있다. 모든 앱 xcconfig에서 Generated 뒤에 `MLKitSimulator.xcconfig`를 읽어 기기 arm64는 유지하고 simulator arm64만 제외한다. iOS 26의 arm64 전용 시뮬레이터는 지원하지 않으며, x86_64 지원 simulator 또는 실기기가 필요하다. 최종 통과 여부는 PR checks에 기록한다.
