@@ -13,6 +13,7 @@ import 'package:uuid/uuid.dart';
 // The generated part references the wire enums and converters directly.
 import '../../core/domain/enums.dart';
 import 'converters.dart';
+import 'purge_gate.dart';
 import 'tables.dart';
 
 export 'converters.dart';
@@ -48,6 +49,9 @@ String databaseNameFor(String flavor) => 'soongong_$flavor';
   ],
 )
 class AppDatabase extends _$AppDatabase {
+  /// S09c: in-memory mirror of `sync_meta.purge_generation` (see `PurgeGate`).
+  final PurgeGate purgeGate = PurgeGate();
+
   AppDatabase(super.executor);
 
   /// On-device database (sqlite3 via native assets, drift_flutter).

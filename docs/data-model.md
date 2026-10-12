@@ -284,7 +284,7 @@ payload 는 전송 시 현재 행을 읽어 만든다(§1.1 push 컬럼). 승인
 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
-| `key` | TEXT PK | `cursor_next_seq`(단조 증가만) · `last_synced_at` · `purge_epoch` |
+| `key` | TEXT PK | `cursor_next_seq`(단조 증가만) · `last_synced_at` · `purge_epoch` · S09b–S09e: `purge_pending_epoch` · `purge_requested`(요청 id) · `purge_requested_at` · `purge_expected_epoch`(요청이 본 서버 epoch, S09e) · `purge_generation` · `photo_sweep_pending` · `account_user_id`(S05) |
 | `value` | TEXT | |
 
 ### 2.18 `sync_conflicts` — 로컬 전용(dev 메뉴 열람)

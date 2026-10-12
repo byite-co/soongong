@@ -1,19 +1,28 @@
 import 'package:go_router/go_router.dart';
 
-import '../../core/router/placeholder_screen.dart';
-import '../../core/strings/common_strings.dart';
 import '../auth/domain/auth_redirect.dart';
+import 'presentation/account_screen.dart';
+import 'presentation/settings_screen.dart';
 
 /// Routes owned by the `settings` feature (S09).
 ///
 /// `/settings` sits outside the tab shell (home header gear → push on the
-/// root navigator). S05 placed a placeholder; S09 replaces the builder and
-/// adds sub-routes. Sheets and modals are not routes — use `showAppSheet` /
-/// `showAppModal`.
+/// root navigator). Sub-screens live in their own features
+/// (`/settings/subjects` · `/settings/privacy` · `/settings/help`). Sheets
+/// (목표 시간 · 주 시작 요일 · 알림) and modals are not routes — `showAppSheet`
+/// / `showAppModal`.
 final List<RouteBase> settingsRoutes = <RouteBase>[
   GoRoute(
     path: AppPaths.settings,
     name: 'settings',
-    builder: (_, _) => const PlaceholderScreen(title: CommonStrings.settingsTitle),
+    builder: (_, _) => const SettingsScreen(),
+  ),
+  GoRoute(
+    path: accountPath,
+    name: 'account',
+    builder: (_, _) => const AccountScreen(),
   ),
 ];
+
+/// 계정 (원본 S09 §4.2, S09b).
+const String accountPath = '/settings/account';

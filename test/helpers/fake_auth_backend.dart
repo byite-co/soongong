@@ -53,6 +53,9 @@ class FakeAuthBackend implements AuthBackend {
   Object? profileError;
 
   AuthSession? session;
+
+  /// Reported by [currentProvider] (S09 계정 row).
+  String? provider;
   AuthSession signedInSession = const AuthSession(userId: 'u-1', email: 'a@x.io');
   final StreamController<AuthSession?> _ctrl = StreamController<AuthSession?>.broadcast();
 
@@ -152,5 +155,32 @@ class FakeAuthBackend implements AuthBackend {
   AuthSession? get currentSession => session;
 
   @override
+  String? get currentProvider => session == null ? null : provider;
+
+  @override
   Stream<AuthSession?> get sessions => _ctrl.stream;
+}
+
+/// S09b: a backend whose named functions wait on a completer so a test can
+/// switch accounts while a server call is in flight.
+class GatedAuthBackend extends FakeAuthBackend {
+  GatedAuthBackend({super.session, super.profileRow});
+
+  final Map<String, Completer<Map<String, dynamic>>> gates = <String, Completer<Map<String, dynamic>>>{};
+
+  /// Holds the next call to [function] until the returned completer resolves.
+  Completer<Map<String, dynamic>> hold(String function) => gates[function] = Completer<Map<String, dynamic>>();
+
+  @override
+  Future<Map<String, dynamic>> invoke(
+    String function, {
+    Map<String, dynamic> body = const <String, dynamic>{},
+    Map<String, String> headers = const <String, String>{},
+    bool withUser = true,
+  }) {
+    final gate = gates.remove(function);
+    if (gate == null) return super.invoke(function, body: body, headers: headers, withUser: withUser);
+    calls.add(RecordedCall(function, body, headers, withUser));
+    return gate.future;
+  }
 }

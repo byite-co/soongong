@@ -1,6 +1,7 @@
 // Barrel for the shared widgets (S01 · S05).
 export 'app_button.dart';
 export 'app_check_row.dart';
+export 'app_list_row.dart';
 export 'app_modal.dart';
 export 'app_notice.dart';
 export 'app_sheet.dart';

@@ -23,6 +23,7 @@ import 'package:drift/drift.dart';
 import '../../core/domain/delete_policy.dart';
 import '../db/app_database.dart';
 import '../db/sync_tables.dart';
+import 'local_purge.dart';
 import 'write_context.dart';
 
 class ApplyServerReport {
@@ -37,6 +38,12 @@ class ApplyServerReport {
   /// them. S13 resolves these (LWW) before calling `applyServer`; the list is
   /// here so it can log a `sync_conflicts` entry when it did not.
   final List<String> dirtyOverwritten;
+}
+
+/// A write refused by the purge barrier ([S09c]): the caller started before
+/// 모든 기록 삭제 ran, or a purge is still in progress. Nothing committed.
+class PurgeBarrierError extends StateError {
+  PurgeBarrierError(super.message);
 }
 
 class SyncWriter {
@@ -67,16 +74,37 @@ class SyncWriter {
     return row?.value;
   }
 
-  /// [runInTransaction] for a write that may be stale ([S06d]): the checks
-  /// run **inside** the transaction, i.e. only once this writer holds the
-  /// database lock, so a write queued behind an account switch can no
-  /// longer slip in after it. It refuses (nothing commits) when
-  ///   * [alive] reports the caller was disposed meanwhile, or
+  /// The purge generation this process last saw (`PurgeGate`), to capture
+  /// when an action starts and pass as [runOwnedTransaction]'s `generation`.
+  /// null before the first read of this run.
+  int? get purgeGeneration => db.purgeGate.generation;
+
+  /// Reads `sync_meta.purge_generation` into the gate (startup).
+  Future<int> refreshPurgeGeneration() async {
+    final g = (await LocalPurge.readState(db)).generation;
+    db.purgeGate.update(g);
+    return g;
+  }
+
+  /// [runInTransaction] for a write that may be stale ([S06d] · [S09c]): the
+  /// checks run **inside** the transaction, i.e. only once this writer holds
+  /// the database lock, so a write queued behind an account switch or
+  /// behind 모든 기록 삭제 can no longer slip in after it. It refuses
+  /// (nothing commits) when
+  ///   * [alive] reports the caller was disposed meanwhile,
   ///   * the database is bound to another account than [ctx.userId]
-  ///     (`sync_meta.account_user_id`, written by `AccountBinding.bind`).
+  ///     (`sync_meta.account_user_id`, written by `AccountBinding.bind`),
+  ///   * [generation] (the `purgeGeneration` the caller captured when its
+  ///     action started) differs from the stored `purge_generation` — the
+  ///     records were purged in between ([PurgeBarrierError]), or
+  ///   * a purge is in progress (requested or pending) and this is an
+  ///     ordinary write — [purgeWork] marks the purge's own steps and the
+  ///     paths that resolve a blocked purge (recovery finish / discard).
   Future<T> runOwnedTransaction<T>(
     Future<T> Function() action, {
     bool Function()? alive,
+    int? generation,
+    bool purgeWork = false,
   }) =>
       db.transaction(() async {
         if (alive != null && !alive()) {
@@ -85,6 +113,14 @@ class SyncWriter {
         final bound = await boundUserId();
         if (bound != null && bound != ctx.userId) {
           throw StateError('stale write: database bound to another account');
+        }
+        final purge = await LocalPurge.readState(db);
+        db.purgeGate.update(purge.generation);
+        if (generation != null && generation != purge.generation) {
+          throw PurgeBarrierError('stale write: records were purged meanwhile');
+        }
+        if (!purgeWork && purge.inProgress) {
+          throw PurgeBarrierError('write refused: 모든 기록 삭제 in progress (${purge.stage.name})');
         }
         return action();
       });

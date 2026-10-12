@@ -163,13 +163,22 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     if (_disposed) throw StateError('MeasureController disposed');
   }
 
-  /// Every write of this controller goes through here ([S06d]): the alive
-  /// and account-ownership checks run inside the transaction, after the
-  /// database lock is acquired, so a write queued behind an account switch
-  /// (D27 wipe + rebind) is refused instead of re-creating the old
-  /// account's rows in the new account's database.
-  Future<T> _owned<T>(Future<T> Function() action) =>
-      sessions.writer.runOwnedTransaction(action, alive: () => !_disposed);
+  /// Every write of this controller goes through here ([S06d] · [S09c]):
+  /// the alive, account-ownership and purge-generation checks run inside
+  /// the transaction, after the database lock is acquired, so a write
+  /// queued behind an account switch (D27 wipe + rebind) or behind 모든
+  /// 기록 삭제 is refused instead of re-creating the old rows. While a
+  /// purge is pending only the session that already exists may be written
+  /// (checkpoint · save · corrections · recovery finish / discard — they
+  /// resolve the measurement the purge waits for); [newRecord] marks the
+  /// one write that starts a new session, which the barrier refuses.
+  Future<T> _owned<T>(Future<T> Function() action, {bool newRecord = false}) =>
+      sessions.writer.runOwnedTransaction(
+        action,
+        alive: () => !_disposed,
+        generation: sessions.writer.purgeGeneration,
+        purgeWork: !newRecord,
+      );
 
   String? get sessionId => _draft?.sessionId ?? _timeline?.sessionId;
   SessionMode get mode => _draft?.mode ?? _timeline?.mode ?? SessionMode.manual;
@@ -302,7 +311,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
         plannerItemId: task?.id,
       );
       final first = _timeline!.snapshot(at);
-      await _owned(() => sessions.startActive(first));
+      await _owned(() => sessions.startActive(first), newRecord: true);
       _todayBaseSeconds = await _todaySeatedBefore(_timeline!.sessionId);
       if (_disposed) return false;
       phase = MeasurePhase.focus;
