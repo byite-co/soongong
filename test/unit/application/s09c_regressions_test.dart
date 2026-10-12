@@ -324,32 +324,43 @@ void main() {
       expect(await h.container.read(localPurgeProvider).pendingEpoch(), isNull);
     });
 
-    test('request stage: purge-all throws and the profile is unreadable → unconfirmed, writes refused; the profile (epoch unchanged) clears it and writes resume', () async {
+    test('request stage: the answer is lost and the device goes offline → unconfirmed, writes refused; back online the SAME id is re-sent until the server answers (S09e: never cleared by time)', () async {
       final backend = FakeAuthBackend(session: kU1, profileRow: kProfileRowOnboardingDone);
       await signedIn(backend);
       final settings = h.container.read(settingsControllerProvider);
-      backend.responses['purge-all'] = Exception('offline');
-      backend.profileError = Exception('offline');
+      backend.responses['purge-all'] = Exception('connection reset'); // the request was formed online; its answer is lost
       expect(await h.container.read(privacyActionsProvider).deleteAll(), isA<DeleteAllUnconfirmed>());
       expect((await h.container.read(localPurgeProvider).state()).stage, PurgeStage.requested);
       expect(await settings.setTheme(ThemeSetting.dark), isFalse, reason: 'nothing is written until the server answers');
 
-      backend.profileError = null; // reachable again · purge_epoch 0 == local 0 · id not served
-      expect(await h.container.read(purgeRecoveryProvider).resume(), isA<DeleteAllUnconfirmed>(), reason: 'inside the server execution window the lost call may still run (S09d)');
-      h.clock.advance(kPurgeRequestSettleWindow + const Duration(seconds: 1));
-      expect(await h.container.read(purgeRecoveryProvider).resume(), isNull, reason: 'window passed → the call never purged');
+      backend.profileError = Exception('offline'); // offline: nothing can be decided
+      expect(await h.container.read(purgeRecoveryProvider).resume(), isA<DeleteAllUnconfirmed>());
+      backend.profileError = null; // reachable again · purge_epoch 0 == expected 0 · id not served → re-sent, still no answer
+      expect(await h.container.read(purgeRecoveryProvider).resume(), isA<DeleteAllUnconfirmed>());
+      h.clock.advance(const Duration(seconds: 151));
+      expect(await h.container.read(purgeRecoveryProvider).resume(), isA<DeleteAllUnconfirmed>(), reason: 'S09e: elapsed time is not evidence');
+      expect((await h.container.read(localPurgeProvider).state()).stage, PurgeStage.requested);
+      expect(await settings.setTheme(ThemeSetting.dark), isFalse);
+
+      backend.responses['purge-all'] = <String, dynamic>{'epoch': 1, 'replayed': false, 'superseded': false};
+      expect(await h.container.read(purgeRecoveryProvider).resume(), isA<DeleteAllDone>(), reason: 'the re-sent id is served');
       expect((await h.container.read(localPurgeProvider).state()).stage, PurgeStage.none);
       expect(await settings.setTheme(ThemeSetting.dark), isTrue);
-      expect(backend.callNames.where((n) => n == 'purge-all').length, 1, reason: 'the server purge is not retried by the recovery');
+      final sent = backend.calls.where((c) => c.name == 'purge-all').toList();
+      expect(sent.map((c) => c.body['request_id']).toSet().length, 1, reason: 'the same id throughout — never a new purge');
     });
 
     test('request stage: purge-all throws but the server profile already carries the new epoch → completed from the profile, no second purge-all', () async {
-      final backend = FakeAuthBackend(session: kU1, profileRow: kProfileRowOnboardingDone);
+      final backend = GatedAuthBackend(session: kU1, profileRow: kProfileRowOnboardingDone);
       await signedIn(backend);
       await h.container.read(subjectRepositoryProvider).create(name: '수학', colorIndex: 0);
-      backend.responses['purge-all'] = Exception('timeout after the server processed');
+      final gate = backend.hold('purge-all');
+      final deleting = h.container.read(privacyActionsProvider).deleteAll();
+      await h.settle();
+      // the server processed the call (epoch 3) and the answer was lost on the way back
       backend.profileRow = <String, dynamic>{...kProfileRowOnboardingDone, 'purge_epoch': 3};
-      expect(await h.container.read(privacyActionsProvider).deleteAll(), isA<DeleteAllDone>());
+      gate.completeError(Exception('timeout after the server processed'));
+      expect(await deleting, isA<DeleteAllDone>());
       expect(await h.container.read(syncWriterProvider).purgeEpoch(), 3);
       expect((await h.container.read(subjectRepositoryProvider).getAll()).map((s) => s.isDefault), <bool>[true]);
       expect(backend.callNames.where((n) => n == 'purge-all').length, 1);

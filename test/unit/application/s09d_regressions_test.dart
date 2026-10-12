@@ -8,6 +8,8 @@
 // `repro` test failed before the S09d fix on Linux except the P2 listing,
 // which fails on Windows only — its Linux control stays here and the
 // Windows-style path contract is covered by `photo_store_path_test.dart`.
+// S09e changed the settlement rule: an open request is never cleared by
+// elapsed time; the same id is re-sent instead (see s09e_regressions_test).
 
 import 'dart:io';
 
@@ -111,9 +113,11 @@ void main() {
       expect(await stage(), PurgeStage.requested);
       expect(await settings.setTheme(ThemeSetting.dark), isFalse);
       for (var i = 0; i < 3; i++) {
-        expect(await h.container.read(privacyActionsProvider).resume(), isA<DeleteAllUnconfirmed>(), reason: 'same epoch + id not served + inside the server window → still unknown');
+        expect(await h.container.read(privacyActionsProvider).resume(), isA<DeleteAllUnconfirmed>(), reason: 'same epoch + id not served → the same id is re-sent; no answer → still unknown');
       }
-      expect(purgeCalls(backend), 1, reason: 'recovery never re-sends');
+      expect(purgeCalls(backend), 4, reason: 'S09e: each recovery run re-sends the SAME id once (the server replays it), never a new one');
+      expect(backend.calls.where((c) => c.name == 'purge-all').map((c) => c.body['request_id']).toSet(), <String>{id});
+      expect(backend.calls.where((c) => c.name == 'purge-all').map((c) => c.body['expected_epoch']).toSet(), <int>{0}, reason: 'formed against the profile epoch');
 
       // the server executed the call whose answer was lost
       backend.profileRow = <String, dynamic>{...kProfileRowOnboardingDone, 'purge_epoch': 9, 'purge_request_id': id};
@@ -121,7 +125,7 @@ void main() {
       expect(await stage(), PurgeStage.none);
       expect(await h.container.read(syncWriterProvider).purgeEpoch(), 9);
       expect((await h.container.read(subjectRepositoryProvider).getAll()).map((s) => s.isDefault), <bool>[true]);
-      expect(purgeCalls(backend), 1);
+      expect(purgeCalls(backend), 4, reason: 'settled from the profile: no further call');
       expect(await settings.setTheme(ThemeSetting.dark), isTrue);
     });
 
@@ -153,20 +157,25 @@ void main() {
       expect(purgeCalls(backend), 1);
     });
 
-    test('lost answer, server reachable, id not served: cleared only after the server execution window passed', () async {
+    test('lost answer, server reachable, id not served: the request stays open however long it takes — settled by the same id re-sent (S09e)', () async {
       final backend = FakeAuthBackend(session: kU1, profileRow: kProfileRowOnboardingDone);
       await signedIn(backend);
       final settings = h.container.read(settingsControllerProvider);
       backend.responses['purge-all'] = Exception('connection reset');
       expect(await h.container.read(privacyActionsProvider).deleteAll(), isA<DeleteAllUnconfirmed>());
-      expect(await h.container.read(privacyActionsProvider).resume(), isA<DeleteAllUnconfirmed>(), reason: 'inside the window the request may still be executing');
+      expect(await h.container.read(privacyActionsProvider).resume(), isA<DeleteAllUnconfirmed>(), reason: 'the request may still be executing');
       expect(await settings.setTheme(ThemeSetting.dark), isFalse);
 
-      h.clock.advance(kPurgeRequestSettleWindow + const Duration(seconds: 1));
-      expect(await h.container.read(privacyActionsProvider).resume(), isNull, reason: 'window passed · epoch unchanged · id not on the profile → never served');
+      h.clock.advance(const Duration(seconds: 151));
+      expect(await h.container.read(privacyActionsProvider).resume(), isA<DeleteAllUnconfirmed>(), reason: 'S09e: elapsed time is not evidence about the server');
+      expect(await stage(), PurgeStage.requested);
+      expect(await settings.setTheme(ThemeSetting.dark), isFalse);
+
+      backend.responses['purge-all'] = <String, dynamic>{'epoch': 1, 'replayed': false, 'superseded': false};
+      expect(await h.container.read(privacyActionsProvider).resume(), isA<DeleteAllDone>(), reason: 'the re-sent id is served');
       expect(await stage(), PurgeStage.none);
       expect(await settings.setTheme(ThemeSetting.dark), isTrue);
-      expect(purgeCalls(backend), 1);
+      expect(backend.calls.where((c) => c.name == 'purge-all').map((c) => c.body['request_id']).toSet().length, 1, reason: 'one id throughout');
     });
 
     test('the same account signs in again while its purge-all is still in flight: the new instance waits (no clear, no second call); the late answer settles it', () async {

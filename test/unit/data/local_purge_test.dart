@@ -135,4 +135,23 @@ void main() {
     expect(await purge.pendingEpoch(), isNull);
     expect(await h.writer.purgeEpoch(), 5);
   });
+
+  test('S09e: markRequested stores the expected epoch; markPending never lowers the stored epoch and returns what it stored', () async {
+    final purge = LocalPurge(h.db, h.ctx);
+    await purge.markRequested('90000000-0000-4000-8000-000000000003', expectedEpoch: 4);
+    var s = await purge.state();
+    expect(s.expectedEpoch, 4);
+    expect(s.stage, PurgeStage.requested);
+    expect(await purge.markPending(9), 9);
+    s = await purge.state();
+    expect(s.expectedEpoch, isNull, reason: 'cleared with the request');
+    expect(s.epoch, 9);
+    await purge.run(epoch: 9);
+    await purge.clearPending();
+    await purge.markRequested('90000000-0000-4000-8000-000000000004');
+    expect((await purge.state()).expectedEpoch, isNull, reason: 'a request without an expected epoch (stored before S09e)');
+    expect(await purge.markPending(3), 9, reason: 'an older epoch is clamped to the stored one');
+    expect(await purge.pendingEpoch(), 9);
+    expect(await h.writer.purgeEpoch(), 9);
+  });
 }

@@ -6,10 +6,10 @@
 // disappears (the measurement was finished or discarded), when the device
 // comes back online, when the account signs in again and when the app
 // returns to the foreground. The privacy screen shows [PurgeRecoveryState]
-// and offers the same `resume()` as "다시 시도". The server is never asked
-// to purge again for a local retry; while a delete or a `purge-all` call is
-// still running the state is "확인 중" and a run follows its completion
-// ([S09d]).
+// and offers the same `resume()` as "다시 시도". A local retry never starts
+// a new purge: an open request is re-sent with its own id, which the server
+// replays ([S09e]); while a delete or a `purge-all` call is still running
+// the state is "확인 중" and one run follows its completion ([S09d]).
 
 import 'dart:async';
 

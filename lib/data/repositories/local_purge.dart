@@ -12,11 +12,15 @@
 // Stages ([S09c], `sync_meta`):
 //   purge_requested      the client request id of a `purge-all` call that
 //                        was started; its result is not known yet (answered
-//                        by the response, or by the server profile's
-//                        `purge_request_id` / `purge_epoch` at a later read)
-//   purge_requested_at   when that call was started (UTC) — a negative
-//                        reconcile needs the server's execution window to
-//                        have passed ([S09d])
+//                        by the response, by the server profile's
+//                        `purge_request_id` / `purge_epoch`, or by re-sending
+//                        the same id — the server replays it, [S09e])
+//   purge_requested_at   when that call was started (UTC) — informational;
+//                        time is never evidence about the server ([S09e])
+//   purge_expected_epoch the server epoch the request was formed against
+//                        (read from the profile right before the call); sent
+//                        with every (re)send so a request older than a later
+//                        purge is superseded, not executed ([S09e])
 //   purge_pending_epoch  the server confirmed [epoch]; the local steps
 //                        (photos · rows · 기타 · marker) are not finished
 //   purge_epoch          the epoch new rows are stamped with (D2)
@@ -55,6 +59,7 @@ class PurgeState {
     required this.pendingEpoch,
     required this.requestId,
     required this.requestedAt,
+    required this.expectedEpoch,
     required this.generation,
   });
 
@@ -64,6 +69,10 @@ class PurgeState {
   /// The open `purge-all` request id, or null.
   final String? requestId;
   final DateTime? requestedAt;
+
+  /// The server epoch the open request was formed against ([S09e]); null for
+  /// a request stored before S09e.
+  final int? expectedEpoch;
   final int generation;
 
   bool get requested => requestId != null;
@@ -87,13 +96,14 @@ class LocalPurge {
   static const String pendingEpochKey = 'purge_pending_epoch';
   static const String requestedKey = 'purge_requested';
   static const String requestedAtKey = 'purge_requested_at';
+  static const String expectedEpochKey = 'purge_expected_epoch';
   static const String generationKey = 'purge_generation';
   static const String cursorKey = 'cursor_next_seq';
 
   /// Reads the whole purge state in one go (usable inside a transaction).
   static Future<PurgeState> readState(AppDatabase db) async {
     final rows = await (db.select(db.syncMeta)
-          ..where((m) => m.key.isIn(const <String>[purgeEpochKey, pendingEpochKey, requestedKey, requestedAtKey, generationKey])))
+          ..where((m) => m.key.isIn(const <String>[purgeEpochKey, pendingEpochKey, requestedKey, requestedAtKey, expectedEpochKey, generationKey])))
         .get();
     final map = <String, String>{for (final r in rows) r.key: r.value};
     final requestedAt = map[requestedAtKey];
@@ -102,6 +112,7 @@ class LocalPurge {
       pendingEpoch: int.tryParse(map[pendingEpochKey] ?? ''),
       requestId: map[requestedKey],
       requestedAt: requestedAt == null ? null : DateTime.tryParse(requestedAt)?.toUtc(),
+      expectedEpoch: int.tryParse(map[expectedEpochKey] ?? ''),
       generation: int.tryParse(map[generationKey] ?? '') ?? 0,
     );
   }
@@ -112,10 +123,16 @@ class LocalPurge {
   Future<int?> pendingEpoch() async => (await state()).pendingEpoch;
 
   /// Records that a `purge-all` call with [requestId] is being made (before
-  /// the call). Re-marking the same id (a resend) only refreshes the time.
-  Future<void> markRequested(String requestId) => db.transaction(() async {
+  /// the call), formed against the server's [expectedEpoch]. Re-marking the
+  /// same id (a resend) only refreshes the time.
+  Future<void> markRequested(String requestId, {int? expectedEpoch}) => db.transaction(() async {
         await _put(requestedKey, requestId);
         await _put(requestedAtKey, ctx.nowUtc().toIso8601String());
+        if (expectedEpoch == null) {
+          await (db.delete(db.syncMeta)..where((m) => m.key.equals(expectedEpochKey))).go();
+        } else {
+          await _put(expectedEpochKey, '$expectedEpoch');
+        }
         await _bump();
       });
 
@@ -126,16 +143,22 @@ class LocalPurge {
         await _bump();
       });
 
-  /// Stores the server's [epoch] and marks the local purge as pending.
-  Future<void> markPending(int epoch) => db.transaction(() async {
-        await _put(purgeEpochKey, '$epoch');
-        await _put(pendingEpochKey, '$epoch');
+  /// Stores the server's [epoch] and marks the local purge as pending. The
+  /// stored epoch never moves backwards ([S09e]: a replayed answer carries
+  /// the account's current epoch; an older one is never applied) — the
+  /// epoch actually stored is returned and is the one the local steps use.
+  Future<int> markPending(int epoch) => db.transaction(() async {
+        final current = (await state()).epoch;
+        final target = epoch > current ? epoch : current;
+        await _put(purgeEpochKey, '$target');
+        await _put(pendingEpochKey, '$target');
         await _clearRequest();
         await _bump();
+        return target;
       });
 
   Future<void> _clearRequest() =>
-      (db.delete(db.syncMeta)..where((m) => m.key.isIn(const <String>[requestedKey, requestedAtKey]))).go();
+      (db.delete(db.syncMeta)..where((m) => m.key.isIn(const <String>[requestedKey, requestedAtKey, expectedEpochKey]))).go();
 
   Future<void> clearPending() => db.transaction(() async {
         await (db.delete(db.syncMeta)..where((m) => m.key.equals(pendingEpochKey))).go();

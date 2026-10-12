@@ -32,10 +32,10 @@ complete-signup(consent_version) ─▶ signup_approvals.age_verified 확인 →
 | `update-consent` | 사용자 JWT | `{granted:bool, consent_version?}` | `{profile}` |
 | `check-email` | `x-app-key`(앱 키) + IP 분당 20회 | `{email}` | `{exists:bool}` · `401 unauthorized` · `429 rate_limited` |
 | `submit-inquiry` | 사용자 JWT | `{body ≤2000, reply_email?}` | `201 {id, created_at}` · `429 rate_limited`(하루 10건) |
-| `purge-all` | 사용자 JWT | `{request_id?: uuid}` | `{epoch, replayed}` — 같은 `request_id`는 서버가 다시 지우지 않고 같은 epoch를 돌려준다(`profiles.purge_request_id`, [S09d]) · `400 invalid_field` |
+| `purge-all` | 사용자 JWT | `{request_id?: uuid, expected_epoch?: int}` | `{epoch, replayed, superseded}` — 계정+요청 id 영수증(`purge_receipts`, [S09e]): 같은 id는 다시 지우지 않고 **현재** epoch를 돌려준다(`replayed`); 요청이 본 `expected_epoch`가 더 이상 현재가 아니면 아무것도 지우지 않고 기록한다(`superseded`) · `400 invalid_field` |
 | `delete-account` | 사용자 JWT | — | `{deleted:true}` |
 
-`profile` = `{user_id, onboarding_done, consent_account_version, consent_account_at, consent_reading_version, consent_reading_at, consent_reading_revoked_at, consent_reading_active, purge_epoch, purge_request_id, created_at}`(`purge_request_id` = 마지막으로 처리한 `purge-all` 요청 id, [S09d]). 온보딩 완료는 RPC `profile_set_onboarding_done()`.
+`profile` = `{user_id, onboarding_done, consent_account_version, consent_account_at, consent_reading_version, consent_reading_at, consent_reading_revoked_at, consent_reading_active, purge_epoch, purge_request_id, created_at}`(`purge_request_id` = 마지막으로 처리한 `purge-all` 요청 id — 정보용, 계약은 `purge_receipts`, [S09d]·[S09e]). 온보딩 완료는 RPC `profile_set_onboarding_done()`.
 
 ### 티켓 · 패스 · 토큰 검증
 

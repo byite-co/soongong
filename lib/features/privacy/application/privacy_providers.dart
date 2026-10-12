@@ -6,10 +6,11 @@
 // captured ([S09b]): a response arriving after an account switch is
 // abandoned, and the local purge runs inside an owned transaction.
 //
-// 모든 기록 삭제 stages ([S09c] · [S09d], `LocalPurge`):
-//   requested  the client request id is stored BEFORE `purge-all` is
-//              called; while the server's answer is unknown nothing else
-//              is written (barrier)
+// 모든 기록 삭제 stages ([S09c] · [S09d] · [S09e], `LocalPurge`):
+//   requested  the client request id + the server epoch it was formed
+//              against (profile read right before) are stored BEFORE
+//              `purge-all` is called; while the server's answer is unknown
+//              nothing else is written (barrier)
 //   pending    the server epoch is stored (the answer, or the server
 //              profile when the answer was lost); the local steps follow
 //              inside one owned transaction
@@ -19,11 +20,13 @@
 // and when the account signs in again (`PurgeRecovery`). One operation per
 // account at a time: a delete or recovery already running is joined, a
 // `purge-all` call still running in this process is waited for, never
-// second-guessed from the profile. The server replays the same request id
-// without a second purge (`purge_all(p_user, p_request_id)`), so a lost
-// answer is settled by the profile (`purge_request_id` · `purge_epoch`) or
-// by re-sending the same id — a new purge is never started on behalf of an
-// old intent.
+// second-guessed from the profile. The server keeps a receipt per (account,
+// request id) and replays the same id without a second purge whatever ran
+// in between, and supersedes a request formed against an older epoch
+// (`purge_all(p_user, p_request_id, p_expected_epoch)`, [S09e]); so an
+// open request is settled only by server evidence — the profile, or the
+// same id sent again — never by elapsed time, and the stored epoch only
+// moves forward. A new purge is never started on behalf of an old intent.
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -168,23 +171,22 @@ class _MeasuringNow implements Exception {
   const _MeasuringNow();
 }
 
-/// How long the server may still be executing one `purge-all` call after
-/// the client lost its answer (the Edge Function wall-clock limit). Until
-/// it has passed since the call was started, "the profile does not carry
-/// the request id" is not evidence that the request was never served.
-const Duration kPurgeRequestSettleWindow = Duration(seconds: 150);
-
 /// What the server said about one request id.
 sealed class PurgeAnswer {
   const PurgeAnswer();
 }
 
-/// The server served the request (now, or as a replay of the same id).
+/// The server handled the request: it purged now, it replays a request it
+/// handled before (whatever ran in between), or it superseded a request
+/// formed against an older epoch (a newer purge had already run — nothing
+/// more to delete for this intent). [epoch] is the account's CURRENT epoch
+/// in every case ([S09e]).
 class PurgeServed extends PurgeAnswer {
-  const PurgeServed(this.epoch, {required this.replayed});
+  const PurgeServed(this.epoch, {required this.replayed, required this.superseded});
 
   final int epoch;
   final bool replayed;
+  final bool superseded;
 }
 
 /// The server answered and refused: the request was not served.
@@ -205,7 +207,7 @@ class PurgeUnknown extends PurgeAnswer {
 /// outlives the per-account [PrivacyActions] instance that started it, so
 /// a recovery run of a later instance (same account signed in again) finds
 /// the call still running — or its answer — instead of asking the server
-/// profile too early.
+/// too early.
 class PurgeCall {
   PurgeCall(this.future) {
     future.then((a) => answer = a, onError: (Object e) => answer = PurgeUnknown(e));
@@ -228,7 +230,6 @@ class PrivacyActions {
     required this.share,
     required this.backend,
     required this.serverPurge,
-    required this.now,
     String Function()? newRequestId,
   }) : _newRequestId = newRequestId ?? newUuid;
 
@@ -240,7 +241,6 @@ class PrivacyActions {
   final ExportService exporter;
   final ShareExport share;
   final AuthBackend backend;
-  final DateTime Function() now;
   final String Function() _newRequestId;
 
   /// true when `purge-all` must be called first (backend mode, signed in).
@@ -280,15 +280,17 @@ class PrivacyActions {
 
   /// 모든 기록 삭제. A delete or recovery already running in this instance
   /// is joined (one operation per account). Then: 1. a stage left open is
-  /// settled first (pending → local steps; requested → the server's
-  /// verdict — an unsettled request is re-sent with the SAME id, which the
-  /// server replays without a second purge); 2. blocked while a session is
-  /// measured; 3. backend: the request id is stored, then `purge-all`; 4.
-  /// served → the epoch + pending marker are stored; refused → the intent
-  /// is cleared; no answer → the server profile decides, else
-  /// [DeleteAllUnconfirmed]; 5. inside one owned transaction: the snapshot
-  /// is checked again, the photos are wiped (failed ones keep their rows),
-  /// the old-generation records are purged, 기타 is recreated, the marker is
+  /// settled first (pending → local steps; requested → the server's verdict,
+  /// re-sending the SAME id when nothing else decides — see
+  /// [_settleRequested]); 2. blocked while a session is measured; 3.
+  /// backend: the server profile is read (the epoch the request is formed
+  /// against — offline: nothing is stored, [DeleteAllFailed]), the request
+  /// id + that epoch are stored, then `purge-all`; 4. served → the epoch +
+  /// pending marker are stored; refused → the intent is cleared; no answer
+  /// → the profile may still show it served, else [DeleteAllUnconfirmed]
+  /// with the intent kept; 5. inside one owned transaction: the snapshot is
+  /// checked again, the photos are wiped (failed ones keep their rows), the
+  /// old-generation records are purged, 기타 is recreated, the marker is
   /// cleared. Login and the subscription caches stay (PRD 4.4).
   Future<DeleteAllOutcome> deleteAll() async {
     final running = _inFlight;
@@ -306,41 +308,45 @@ class PrivacyActions {
     try {
       if (_disposed) return DeleteAllFailed(StateError('account changed'));
       var current = await purge.state();
-      String? requestId;
       if (current.stage == PurgeStage.pending) return await _completeLocal(current.pendingEpoch!);
       if (current.stage == PurgeStage.requested) {
-        final settled = await _settleRequested(current);
-        if (settled is DeleteAllUnconfirmed) {
-          if (_callOf(current.requestId!)?.running ?? false) return settled; // still running: nothing to add
-          requestId = current.requestId; // the user's retry re-sends the same id (replayed by the server)
-        } else if (settled != null) {
-          return settled;
-        } else {
-          current = await purge.state(); // not served → start over with a new id
-        }
+        final settled = await _settleRequested(current, resend: true);
+        if (settled != null) return settled;
+        current = await purge.state(); // refused → cleared → a new request below
       }
       if (await sessions.readSnapshot() != null) return const DeleteAllBlocked();
       if (!serverPurge) {
-        final epoch = current.epoch + 1;
-        await writer.runOwnedTransaction(() => purge.markPending(epoch), alive: _alive, purgeWork: true);
+        final epoch = await writer.runOwnedTransaction(() => purge.markPending(current.epoch + 1), alive: _alive, purgeWork: true);
         return await _completeLocal(epoch);
       }
-      requestId ??= _newRequestId();
-      _lastRequestId = requestId;
-      final id = requestId;
-      await writer.runOwnedTransaction(() => purge.markRequested(id), alive: _alive, purgeWork: true);
-      final answer = await _call(id);
+      // The request is formed against the server's current epoch ([S09e]):
+      // a request that cannot be formed (offline) is not stored — no barrier
+      // for a request the server never heard of.
+      final int expected;
+      try {
+        final row = await backend.fetchOwnProfile();
+        if (row == null) return DeleteAllFailed(StateError('no profile'));
+        expected = ProfileSnapshot.fromJson(row).purgeEpoch;
+      } on Object catch (e) {
+        appLog.w('purge-all: profile unreadable before the request (${e.runtimeType}) · nothing stored');
+        return DeleteAllFailed(e);
+      }
+      if (_disposed) return DeleteAllFailed(StateError('account changed'));
+      final id = _newRequestId();
+      _lastRequestId = id;
+      await writer.runOwnedTransaction(() => purge.markRequested(id, expectedEpoch: expected), alive: _alive, purgeWork: true);
+      final answer = await _call(id, expected);
       if (_disposed) return DeleteAllFailed(StateError('account changed')); // the call record keeps the answer
       switch (answer) {
-        case PurgeServed(:final epoch):
-          await writer.runOwnedTransaction(() => purge.markPending(epoch), alive: _alive, purgeWork: true);
-          return await _completeLocal(epoch);
+        case PurgeServed(:final epoch, :final superseded):
+          if (superseded) appLog.i('purge-all: superseded by a newer purge · converging to epoch $epoch');
+          return await _confirmServed(epoch);
         case PurgeRefused(:final error):
           await writer.runOwnedTransaction(purge.clearRequested, alive: _alive, purgeWork: true);
           return DeleteAllFailed(error);
         case PurgeUnknown(:final error):
           appLog.w('purge-all: no answer (${error.runtimeType}) · asking the server profile');
-          return await _settleRequested(await purge.state()) ?? DeleteAllFailed(error);
+          return await _settleRequested(await purge.state(), resend: false) ?? DeleteAllFailed(error);
       }
     } on _MeasuringNow {
       return const DeleteAllBlocked();
@@ -350,11 +356,11 @@ class PrivacyActions {
   }
 
   /// Continues the stage that is open — requested: settled by the call this
-  /// process is still waiting for, by its answer, or by the server profile
-  /// (see [_settleRequested]); pending: the remaining local steps. null when
-  /// nothing is open (or the request turned out never to have been served).
-  /// While this instance is already deleting or recovering the result is
-  /// [DeleteAllUnconfirmed] — nothing is decided twice.
+  /// process is still waiting for, by its answer, by the server profile, or
+  /// by re-sending the same id (see [_settleRequested]); pending: the
+  /// remaining local steps. null when nothing is open (or the server refused
+  /// the request). While this instance is already deleting or recovering
+  /// the result is [DeleteAllUnconfirmed] — nothing is decided twice.
   Future<DeleteAllOutcome?> resume() async {
     if (_inFlight != null) return const DeleteAllUnconfirmed();
     final f = _resume().whenComplete(() => _inFlight = null);
@@ -372,7 +378,7 @@ class PrivacyActions {
         case PurgeStage.pending:
           return await _completeLocal(s.pendingEpoch!);
         case PurgeStage.requested:
-          return await _settleRequested(s);
+          return await _settleRequested(s, resend: true);
       }
     } on _MeasuringNow {
       return const DeleteAllBlocked();
@@ -381,25 +387,22 @@ class PrivacyActions {
     }
   }
 
-  PurgeCall? _callOf(String requestId) => _calls[requestId];
-
-  /// Sends `purge-all` for [requestId] once per process: a call still
-  /// running for the same id is joined, a finished one is not repeated here
-  /// (its answer is read by [_settleRequested]).
-  Future<PurgeAnswer> _call(String requestId) {
+  /// Sends `purge-all` for [requestId] (formed against [expectedEpoch]): a
+  /// call still running for the same id in this process is joined.
+  Future<PurgeAnswer> _call(String requestId, int? expectedEpoch) {
     final existing = _calls[requestId];
     if (existing != null && existing.running) return existing.future;
-    final call = PurgeCall(_invoke(requestId));
+    final call = PurgeCall(_invoke(requestId, expectedEpoch));
     _calls[requestId] = call;
     return call.future;
   }
 
-  Future<PurgeAnswer> _invoke(String requestId) async {
+  Future<PurgeAnswer> _invoke(String requestId, int? expectedEpoch) async {
     try {
-      final res = await backend.invoke('purge-all', body: <String, dynamic>{'request_id': requestId});
+      final res = await backend.invoke('purge-all', body: <String, dynamic>{'request_id': requestId, 'expected_epoch': ?expectedEpoch});
       final epoch = res['epoch'];
       if (epoch is! num) return PurgeUnknown(StateError('purge-all answered without an epoch'));
-      return PurgeServed(epoch.toInt(), replayed: res['replayed'] == true);
+      return PurgeServed(epoch.toInt(), replayed: res['replayed'] == true, superseded: res['superseded'] == true);
     } on EdgeFunctionException catch (e) {
       // 4xx = the server answered and did not purge (401/403 no profile,
       // 400 bad request, 429 limit) — except a request timeout.
@@ -410,17 +413,20 @@ class PrivacyActions {
     }
   }
 
-  /// The verdict on an open request [s] (stage requested):
+  /// The verdict on an open request [s] (stage requested), by server
+  /// evidence only — time is never evidence ([S09e]):
   ///   · a call for that id is still running in this process → unconfirmed;
   ///   · it finished → its answer (served → pending + local steps; refused →
   ///     intent cleared, null);
-  ///   · otherwise the server profile: `purge_request_id` = ours, or a
-  ///     larger epoch → served (pending + local steps); unreadable →
-  ///     unconfirmed; same epoch and our id not served → only after the
-  ///     server's execution window has passed since the call started is the
-  ///     request known never to have been served → intent cleared, null;
-  ///     before that → unconfirmed.
-  Future<DeleteAllOutcome?> _settleRequested(PurgeState s) async {
+  ///   · the server profile as POSITIVE evidence: `purge_request_id` is ours,
+  ///     or the epoch moved past the one the request was formed against →
+  ///     served (the server would answer the same id with a replay or a
+  ///     superseded receipt; both converge to the current epoch);
+  ///   · otherwise, when [resend], the same id and expected epoch are sent
+  ///     again — the server replays / supersedes a request it has seen and
+  ///     never purges twice — and that answer decides; without an answer the
+  ///     request stays open (barrier kept) until the next trigger or retry.
+  Future<DeleteAllOutcome?> _settleRequested(PurgeState s, {required bool resend}) async {
     final id = s.requestId!;
     _lastRequestId = id;
     final call = _calls[id];
@@ -429,28 +435,40 @@ class PrivacyActions {
       case PurgeServed(:final epoch):
         return await _confirmServed(epoch);
       case PurgeRefused():
-        await writer.runOwnedTransaction(purge.clearRequested, alive: _alive, purgeWork: true);
-        appLog.i('purge: the server refused the request · intent cleared');
-        return null;
+        return await _refused();
       case PurgeUnknown() || null:
         break;
     }
     final profile = await _serverProfile();
     if (_disposed) return DeleteAllFailed(StateError('account changed'));
-    if (profile == null) return const DeleteAllUnconfirmed();
-    if (profile.purgeRequestId == id || profile.purgeEpoch > s.epoch) return await _confirmServed(profile.purgeEpoch);
-    final startedAt = s.requestedAt;
-    if (startedAt != null && now().toUtc().difference(startedAt) < kPurgeRequestSettleWindow) {
-      return const DeleteAllUnconfirmed(); // the server may still be executing the call whose answer was lost
+    if (profile != null) {
+      final since = s.expectedEpoch ?? s.epoch;
+      if (profile.purgeRequestId == id || profile.purgeEpoch > since) return await _confirmServed(profile.purgeEpoch);
     }
+    if (!resend) return const DeleteAllUnconfirmed();
+    final again = await _call(id, s.expectedEpoch);
+    if (_disposed) return DeleteAllFailed(StateError('account changed'));
+    switch (again) {
+      case PurgeServed(:final epoch, :final replayed, :final superseded):
+        appLog.i('purge-all: resend ${superseded ? 'superseded' : replayed ? 'replayed' : 'served'} · converging to epoch $epoch');
+        return await _confirmServed(epoch);
+      case PurgeRefused():
+        return await _refused();
+      case PurgeUnknown(:final error):
+        appLog.w('purge-all: resend without an answer (${error.runtimeType}) · the request stays open');
+        return const DeleteAllUnconfirmed();
+    }
+  }
+
+  Future<DeleteAllOutcome?> _refused() async {
     await writer.runOwnedTransaction(purge.clearRequested, alive: _alive, purgeWork: true);
-    appLog.i('purge: the request was never served (epoch unchanged · id not on the profile · window passed) · intent cleared');
+    appLog.i('purge: the server refused the request · intent cleared');
     return null;
   }
 
   Future<DeleteAllOutcome> _confirmServed(int epoch) async {
-    await writer.runOwnedTransaction(() => purge.markPending(epoch), alive: _alive, purgeWork: true);
-    return _completeLocal(epoch);
+    final stored = await writer.runOwnedTransaction(() => purge.markPending(epoch), alive: _alive, purgeWork: true);
+    return _completeLocal(stored);
   }
 
   /// The server profile, or null when it cannot be read now (offline).
@@ -500,7 +518,6 @@ PrivacyActions privacyActions(Ref ref) {
     share: ref.watch(shareExportProvider),
     backend: ref.watch(authBackendProvider),
     serverPurge: signedIn,
-    now: ref.watch(appClockProvider).now,
   );
   ref.onDispose(a.dispose);
   return a;

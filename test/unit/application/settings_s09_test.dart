@@ -293,10 +293,13 @@ void main() {
       expect(await h.container.read(syncWriterProvider).purgeEpoch(), 9);
 
       h.backend.responses['purge-all'] = Exception('offline');
-      // S09d: no answer = unknown until the server profile (or the window) settles it, never "failed"
+      // S09d: no answer = unknown until the server settles it, never "failed"; S09e: time is not evidence
       expect(await h.container.read(privacyActionsProvider).deleteAll(), isA<DeleteAllUnconfirmed>());
-      h.clock.advance(kPurgeRequestSettleWindow + const Duration(seconds: 1));
-      expect(await h.container.read(privacyActionsProvider).resume(), isNull, reason: 'profile epoch 0 < local 9 · id not served · window passed → the call never purged');
+      h.clock.advance(const Duration(seconds: 151));
+      expect(await h.container.read(privacyActionsProvider).resume(), isA<DeleteAllUnconfirmed>(), reason: 'the same id was re-sent and got no answer → still open');
+      h.backend.responses['purge-all'] = <String, dynamic>{'epoch': 9, 'replayed': true, 'superseded': false};
+      expect(await h.container.read(privacyActionsProvider).resume(), isA<DeleteAllDone>(), reason: 'the re-sent id is replayed by the server');
+      expect(await h.container.read(syncWriterProvider).purgeEpoch(), 9);
     });
   });
 

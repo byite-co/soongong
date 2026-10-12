@@ -5,6 +5,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:soongong/data/photos/photo_store.dart';
 import 'package:soongong/features/privacy/application/photo_retention.dart';
 
@@ -86,6 +87,7 @@ void main() {
     expect(await store.fileFor('/abs.jpg'), isNull);
     expect(await store.fileFor(''), isNull);
     expect(await store.delete('../x.jpg'), isTrue, reason: 'nothing to delete inside the store');
-    expect((await store.fileFor('ok/1.jpg'))!.path, '${dir.path}/ok/1.jpg');
+    // S09e: the same file, compared as paths — the native separator ('\\' on Windows) is not part of the contract
+    expect(p.equals((await store.fileFor('ok/1.jpg'))!.path, p.join(dir.path, 'ok', '1.jpg')), isTrue);
   });
 }
