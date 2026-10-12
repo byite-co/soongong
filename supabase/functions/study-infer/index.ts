@@ -5,7 +5,7 @@ import { requireUser } from "../_shared/auth.ts";
 import { serviceClient } from "../_shared/db.ts";
 import { env, envList, envOr } from "../_shared/env.ts";
 import { HttpError, json, methodNotAllowed } from "../_shared/http.ts";
-import { boundedJson, requireStudyProfile, studyRequest, transcriptionResponse } from "../_shared/study.ts";
+import { boundedJson, requireStudyProfile, studyRequest, transcriptionResponse, solutionResponse } from "../_shared/study.ts";
 
 export async function handle(req: Request): Promise<Response> {
   const mna = methodNotAllowed(req); if (mna) return mna;
@@ -24,7 +24,7 @@ export async function handle(req: Request): Promise<Response> {
     return data;
   };
   requireStudyProfile(await profile(), body.purge_epoch);
-  const endpoint = new URL(env(body.kind === "math" ? "STUDY_MATH_OCR_WORKER_URL" : "STUDY_WORKER_URL"));
+  const endpoint = new URL(env(body.operation === "solve" ? "STUDY_SOLVER_WORKER_URL" : body.kind === "math" ? "STUDY_MATH_OCR_WORKER_URL" : "STUDY_WORKER_URL"));
   if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
     throw new HttpError(503, "engine_unavailable");
   }
@@ -39,12 +39,19 @@ export async function handle(req: Request): Promise<Response> {
       body: JSON.stringify(body),
     });
     if (!response.ok) throw new HttpError(response.status === 429 ? 429 : 503, "engine_unavailable");
-    const result = transcriptionResponse.safeParse(await boundedJson(response.body, 256000));
-    if (!result.success || result.data.kind !== body.kind) throw new HttpError(502, "invalid_engine_result");
+    const raw = await boundedJson(response.body, 256000);
+    const parsedResult = body.operation === "ocr" ? transcriptionResponse.safeParse(raw) : solutionResponse.safeParse(raw);
+    if (!parsedResult.success) throw new HttpError(502, "invalid_engine_result");
+    const result = parsedResult.data;
+    if (body.operation === "ocr" && (!("kind" in result) || result.kind !== body.kind)) throw new HttpError(502, "invalid_engine_result");
+    if (body.operation === "solve" && (!("document_id" in result) || result.document_id !== body.document_id || result.revision !== body.revision ||
+      result.reference_provided !== Boolean(body.reference_answer) || (result.verification === "verified" && !body.reference_answer))) {
+      throw new HttpError(502, "invalid_engine_result");
+    }
     // Deletion/revocation/account removal during inference invalidates it.
     await requireUser(req);
     requireStudyProfile(await profile(), body.purge_epoch);
-    return json(result.data, 200, { "cache-control": "no-store" });
+    return json(result, 200, { "cache-control": "no-store" });
   } catch (error) {
     if (error instanceof HttpError) throw error;
     throw new HttpError(503, "engine_unavailable");

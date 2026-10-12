@@ -1,4 +1,14 @@
 abstract final class StudyStrings {
+  static const solveTitle = '수학 풀이';
+  static const solve = '풀이 요청';
+  static const solveHint = '수학 문제의 풀이 후보입니다. 조건과 풀이를 직접 확인하세요. 도형 정보가 없는 문제는 지원이 제한됩니다.';
+  static const reference = '대조할 정답 (선택 · 정수/분수/소수)';
+  static const solveConsent = '확정한 문제 텍스트를 풀이 서버에 전송하는 데 동의합니다.';
+  static const verified = '요청할 때 제공한 정답과 답의 수치가 일치합니다. 해설 전체가 검증된 것은 아닙니다.';
+  static const contradicted = '입력한 정답과 답이 다릅니다.';
+  static const inconclusive = '정답 확인이 완료되지 않았습니다.';
+  static const unsupported = '이 문제 또는 정답 형식은 검증 범위 밖입니다.';
+  static const saveSolution = '확인한 풀이 저장';
   static const title = '손글씨 인식';
   static const select = '사진 선택';
   static const camera = '사진 촬영';

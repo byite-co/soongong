@@ -93,6 +93,9 @@ class AppHarness {
       deviceIdProvider.overrideWithValue('test-device'),
       appDatabaseProvider.overrideWithValue(db),
       appClockProvider.overrideWithValue(clock),
+      exportServiceProvider.overrideWith((ref) => ExportService(
+        db: db, userId: ref.watch(currentUserIdProvider), clock: clock, encodeInBackground: false,
+      )),
       authModeProvider.overrideWithValue(mode),
       authBackendProvider.overrideWithValue(backend),
       socialSignInProvider.overrideWithValue(social),

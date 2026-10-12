@@ -101,7 +101,11 @@ def child(body, connection):
         with open(os.devnull, "w") as sink:
             os.dup2(sink.fileno(), 1)
             os.dup2(sink.fileno(), 2)
-        result = infer_ocr(body)
+        if body["operation"] == "solve":
+            from solver import solve
+            result = solve(body)
+        else:
+            result = infer_ocr(body)
         connection.send({"ok": result})
     except BaseException:
         connection.send({"error": "inference_failed"})
@@ -151,7 +155,7 @@ class Handler(BaseHTTPRequestHandler):
             raw = self.rfile.read(length)
             if len(raw) != length: raise ValueError("truncated_body")
             body = json.loads(raw)
-            if body.get("schema_version") != 1 or body.get("operation") != "ocr" or body.get("kind") not in {"text", "math"}:
+            if body.get("schema_version") != 1 or body.get("operation") not in {"ocr", "solve"} or (body.get("operation") == "ocr" and body.get("kind") not in {"text", "math"}):
                 raise ValueError("invalid_payload")
             result = json.dumps(execute(body), ensure_ascii=False, allow_nan=False).encode()
             if len(result) > 256000: raise ValueError("result_too_large")

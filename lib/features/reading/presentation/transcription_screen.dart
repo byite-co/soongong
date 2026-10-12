@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -96,6 +97,8 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
     try {
       final generation = await writer.refreshPurgeGeneration();
       final epoch = (await LocalPurge.readState(writer.db)).epoch;
+      if (!mounted || op != _operation) return;
+      _generation = generation;
       final result = await engine.transcribe(_image!, _kind, epoch: epoch);
       if (!mounted || op != _operation || ref.read(currentUserIdProvider) != owner) return;
       final state = await LocalPurge.readState(writer.db);
@@ -149,6 +152,14 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
   @override
   Widget build(BuildContext context) {
     final documents = ref.watch(studyDocumentsProvider);
+    ref.listen(studyGenerationProvider, (_, next) {
+      final generation = next.asData?.value;
+      if (_generation != null && generation != null && generation != _generation) {
+        _operation++;
+        _image?.fillRange(0, _image!.length, 0);
+        setState(() { _image = null; _text.clear(); _transcription = null; _saved = null; _busy = false; _agreed = false; _generation = null; });
+      }
+    });
     final measuring = ref.watch(measureControllerProvider).isLive;
     ref.listen(currentUserIdProvider, (_, _) {
       _operation++;
@@ -180,6 +191,8 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
         const SizedBox(height: 16), const Text(StudyStrings.history),
         ...documents.when(data: (rows) => rows.map((document) => ListTile(
           title: Text(document.text, maxLines: 2, overflow: TextOverflow.ellipsis),
+          subtitle: const Text(StudyStrings.solveTitle),
+          onTap: _busy ? null : () => context.push('/reading/solve/${document.id}'),
           trailing: IconButton(tooltip: StudyStrings.delete, icon: const Icon(Icons.delete_outline),
             onPressed: _busy ? null : () => _delete(document)),
         )).toList(), loading: () => <Widget>[const LinearProgressIndicator()],

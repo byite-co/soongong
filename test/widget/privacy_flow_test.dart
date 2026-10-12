@@ -140,32 +140,20 @@ void main() {
     await openPrivacy(tester);
     await tapKey(tester, PrivacyKeys.export);
     expect(find.text(PrivacyStrings.exportHint), findsOneWidget);
-    // Export encoding runs in a real isolate; leave the fake-async clock
-    // while awaiting its completion. Actual export contents have unit tests.
-    await tester.runAsync(() async {
-      await tester.tap(find.byKey(PrivacyKeys.exportCsv));
-      await tester.pumpAndSettle();
-    });
+    await tester.tap(find.byKey(PrivacyKeys.exportCsv));
+    await tester.pumpAndSettle();
     expect(h.exports.length, 1);
     expect(find.text(PrivacyStrings.exportHint), findsNothing);
 
     h.shareError = Exception('no target');
     await tapKey(tester, PrivacyKeys.export);
-    // Export encoding runs in a real isolate; leave the fake-async clock
-    // while awaiting its completion. Actual export contents have unit tests.
-    await tester.runAsync(() async {
-      await tester.tap(find.byKey(PrivacyKeys.exportJson));
-      await tester.pumpAndSettle();
-    });
+    await tester.tap(find.byKey(PrivacyKeys.exportJson));
+    await tester.pumpAndSettle();
     expect(find.byKey(PrivacyKeys.exportError), findsOneWidget);
     expect(find.text(PrivacyStrings.exportRetry), findsOneWidget);
     h.shareError = null;
-    // Export encoding runs in a real isolate; leave the fake-async clock
-    // while awaiting its completion. Actual export contents have unit tests.
-    await tester.runAsync(() async {
-      await tester.tap(find.byKey(PrivacyKeys.exportJson));
-      await tester.pumpAndSettle();
-    });
+    await tester.tap(find.byKey(PrivacyKeys.exportJson));
+    await tester.pumpAndSettle();
     expect(h.exports.length, 2);
     expect(h.exports.last.mimeType, 'application/json');
     await h.unmount(tester);

@@ -36,6 +36,7 @@ class ExportService {
     required this.userId,
     this.clock = const SystemClock(),
     this.appVersion = '0.1.0',
+    this.encodeInBackground = true,
   });
 
   static const int schemaVersion = 1;
@@ -44,6 +45,10 @@ class ExportService {
   final String userId;
   final Clock clock;
   final String appVersion;
+
+  /// Widget harnesses use the same encoders inline because their fake clock
+  /// cannot drive real isolate messages. Production and unit tests use true.
+  final bool encodeInBackground;
 
   Future<ExportFile> build(ExportFormat format) => switch (format) {
         ExportFormat.json => buildJson(),
@@ -82,7 +87,7 @@ class ExportService {
     final map = await exportMap();
     // Only a detached value snapshot crosses the isolate boundary. Neither
     // the database, a provider, nor the authenticated client is captured.
-    final bytes = await compute(_encodeJson, map);
+    final bytes = encodeInBackground ? await compute(_encodeJson, map) : _encodeJson(map);
     return ExportFile(
       name: 'soongong-${_stamp()}.json',
       bytes: bytes,
@@ -125,7 +130,7 @@ class ExportService {
       'planner.csv': await plannerCsv(subjects),
       'wrongs.csv': await wrongsCsv(subjects),
     };
-    final bytes = await compute(_encodeCsvZip, payload);
+    final bytes = encodeInBackground ? await compute(_encodeCsvZip, payload) : _encodeCsvZip(payload);
     return ExportFile(
       name: 'soongong-${_stamp()}.zip',
       bytes: bytes,

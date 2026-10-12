@@ -1,10 +1,24 @@
 import { z } from "zod";
 import { HttpError } from "./http.ts";
 
-export const studyRequest = z.object({
+const ocrRequest = z.object({
   schema_version: z.literal(1), operation: z.literal("ocr"),
   kind: z.enum(["text", "math"]), image: z.string().min(4).max(5592408).regex(/^[A-Za-z0-9+/]+={0,2}$/),
   purge_epoch: z.number().int().nonnegative(), consent_version: z.literal("study-2026-10-13"),
+}).strict();
+
+const solutionRequest = z.object({
+  schema_version: z.literal(1), operation: z.literal("solve"),
+  document_id: z.string().uuid(), revision: z.number().int().positive(),
+  text: z.string().min(1).max(20000), reference_answer: z.string().max(100).nullable(),
+  purge_epoch: z.number().int().nonnegative(), consent_version: z.literal("study-2026-10-13"),
+}).strict();
+export const studyRequest = z.discriminatedUnion("operation", [ocrRequest, solutionRequest]);
+export const solutionResponse = z.object({
+  schema_version: z.literal(1), document_id: z.string().uuid(), revision: z.number().int().positive(),
+  answer: z.string().max(200), explanation: z.string().max(16000), model: z.string().min(1).max(200),
+  verification: z.enum(["verified", "contradicted", "inconclusive", "unsupported"]),
+  reference_provided: z.boolean(),
 }).strict();
 
 export const transcriptionResponse = z.object({

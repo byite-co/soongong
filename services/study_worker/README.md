@@ -50,3 +50,22 @@ Tests without model downloads: `python -m unittest discover -s services/study_wo
 Tests exercise image boundaries and manifest integrity, not OCR accuracy.
 Reference API: UniMERNet `demo.py` at `5a2c80d96b1d2dba447ff18d873e5fb73ba03c35`;
 PaddleOCR API via its pinned package. No upstream assets or datasets copied.
+
+## EXT-02 math solver
+
+The `solve` operation uses a separately deployed worker provisioned with
+`requirements-solver.lock` (`pip install --require-hashes -r ...`). Set
+`STUDY_SOLVER_WORKER_URL` on Edge, and `MATH_MODEL_URL` (HTTPS chat-completions
+endpoint), `MATH_MODEL_ID`, `MATH_MODEL_KEY` on that private worker. Choose and
+pin the actual math model/weights and inference container before rollout.
+The code uses the structured math-tool loop as a reference from Qwen-Agent;
+it does not install or call its general PythonExecutor.
+
+Only a small arithmetic AST reaches SymPy. CAS children have memory/CPU/wall
+limits and no inherited API secrets. No generated code is executed. Matching
+an optional user-supplied numeric reference through Math-Verify is distinct
+from verifying a complete solution or establishing CSAT accuracy. The gold is
+withheld from the model request. With no reference the result is inconclusive.
+The retained solution is attached to the exact confirmed document revision;
+editing that document clears the previous solution. Both transfer and save
+require explicit user actions. No automatic grading/wrong-item creation.
