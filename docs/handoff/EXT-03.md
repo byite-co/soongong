@@ -17,3 +17,7 @@ Native CI compiles Android/iOS. Physical camera orientation, glasses, lighting, 
 Official sources: https://github.com/google-ai-edge/mediapipe ; https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker ; https://github.com/casiez/OneEuroFilter .
 
 Model licensing: the official BlazeFace (Short Range), FaceMesh V2 and Blendshape V2 model cards each state Apache-2.0. SDK license is from the pinned repository. OneEuroFilter reference license is `python/LICENSE` (BSD-3-Clause, Copyright 2023 Inria), retained even though the equations were independently implemented. SDK/model copyright belongs to Google and respective contributors.
+
+## iOS native build target
+
+Use an iPhone ARM64 build (`flutter build ios --release --flavor dev --no-codesign --dart-define-from-file=env/app.dev.example.json`). The existing MLKitVision 10.0.0 binary excludes arm64 simulators, while the pinned MediaPipe 1.1.0 task graph library provides ARM64 rather than x86_64. Native CI confirmed this has no common simulator architecture: `ee97d22`, Actions run `38321101810`. The full app therefore requires a physical iOS target; native-check builds the unsigned device Release target. This does not validate camera/keychain behavior on hardware. No fake simulator gaze implementation is substituted.

@@ -58,3 +58,5 @@ Android 네이티브 시선 빌드는 `0ffbebe`에서 통과했다. 같은 실�
 후속 iOS 빌드: 최소 버전 수정 이후 Pods_Runner framework 연결 실패를 확인했다. 명시적 iOS 15.5 Podfile, dev/prod의 Debug/Profile/Release 구성 매핑, workspace의 Pods 프로젝트 참조를 고정하고 재검증한다. 개인정보 화면에는 OS 백업/기기 이전 제외와 내보내기 안내를 추가했다.
 
 첫 iOS 시뮬레이터 빌드 제한: MLKitVision 10.0.0의 공식 podspec은 arm64 simulator를 제외한다. Flutter 3.47.5는 Pods가 없는 첫 빌드에서 Generated.xcconfig를 pod install 전에 생성하므로, 이 제한을 보지 못해 앱/Pods의 architecture가 어긋날 수 있다. 모든 앱 xcconfig에서 Generated 뒤에 `MLKitSimulator.xcconfig`를 읽어 기기 arm64는 유지하고 simulator arm64만 제외한다. iOS 26의 arm64 전용 시뮬레이터는 지원하지 않으며, x86_64 지원 simulator 또는 실기기가 필요하다. 최종 통과 여부는 PR checks에 기록한다.
+
+후속 네이티브 증거 (`ee97d22`, Actions `38321101810`): 시뮬레이터 아키텍처 정합성을 맞춘 뒤 Pods_Runner 오류는 사라졌다. 그러나 MediaPipe 1.1.0의 `MediaPipeTaskGraphs_library.a`가 arm64만 제공해 x86_64 링크에서 `MPPFaceLandmarker`/`MPPImage`가 누락됐다. **현재 ML Kit + MediaPipe 조합은 시뮬레이터에 공통 지원 아키텍처가 없다.** 앞 문단의 x86_64 simulator 안내는 ML Kit 단독의 제한 설명이며 전체 앱 실행 안내가 아니다. 전체 앱은 iPhone ARM64 대상으로 빌드·검증한다. native-check의 iOS gate를 실제 기기 대상 Release/no-codesign으로 변경했다. 이는 설치/서명/배포/실기기 동작 검증을 뜻하지 않는다. 시뮬레이터 지원에는 SDK 교체 또는 별도의 검토된 빌드가 필요하며, 오류를 숨기는 가짜 브리지는 넣지 않았다.

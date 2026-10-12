@@ -24,7 +24,7 @@ jobs:
       - run: python3 tool/fetch_gaze_model.py
       - run: flutter pub get
       - run: flutter build apk --debug --flavor dev --dart-define-from-file=env/app.dev.example.json
-  ios:
+  ios-device:
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -36,19 +36,16 @@ jobs:
           cache: true
       - run: python3 tool/fetch_gaze_model.py
       - run: flutter pub get
-      - name: Build iOS simulator with bounded diagnostic output
-        shell: bash
-        run: |
-          set -o pipefail
-          flutter build ios --simulator --debug --flavor dev --no-codesign --dart-define-from-file=env/app.dev.example.json --verbose 2>&1 | tee /tmp/soongong-ios-build.log | grep -E 'Error \(Xcode\)|error:|warning:|Built |Xcode build done|Failed to build|EXCLUDED_ARCHS|Skipping implicit dependency|ignoring implicit dependency|TARGET_BUILD_DIR =|CONFIGURATION_BUILD_DIR ='
+      # ML Kit excludes arm64 simulators; MediaPipe 1.1.0 ships ARM64 binaries.
+      # Device ARM64 is their common target. No signing or deployment occurs.
+      - name: Build iPhone release without signing
+        run: flutter build ios --release --flavor dev --no-codesign --dart-define-from-file=env/app.dev.example.json
       - name: Diagnose iOS dependency linkage on failure
         if: failure()
         run: |
           cat ios/Podfile
           cat ios/Runner.xcworkspace/contents.xcworkspacedata
-          xcodebuild -workspace ios/Runner.xcworkspace -scheme dev -configuration Debug-dev -sdk iphonesimulator -showBuildSettings > /tmp/soongong-ios-settings.txt
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme dev -configuration Release-dev -sdk iphoneos -showBuildSettings > /tmp/soongong-ios-settings.txt
           grep -E 'CONFIGURATION_BUILD_DIR|FRAMEWORK_SEARCH_PATHS|PODS_|EXCLUDED_ARCHS|SDKROOT' /tmp/soongong-ios-settings.txt
-          cat 'ios/Pods/Target Support Files/Pods-Runner/Pods-Runner.debug-dev.xcconfig'
-          xcodebuild -project ios/Pods/Pods.xcodeproj -target Pods-Runner -configuration Debug-dev -sdk iphonesimulator -showBuildSettings > /tmp/soongong-pods-settings.txt
-          grep -E 'CONFIGURATION_BUILD_DIR|FRAMEWORK_SEARCH_PATHS|PODS_|EXCLUDED_ARCHS|SDKROOT|PRODUCT_NAME' /tmp/soongong-pods-settings.txt
+          cat 'ios/Pods/Target Support Files/Pods-Runner/Pods-Runner.release-dev.xcconfig'
           find build/ios -name 'Pods_Runner*' -print
