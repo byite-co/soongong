@@ -10,6 +10,7 @@ import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' show KakaoSd
 import 'app.dart';
 import 'core/config/app_config.dart';
 import 'core/contracts/providers.dart';
+import 'core/legal/third_party_licenses.dart';
 import 'core/logging/app_logger.dart';
 import 'core/utils/device_id.dart';
 import 'data/auth/supabase_init.dart';
@@ -17,6 +18,7 @@ import 'data/startup/startup_tasks.dart';
 
 Future<void> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerThirdPartyLicenses();
 
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);

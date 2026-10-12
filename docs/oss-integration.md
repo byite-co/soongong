@@ -8,7 +8,7 @@
 
 | 영역 | 코드 | 동작 |
 |---|---|---|
-| 인증 | `lib/data/auth/secure_auth_storage.dart` · `supabase_init.dart` | 세션·PKCE를 플랫폼 보안 저장소에 보관, 이전값 write/read 확인 후 제거, 프로젝트·flavor 키 격리, 로그아웃 저장 순서 보존 |
+| 인증 | `lib/data/auth/secure_auth_storage.dart` · `supabase_init.dart` | 세션·PKCE를 플랫폼 보안 저장소에 보관, 이전값 write/read 확인 후 제거, 프로젝트·flavor 키 격리, 로그아웃 저장 순서 보존 + 빈 secure tombstone으로 이전값 재수입 차단 |
 | 화면 | `features/timetable/domain/overlap_layout.dart` · `timetable_screen.dart` | 겹친 반복 일정·세션 나란히 표시; 공부 시간 집계에는 영향 없음 |
 | 내보내기 | `lib/data/export/export_service.dart` | SQL에서 계정/live 행 선택, JSON/ZIP 인코딩 compute, CSV 연결 행 계정 제한 |
 | Edge | `_shared/validation.ts` · `_shared/http.ts` · `reading-submit/index.ts` | Zod 공통 형식 검증, 기존 오류/길이/null 의미 보존 |
@@ -92,7 +92,7 @@
 
 ## 출처·패키지·라이선스
 
-- `flutter_calendar_view` 부분 차용 기준 commit `0cc89e4cf9b26d6154bb149c9e11f3a3dd360b55`; 정확한 파일 URL과 변경 설명은 `third_party/flutter_calendar_view/NOTICE.md`, MIT 원문은 같은 디렉터리 `LICENSE`.
+- `flutter_calendar_view` 부분 차용 기준 commit `0cc89e4cf9b26d6154bb149c9e11f3a3dd360b55`; 정확한 파일 URL과 변경 설명은 `third_party/flutter_calendar_view/NOTICE.md`, MIT 원문은 같은 디렉터리 `LICENSE`. `core/legal/third_party_licenses.dart`를 bootstrap에서 등록해 앱 배포물의 LicenseRegistry에도 포함한다.
 - 보안 저장: [Supabase Flutter 2.18.0 LocalStorage](https://github.com/supabase/supabase-flutter/blob/supabase_flutter-v2.18.0/packages/supabase_flutter/lib/src/local_storage.dart) 확장 API 사용. 기존 의존성의 API 연결이며 SDK 구현 복제 없음.
 - Drift 조회 API와 Flutter `compute` API를 사용한 자체 구현. 예제 자산·로고·화면·전체 서비스 복사 없음.
 - 새 Deno 의존성: `zod@4.6.6`(MIT), 테스트 전용 import `fast-check@4.10.2`(MIT), 전이 `pure-rand@8.0.0`(MIT). `deno.json` 정확 버전과 `deno.lock` integrity 기록. npm 공식 metadata와 tarball SHA-512를 대조하여 추가했으며 CI에서 다시 확인한다.

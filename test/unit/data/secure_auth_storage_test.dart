@@ -25,6 +25,7 @@ class MemorySecrets implements AuthSecretStore {
 class LegacySession extends LocalStorage {
   LegacySession(this.value);
   String? value;
+  bool failRemove = false;
   @override
   Future<void> initialize() async {}
   @override
@@ -34,7 +35,10 @@ class LegacySession extends LocalStorage {
   @override
   Future<void> persistSession(String persistSessionString) async => value = persistSessionString;
   @override
-  Future<void> removePersistedSession() async => value = null;
+  Future<void> removePersistedSession() async {
+    if (failRemove) throw StateError('legacy_unavailable');
+    value = null;
+  }
 }
 
 class LegacyPkce extends GotrueAsyncStorage {
@@ -93,9 +97,25 @@ void main() {
     await Future.wait([persist, logout]);
     expect(await session.accessToken(), isNull);
     expect(legacy.value, isNull);
-    expect(secrets.values, {'device_id': 'device', 'other-project': 'other'});
+    expect(secrets.values, {'session': '', 'device_id': 'device', 'other-project': 'other'});
+    legacy.value = 'restored-stale-session';
     final restarted = SecureSessionStorage(secrets: secrets, key: 'session', legacy: legacy);
     expect(await restarted.hasAccessToken(), isFalse);
+  });
+
+  test('logout tombstone survives failed legacy cleanup and blocks later re-import', () async {
+    await session.initialize();
+    legacy.value = 'stale-session';
+    legacy.failRemove = true;
+    await expectLater(session.removePersistedSession(), throwsStateError);
+    expect(await session.hasAccessToken(), isFalse);
+    expect(legacy.value, 'stale-session');
+    legacy.failRemove = false;
+    final restarted = SecureSessionStorage(secrets: secrets, key: 'session', legacy: legacy);
+    expect(await restarted.accessToken(), isNull);
+    expect(legacy.value, isNull);
+    await restarted.persistSession('signed-in-again');
+    expect(await restarted.accessToken(), 'signed-in-again');
   });
 
   test('keys isolate flavor, full origin and SDK PKCE key', () {

@@ -89,7 +89,10 @@ class SecureSessionStorage extends LocalStorage {
   @override
   Future<String?> accessToken() async {
     await initialize();
-    return _serial.run(() => secrets.read(key));
+    return _serial.run(() async {
+      final value = await secrets.read(key);
+      return value == null || value.isEmpty ? null : value;
+    });
   }
 
   @override
@@ -108,10 +111,11 @@ class SecureSessionStorage extends LocalStorage {
   Future<void> removePersistedSession() async {
     await initialize();
     await _serial.run(() async {
-      // If deleting the legacy copy fails, retain the secure copy rather than
-      // allowing a later startup to import an older legacy session.
+      // A verified empty tombstone prevents a stale plaintext copy restored
+      // from backup (or left behind by failed cleanup) from logging in again.
+      // A subsequent successful login overwrites this scoped tombstone.
+      await _verifiedWrite(secrets, key, '');
       await legacy.removePersistedSession();
-      await secrets.remove(key);
     });
   }
 }
