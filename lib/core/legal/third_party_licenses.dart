@@ -1,6 +1,7 @@
 // Include the adapted layout's MIT notice in distributed applications, even
 // though calendar_view is not installed as a Flutter package.
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 bool _registered = false;
 
@@ -8,6 +9,10 @@ void registerThirdPartyLicenses() {
   if (_registered) return;
   _registered = true;
   LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(const ['MediaPipe Tasks Vision; BlazeFace, FaceMesh V2, Blendshape V2 models'],
+      await rootBundle.loadString('assets/licenses/MediaPipe-Apache-2.0.txt'));
+    yield LicenseEntryWithLineBreaks(const ['One Euro Filter (algorithm reference; independent implementation)'],
+      await rootBundle.loadString('assets/licenses/OneEuroFilter-BSD-3-Clause.txt'));
     yield const LicenseEntryWithLineBreaks(
       <String>['flutter_calendar_view (adapted layout)'],
       _calendarViewLicense,

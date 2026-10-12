@@ -108,6 +108,8 @@ flutter:
 
   assets:
     - assets/fonts/LICENSE-Pretendard.txt
+    - assets/models/face_landmarker.task
+    - assets/licenses/
 
   # Pretendard Variable (OFL-1.1), wght 45–930. Weight is selected through the
   # `wght` axis; see core/theme/tokens.dart (AppTypography).

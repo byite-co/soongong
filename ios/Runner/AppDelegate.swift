@@ -3,6 +3,8 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  private var gazeBridge: GazeBridge?
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -12,6 +14,7 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    gazeBridge = GazeBridge(messenger: engineBridge.applicationRegistrar.messenger())
     registerSleepAwareClock(messenger: engineBridge.applicationRegistrar.messenger())
   }
 

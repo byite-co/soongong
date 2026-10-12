@@ -72,3 +72,7 @@ app.*.map.json
 __pycache__/
 *.pyc
 .venv/
+
+# Reproducible, hash-checked build asset (tool/fetch_gaze_model.py)
+assets/models/*.task
+assets/models/*.part

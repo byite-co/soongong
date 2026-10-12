@@ -20,6 +20,7 @@ import '../contracts/fakes/fakes.dart';
 import '../contracts/providers.dart';
 import '../logging/app_logger.dart';
 import '../strings/dev_strings.dart';
+import '../strings/gaze_strings.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/widgets.dart';
@@ -231,6 +232,10 @@ class DevMenuSheet extends ConsumerWidget {
             (FakeSeatScenario.permissionDenied, DevStrings.seatPermissionDenied),
             (FakeSeatScenario.cameraBusy, DevStrings.seatCameraBusy),
           ],
+        ),
+        AppButton.secondary(
+          label: GazeStrings.title,
+          onPressed: () { Navigator.of(context).pop(); GoRouter.of(context).push('/_gaze_lab'); },
         ),
         section(DevStrings.sectionReading),
         choices<FakeReadingScenario>(
