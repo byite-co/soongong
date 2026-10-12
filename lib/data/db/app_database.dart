@@ -7,12 +7,12 @@
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
-import 'package:drift_flutter/drift_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 // The generated part references the wire enums and converters directly.
 import '../../core/domain/enums.dart';
 import 'converters.dart';
+import 'encrypted_database.dart';
 import 'purge_gate.dart';
 import 'study_schema.dart';
 import 'tables.dart';
@@ -57,7 +57,7 @@ class AppDatabase extends _$AppDatabase {
 
   /// On-device database (sqlite3 via native assets, drift_flutter).
   AppDatabase.open({required String flavor})
-      : super(driftDatabase(name: databaseNameFor(flavor)));
+      : super(encryptedDatabase(databaseNameFor(flavor)));
 
   /// In-memory database for unit tests and the widget catalog.
   AppDatabase.inMemory() : super(NativeDatabase.memory());

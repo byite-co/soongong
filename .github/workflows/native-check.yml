@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 concurrency:
   group: native-check-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   android:
     runs-on: ubuntu-latest

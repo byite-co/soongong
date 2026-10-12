@@ -47,3 +47,10 @@ flutter analyze && dart run tool/check_forbidden_phrases.dart && flutter test
 ```
 
 업데이트 절차: Flutter/Dart 버전 변경은 `.fvmrc` · `pubspec.yaml` · CI 워크플로 · 이 문서를 한 PR에서 함께 바꾼다.
+
+## EXT native integrations
+
+- iOS minimum 15.5: existing google_mlkit_commons/face_detection requires 15.5; the first native CI exposed the prior 15.0 mismatch. Xcode target configurations now agree.
+- MediaPipe Tasks Vision 1.1.0: Android exact Maven coordinate; iOS SPM revision d652c28b7e27d04d49dda53dd359a98b881848ec.
+- sqlite3 3.5.2 unchanged, now direct dependency + sqlite3mc native-assets source. Codec and model distribution notices are bundled in the app.
+- Run `python3 tool/fetch_gaze_model.py` before Flutter pub get/build/test. Model URL/hash fixed in that script; runtime has no model download.

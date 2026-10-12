@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/dev/seat_lab/seat_lab_screen.dart';
+import '../../core/dev/gaze_lab_screen.dart';
 import '../auth/domain/auth_redirect.dart';
 import 'presentation/measure_screens.dart';
 
@@ -16,6 +17,8 @@ import 'presentation/measure_screens.dart';
 /// `/measure/setup?resume=<sessionId>` (docs/routes.md). Routes sit outside
 /// the tab shell (full-screen measurement).
 final List<RouteBase> measureRoutes = <RouteBase>[
+  if (AppConfig.devToolsEnabled)
+    GoRoute(path: AppPaths.gazeLab, builder: (_, _) => const GazeLabScreen()),
   GoRoute(
     path: AppPaths.measureSetup,
     name: 'setupOn',

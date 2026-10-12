@@ -38,7 +38,6 @@ import '../../features/timetable/timetable_routes.dart';
 import '../../features/wrongs/wrongs_routes.dart';
 import '../config/app_config.dart';
 import '../dev/gallery/gallery_screen.dart';
-import '../dev/gaze_lab_screen.dart';
 import 'app_shell.dart';
 import 'launch_screen.dart';
 
@@ -84,8 +83,6 @@ GoRouter appRouter(Ref ref) {
           name: 'gallery',
           builder: (_, _) => const GalleryScreen(),
         ),
-      if (AppConfig.devToolsEnabled)
-        GoRoute(path: '/_gaze_lab', builder: (_, _) => const GazeLabScreen()),
       ...gateRoutes,
       ...authRoutes,
       ...onboardingRoutes,

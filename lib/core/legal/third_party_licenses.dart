@@ -13,6 +13,8 @@ void registerThirdPartyLicenses() {
       await rootBundle.loadString('assets/licenses/MediaPipe-Apache-2.0.txt'));
     yield LicenseEntryWithLineBreaks(const ['One Euro Filter (algorithm reference; independent implementation)'],
       await rootBundle.loadString('assets/licenses/OneEuroFilter-BSD-3-Clause.txt'));
+    yield LicenseEntryWithLineBreaks(const ['SQLite3MultipleCiphers'],
+      await rootBundle.loadString('assets/licenses/SQLite3MultipleCiphers-MIT.txt'));
     yield const LicenseEntryWithLineBreaks(
       <String>['flutter_calendar_view (adapted layout)'],
       _calendarViewLicense,

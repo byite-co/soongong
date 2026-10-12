@@ -30,6 +30,7 @@ dependencies:
   # Local DB (drift + drift_flutter → sqlite3 native assets; sqlite3_flutter_libs is EOL)
   drift: ^2.35.0
   drift_flutter: ^0.3.1
+  sqlite3: 3.5.2 # Native assets are hash-pinned by the package build hook.
 
   # Backend
   supabase_flutter: ^2.18.0
@@ -117,3 +118,9 @@ flutter:
     - family: Pretendard
       fonts:
         - asset: assets/fonts/PretendardVariable.ttf
+
+# EXT-04: upstream sqlite3 silently ignores key pragmas; a real codec is mandatory.
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlite3mc

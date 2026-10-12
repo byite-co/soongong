@@ -14,6 +14,17 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    let storage = FlutterMethodChannel(name: "co.byite.soongong/storage", binaryMessenger: engineBridge.applicationRegistrar.messenger())
+    storage.setMethodCallHandler { call, result in
+      guard call.method == "excludeDocumentsFromBackup" else { result(FlutterMethodNotImplemented); return }
+      do {
+        var directory = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try directory.setResourceValues(values)
+        result(nil)
+      } catch { result(FlutterError(code: "backup_policy_failed", message: nil, details: nil)) }
+    }
     gazeBridge = GazeBridge(messenger: engineBridge.applicationRegistrar.messenger())
     registerSleepAwareClock(messenger: engineBridge.applicationRegistrar.messenger())
   }
