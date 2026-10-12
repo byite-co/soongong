@@ -10,9 +10,13 @@
 // / quota caches.
 //
 // Stages ([S09c], `sync_meta`):
-//   purge_requested      a `purge-all` call was started; its result is not
-//                        known yet (answered by the response, or by the
-//                        server profile's `purge_epoch` at the next read)
+//   purge_requested      the client request id of a `purge-all` call that
+//                        was started; its result is not known yet (answered
+//                        by the response, or by the server profile's
+//                        `purge_request_id` / `purge_epoch` at a later read)
+//   purge_requested_at   when that call was started (UTC) — a negative
+//                        reconcile needs the server's execution window to
+//                        have passed ([S09d])
 //   purge_pending_epoch  the server confirmed [epoch]; the local steps
 //                        (photos · rows · 기타 · marker) are not finished
 //   purge_epoch          the epoch new rows are stamped with (D2)
@@ -49,14 +53,20 @@ class PurgeState {
   const PurgeState({
     required this.epoch,
     required this.pendingEpoch,
-    required this.requested,
+    required this.requestId,
+    required this.requestedAt,
     required this.generation,
   });
 
   final int epoch;
   final int? pendingEpoch;
-  final bool requested;
+
+  /// The open `purge-all` request id, or null.
+  final String? requestId;
+  final DateTime? requestedAt;
   final int generation;
+
+  bool get requested => requestId != null;
 
   PurgeStage get stage => pendingEpoch != null
       ? PurgeStage.pending
@@ -76,19 +86,22 @@ class LocalPurge {
   static const String purgeEpochKey = 'purge_epoch';
   static const String pendingEpochKey = 'purge_pending_epoch';
   static const String requestedKey = 'purge_requested';
+  static const String requestedAtKey = 'purge_requested_at';
   static const String generationKey = 'purge_generation';
   static const String cursorKey = 'cursor_next_seq';
 
   /// Reads the whole purge state in one go (usable inside a transaction).
   static Future<PurgeState> readState(AppDatabase db) async {
     final rows = await (db.select(db.syncMeta)
-          ..where((m) => m.key.isIn(const <String>[purgeEpochKey, pendingEpochKey, requestedKey, generationKey])))
+          ..where((m) => m.key.isIn(const <String>[purgeEpochKey, pendingEpochKey, requestedKey, requestedAtKey, generationKey])))
         .get();
     final map = <String, String>{for (final r in rows) r.key: r.value};
+    final requestedAt = map[requestedAtKey];
     return PurgeState(
       epoch: int.tryParse(map[purgeEpochKey] ?? '') ?? 0,
       pendingEpoch: int.tryParse(map[pendingEpochKey] ?? ''),
-      requested: map[requestedKey] != null,
+      requestId: map[requestedKey],
+      requestedAt: requestedAt == null ? null : DateTime.tryParse(requestedAt)?.toUtc(),
       generation: int.tryParse(map[generationKey] ?? '') ?? 0,
     );
   }
@@ -98,15 +111,18 @@ class LocalPurge {
   /// The epoch of a local purge that has not completed, or null.
   Future<int?> pendingEpoch() async => (await state()).pendingEpoch;
 
-  /// Records that a `purge-all` call is being made (before the call).
-  Future<void> markRequested() => db.transaction(() async {
-        await _put(requestedKey, '1');
+  /// Records that a `purge-all` call with [requestId] is being made (before
+  /// the call). Re-marking the same id (a resend) only refreshes the time.
+  Future<void> markRequested(String requestId) => db.transaction(() async {
+        await _put(requestedKey, requestId);
+        await _put(requestedAtKey, ctx.nowUtc().toIso8601String());
         await _bump();
       });
 
-  /// The server did not purge (its epoch equals ours): nothing to finish.
+  /// The server confirmed it never served the request (or refused it):
+  /// nothing to finish.
   Future<void> clearRequested() => db.transaction(() async {
-        await (db.delete(db.syncMeta)..where((m) => m.key.equals(requestedKey))).go();
+        await _clearRequest();
         await _bump();
       });
 
@@ -114,9 +130,12 @@ class LocalPurge {
   Future<void> markPending(int epoch) => db.transaction(() async {
         await _put(purgeEpochKey, '$epoch');
         await _put(pendingEpochKey, '$epoch');
-        await (db.delete(db.syncMeta)..where((m) => m.key.equals(requestedKey))).go();
+        await _clearRequest();
         await _bump();
       });
+
+  Future<void> _clearRequest() =>
+      (db.delete(db.syncMeta)..where((m) => m.key.isIn(const <String>[requestedKey, requestedAtKey]))).go();
 
   Future<void> clearPending() => db.transaction(() async {
         await (db.delete(db.syncMeta)..where((m) => m.key.equals(pendingEpochKey))).go();

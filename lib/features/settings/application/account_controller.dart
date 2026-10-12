@@ -59,7 +59,7 @@ class AccountController {
     _guard();
     final result = await photos.wipeAll(alive: _alive);
     _guard();
-    if (!result.allDone) throw PhotoWipeFailed(result.failedCount);
+    if (!result.allDone) throw PhotoWipeFailed(result.failedCount, storeUnavailable: result.storeUnavailable);
     await auth.signOut();
   }
 
@@ -70,7 +70,7 @@ class AccountController {
     _guard();
     final result = await photos.wipeAll(alive: _alive);
     _guard();
-    if (!result.allDone) throw PhotoWipeFailed(result.failedCount);
+    if (!result.allDone) throw PhotoWipeFailed(result.failedCount, storeUnavailable: result.storeUnavailable);
     await auth.deleteAccount(forUserId: userId);
     try {
       await writer.runOwnedTransaction(db.wipeAll, purgeWork: true);

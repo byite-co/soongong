@@ -159,8 +159,8 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     switch (outcome) {
       case null || DeleteAllDone():
         showAppToast(context, message: PrivacyStrings.recoveryDone);
-      case DeleteAllPartial(:final failedPhotos):
-        showAppToast(context, message: PrivacyStrings.deleteAllPartial(failedPhotos));
+      case DeleteAllPartial(:final failedPhotos, :final storeUnavailable):
+        showAppToast(context, message: storeUnavailable && failedPhotos == 0 ? PrivacyStrings.deleteAllStoreUnavailable : PrivacyStrings.deleteAllPartial(failedPhotos));
       case DeleteAllBlocked():
         showAppToast(context, message: PrivacyStrings.recoveryBlocked);
       case DeleteAllUnconfirmed():
@@ -174,7 +174,7 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
   Future<void> _retrySweep() async {
     if (_sweepBusy) return;
     setState(() => _sweepBusy = true);
-    int left;
+    int? left;
     try {
       left = await ref.read(photoRetentionProvider).retryPendingSweep();
     } finally {
@@ -182,7 +182,14 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     }
     if (!mounted) return;
     ref.invalidate(pendingPhotoFilesProvider);
-    showAppToast(context, message: left == 0 ? PrivacyStrings.sweepDone : PrivacyStrings.sweepPending(left));
+    showAppToast(
+      context,
+      message: switch (left) {
+        null => PrivacyStrings.sweepUnavailable,
+        0 => PrivacyStrings.sweepDone,
+        final n => PrivacyStrings.sweepPending(n),
+      },
+    );
   }
 
   Future<void> _deleteAll() async {
@@ -221,9 +228,9 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     switch (outcome) {
       case DeleteAllDone():
         showAppToast(context, message: PrivacyStrings.deleteAllDone);
-      case DeleteAllPartial(:final failedPhotos):
+      case DeleteAllPartial(:final failedPhotos, :final storeUnavailable):
         ref.invalidate(pendingPhotoFilesProvider);
-        showAppToast(context, message: PrivacyStrings.deleteAllPartial(failedPhotos));
+        showAppToast(context, message: storeUnavailable && failedPhotos == 0 ? PrivacyStrings.deleteAllStoreUnavailable : PrivacyStrings.deleteAllPartial(failedPhotos));
       case DeleteAllBlocked():
         showAppToast(context, message: PrivacyStrings.deleteAllBlocked);
       case DeleteAllUnconfirmed():
@@ -243,7 +250,9 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     final corrections = ref.watch(recentCorrectionsProvider).value ?? 0;
     final rows = ref.watch(photoRowsProvider) ?? const <PhotoRow>[];
     final recovery = ref.watch(purgeRecoveryStatusProvider);
-    final pendingFiles = ref.watch(pendingPhotoFilesProvider).value ?? 0;
+    final pendingFilesValue = ref.watch(pendingPhotoFilesProvider);
+    // null inside a loaded value = the store cannot be listed (S09d).
+    final pendingFiles = pendingFilesValue.hasValue ? (pendingFilesValue.value ?? -1) : 0;
 
     return FlowScaffold(
       title: PrivacyStrings.title,
@@ -269,10 +278,10 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
                 ),
                 const SizedBox(height: AppSpacing.s16),
               ],
-              if (pendingFiles > 0) ...<Widget>[
+              if (pendingFiles != 0) ...<Widget>[
                 _RetryNotice(
                   key: PrivacyKeys.sweepNotice,
-                  text: PrivacyStrings.sweepPending(pendingFiles),
+                  text: pendingFiles < 0 ? PrivacyStrings.sweepUnavailable : PrivacyStrings.sweepPending(pendingFiles),
                   error: true,
                   retryKey: PrivacyKeys.sweepRetry,
                   retryLabel: PrivacyStrings.sweepRetry,

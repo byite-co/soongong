@@ -98,9 +98,11 @@ void main() {
     final purge = LocalPurge(h.db, h.ctx);
     expect((await purge.state()).stage, PurgeStage.none);
     expect(h.db.purgeGate.generation, isNull, reason: 'nothing read yet in this process');
-    await purge.markRequested();
+    await purge.markRequested('90000000-0000-4000-8000-000000000001');
     var s = await purge.state();
     expect(s.stage, PurgeStage.requested);
+    expect(s.requestId, '90000000-0000-4000-8000-000000000001');
+    expect(s.requestedAt, kT0);
     expect(s.generation, 1);
     expect(h.db.purgeGate.generation, 1);
     await purge.markPending(5);
@@ -114,9 +116,10 @@ void main() {
     expect(s.stage, PurgeStage.none);
     expect(s.generation, 4);
     expect(h.db.purgeGate.generation, 4);
-    await purge.markRequested();
+    await purge.markRequested('90000000-0000-4000-8000-000000000002');
     await purge.clearRequested();
     expect((await purge.state()).stage, PurgeStage.none);
+    expect((await purge.state()).requestedAt, isNull);
     expect(await h.writer.refreshPurgeGeneration(), 6);
   });
 

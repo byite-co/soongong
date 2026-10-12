@@ -10,7 +10,10 @@
 // deleted is counted too: the wipe leaves the `photo_sweep_pending` marker
 // (account id) and the next start / foreground sweeps again, keeping the
 // live rows' files. A wipe stops when its account is no longer signed in
-// ([alive]) — it never deletes the next account's files.
+// ([alive]) — it never deletes the next account's files. A store that
+// cannot be opened or listed is a failure, not an empty store ([S09d]):
+// the result says `storeUnavailable`, the marker stays, nothing is
+// reported as deleted that was not seen.
 //
 // S10 reads photos through [fileFor]: an expired or deleted photo is never
 // handed out (the file is removed on the spot); a retry never extends
@@ -32,17 +35,21 @@ part 'photo_retention.g.dart';
 /// deleted: the rows (and the sweep marker) stay for a retry and the action
 /// is not completed.
 class PhotoWipeFailed implements Exception {
-  const PhotoWipeFailed(this.failed);
+  const PhotoWipeFailed(this.failed, {this.storeUnavailable = false});
 
-  /// Rows whose file stayed + row-less files that stayed.
+  /// Rows whose file stayed + row-less files that stayed (0 when the store
+  /// could not be opened — the count is unknown then).
   final int failed;
 
+  /// The store could not be opened or listed ([S09d]).
+  final bool storeUnavailable;
+
   @override
-  String toString() => 'PhotoWipeFailed($failed)';
+  String toString() => 'PhotoWipeFailed($failed${storeUnavailable ? ' · store unavailable' : ''})';
 }
 
 class PhotoDeleteResult {
-  const PhotoDeleteResult({required this.deleted, required this.failed, this.failedFiles = 0});
+  const PhotoDeleteResult({required this.deleted, required this.failed, this.failedFiles = 0, this.storeUnavailable = false});
 
   final List<String> deleted;
   final List<String> failed;
@@ -51,9 +58,13 @@ class PhotoDeleteResult {
   /// not delete ([S09c]).
   final int failedFiles;
 
+  /// The store could not be opened or listed, so the row-less files are
+  /// unknown ([S09d]).
+  final bool storeUnavailable;
+
   int get total => deleted.length + failed.length;
   int get failedCount => failed.length + failedFiles;
-  bool get allDone => failed.isEmpty && failedFiles == 0;
+  bool get allDone => failed.isEmpty && failedFiles == 0 && !storeUnavailable;
 }
 
 class PhotoRetention {
@@ -76,7 +87,7 @@ class PhotoRetention {
     }
     final cache = await store.clearCache(now: now());
     final left = await retryPendingSweep();
-    if (n > 0 || cache > 0 || left > 0) appLog.i('photos · expired deleted=$n cache=$cache sweepLeft=$left');
+    if (n > 0 || cache > 0 || left != 0) appLog.i('photos · expired deleted=$n cache=$cache sweepLeft=${left ?? 'unknown'}');
     return n;
   }
 
@@ -132,29 +143,41 @@ class PhotoRetention {
       }
     }
     if (ok.isNotEmpty && go()) await reading.purgePhotoRows(ok);
-    final left = await store.sweep(keep: <String>{for (final p in failed) p.localPath}, proceed: go);
-    if (failed.isEmpty && left.isEmpty && go()) await reading.clearPhotoSweepPending();
-    return PhotoDeleteResult(deleted: ok, failed: <String>[for (final p in failed) p.id], failedFiles: left.length);
+    final sweep = await store.sweep(keep: <String>{for (final p in failed) p.localPath}, proceed: go);
+    if (failed.isEmpty && sweep.clean && go()) await reading.clearPhotoSweepPending();
+    return PhotoDeleteResult(
+      deleted: ok,
+      failed: <String>[for (final p in failed) p.id],
+      failedFiles: sweep.left.length,
+      storeUnavailable: !sweep.complete && go(),
+    );
   }
 
   /// Finishes a wipe left behind (marker set): deletes every file that no
-  /// live row names. Returns how many files are still there; 0 clears the
-  /// marker.
-  Future<int> retryPendingSweep() async {
+  /// live row names. Returns how many files are still there — 0 clears the
+  /// marker; null when the store could not be opened or listed (the marker
+  /// stays, nothing is known).
+  Future<int?> retryPendingSweep() async {
     if (!await reading.photoSweepPending()) return 0;
     final live = await reading.getAllPhotos();
-    final left = await store.sweep(keep: <String>{for (final p in live) p.localPath});
-    if (left.isEmpty) await reading.clearPhotoSweepPending();
-    return left.length;
+    final sweep = await store.sweep(keep: <String>{for (final p in live) p.localPath});
+    if (!sweep.complete) return null;
+    if (sweep.left.isEmpty) await reading.clearPhotoSweepPending();
+    return sweep.left.length;
   }
 
   /// Row-less files a previous wipe could not delete (0 when no wipe is
-  /// pending) — shown on the privacy screen with a retry.
-  Future<int> pendingSweepCount() async {
+  /// pending; null when the store cannot be listed) — shown on the privacy
+  /// screen with a retry.
+  Future<int?> pendingSweepCount() async {
     if (!await reading.photoSweepPending()) return 0;
     final live = <String>{for (final p in await reading.getAllPhotos()) p.localPath};
-    final files = await store.listAll();
-    return files.where((f) => !live.contains(f) && !live.any((k) => _derivedOf(k, f))).length;
+    try {
+      final files = await store.listAll();
+      return files.where((f) => !live.contains(f) && !live.any((k) => _derivedOf(k, f))).length;
+    } on PhotoStoreUnavailable {
+      return null;
+    }
   }
 
   static bool _derivedOf(String original, String candidate) {

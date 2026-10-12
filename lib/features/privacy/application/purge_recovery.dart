@@ -7,7 +7,9 @@
 // comes back online, when the account signs in again and when the app
 // returns to the foreground. The privacy screen shows [PurgeRecoveryState]
 // and offers the same `resume()` as "다시 시도". The server is never asked
-// to purge again for a local retry.
+// to purge again for a local retry; while a delete or a `purge-all` call is
+// still running the state is "확인 중" and a run follows its completion
+// ([S09d]).
 
 import 'dart:async';
 
@@ -103,7 +105,8 @@ class PurgeRecovery {
 
   Future<DeleteAllOutcome?> _run() async {
     try {
-      final outcome = await _ref.read(privacyActionsProvider).resume();
+      final actions = _ref.read(privacyActionsProvider);
+      final outcome = await actions.resume();
       _ref.read(purgeRecoveryStatusProvider.notifier).set(switch (outcome) {
         null || DeleteAllDone() || DeleteAllPartial() => const PurgeRecoveryIdle(),
         DeleteAllBlocked() => const PurgeRecoveryBlocked(),
@@ -111,6 +114,12 @@ class PurgeRecovery {
         DeleteAllFailed(:final error) => PurgeRecoveryFailed(error),
       });
       if (outcome != null) appLog.i('purge recovery → ${outcome.runtimeType}');
+      // [S09d] "unconfirmed" because a delete / a server call is still
+      // running: run again when it finishes so the state settles by itself.
+      if (outcome is DeleteAllUnconfirmed) {
+        final work = actions.pendingWork;
+        if (work != null) unawaited(work.then((_) => resume(), onError: (_) => resume()));
+      }
       return outcome;
     } on Object catch (e, st) {
       appLog.w('purge recovery failed', error: e, stackTrace: st);

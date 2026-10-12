@@ -22,7 +22,9 @@ import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../core/logging/app_logger.dart';
+import '../db/app_database.dart';
 import '../photos/photo_store.dart';
+import '../repositories/reading_repository.dart';
 import '../repositories/repository_providers.dart';
 import 'account_binding.dart';
 import 'auth_mode.dart';
@@ -166,10 +168,7 @@ class AuthGate extends _$AuthGate {
       // [S09c] The previous account's photo files (rows just wiped) must not
       // stay on the device: the new account has no rows yet, so every file
       // under the store is an orphan.
-      if (wiped) {
-        final left = await ref.read(photoStoreProvider).sweep();
-        if (left.isNotEmpty) appLog.w('auth gate: ${left.length} photo file(s) of the previous account could not be deleted');
-      }
+      if (wiped) await _sweepPreviousAccountPhotos(userId);
     } on Object catch (e, st) {
       appLog.e('auth gate: account binding failed', error: e, stackTrace: st);
     }
@@ -191,6 +190,30 @@ class AuthGate extends _$AuthGate {
       }
       appLog.w('auth gate: profile read failed (${reason.name})');
       state = AuthGateProfileError(userId: userId, reason: reason);
+    }
+  }
+
+  /// [S09d] The previous account's files: a sweep that could not finish
+  /// (store unreadable, a file that stayed) is remembered for the account
+  /// now bound (`photo_sweep_pending`), so its next start / foreground
+  /// retries — the information is not lost with the wiped database.
+  Future<void> _sweepPreviousAccountPhotos(String userId) async {
+    var done = false;
+    try {
+      final result = await ref.read(photoStoreProvider).sweep();
+      done = result.clean;
+      if (!done) appLog.w('auth gate: previous account photo sweep incomplete (left=${result.left.length} complete=${result.complete})');
+    } on Object catch (e) {
+      appLog.w('auth gate: previous account photo sweep failed (${e.runtimeType})');
+    }
+    if (done) return;
+    try {
+      final db = ref.read(appDatabaseProvider);
+      await db.into(db.syncMeta).insertOnConflictUpdate(
+            SyncMetaCompanion.insert(key: ReadingRepository.photoSweepPendingKey, value: userId),
+          );
+    } on Object catch (e) {
+      appLog.w('auth gate: photo sweep marker not written (${e.runtimeType})');
     }
   }
 

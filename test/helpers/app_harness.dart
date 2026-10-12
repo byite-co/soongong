@@ -54,6 +54,7 @@ class AppHarness {
         db = db ?? AppDatabase.inMemory(),
         _ownsDb = db == null {
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+    PrivacyActions.resetCallsForTest(); // S09d: process-wide purge-all call records
   }
 
   final AuthMode mode;

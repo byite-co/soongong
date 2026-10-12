@@ -293,7 +293,10 @@ void main() {
       expect(await h.container.read(syncWriterProvider).purgeEpoch(), 9);
 
       h.backend.responses['purge-all'] = Exception('offline');
-      expect(await h.container.read(privacyActionsProvider).deleteAll(), isA<DeleteAllFailed>());
+      // S09d: no answer = unknown until the server profile (or the window) settles it, never "failed"
+      expect(await h.container.read(privacyActionsProvider).deleteAll(), isA<DeleteAllUnconfirmed>());
+      h.clock.advance(kPurgeRequestSettleWindow + const Duration(seconds: 1));
+      expect(await h.container.read(privacyActionsProvider).resume(), isNull, reason: 'profile epoch 0 < local 9 · id not served · window passed → the call never purged');
     });
   });
 

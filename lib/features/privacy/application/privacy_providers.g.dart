@@ -249,19 +249,22 @@ final class PhotoRowsProvider
 String _$photoRowsHash() => r'32179bd5dd8a6d20c7d9c42e13163b951cfebd97';
 
 /// Row-less photo files a previous wipe could not delete ([S09c]); the
-/// screen offers a retry. Re-read after every photo action.
+/// screen offers a retry. null = the store cannot be listed right now
+/// ([S09d]). Re-read after every photo action.
 
 @ProviderFor(pendingPhotoFiles)
 final pendingPhotoFilesProvider = PendingPhotoFilesProvider._();
 
 /// Row-less photo files a previous wipe could not delete ([S09c]); the
-/// screen offers a retry. Re-read after every photo action.
+/// screen offers a retry. null = the store cannot be listed right now
+/// ([S09d]). Re-read after every photo action.
 
 final class PendingPhotoFilesProvider
-    extends $FunctionalProvider<AsyncValue<int>, int, FutureOr<int>>
-    with $FutureModifier<int>, $FutureProvider<int> {
+    extends $FunctionalProvider<AsyncValue<int?>, int?, FutureOr<int?>>
+    with $FutureModifier<int?>, $FutureProvider<int?> {
   /// Row-less photo files a previous wipe could not delete ([S09c]); the
-  /// screen offers a retry. Re-read after every photo action.
+  /// screen offers a retry. null = the store cannot be listed right now
+  /// ([S09d]). Re-read after every photo action.
   PendingPhotoFilesProvider._()
     : super(
         from: null,
@@ -278,16 +281,16 @@ final class PendingPhotoFilesProvider
 
   @$internal
   @override
-  $FutureProviderElement<int> $createElement($ProviderPointer pointer) =>
+  $FutureProviderElement<int?> $createElement($ProviderPointer pointer) =>
       $FutureProviderElement(pointer);
 
   @override
-  FutureOr<int> create(Ref ref) {
+  FutureOr<int?> create(Ref ref) {
     return pendingPhotoFiles(ref);
   }
 }
 
-String _$pendingPhotoFilesHash() => r'727a962674c3499280b09d4170a071a96d12a4a5';
+String _$pendingPhotoFilesHash() => r'cad1dd1dc958ebe3f53b38bd99350bd2d8c9a96f';
 
 @ProviderFor(shareExport)
 final shareExportProvider = ShareExportProvider._();
@@ -377,4 +380,4 @@ final class PrivacyActionsProvider
   }
 }
 
-String _$privacyActionsHash() => r'fcff805d1e86969368a2c1f7dd613925b3ea2cdb';
+String _$privacyActionsHash() => r'0ee18764d5f512fe0810b009adcae3bea65c77fa';

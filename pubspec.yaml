@@ -85,6 +85,7 @@ dependencies:
   wakelock_plus: ^1.8.0
   connectivity_plus: ^7.3.1
   url_launcher: ^6.3.2
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:

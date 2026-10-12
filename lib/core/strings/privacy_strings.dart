@@ -123,8 +123,10 @@ abstract final class PrivacyStrings {
   static const String recoveryRetry = '다시 시도';
   static const String recoveryDone = '모든 기록 삭제를 마무리했습니다';
   static String sweepPending(int n) => '삭제하지 못한 사진 파일 $n개';
+  static const String sweepUnavailable = '사진 저장소를 열지 못해 남은 사진 파일을 확인하지 못했습니다';
   static const String sweepRetry = '다시 시도';
   static const String sweepDone = '사진 파일을 모두 삭제했습니다';
+  static const String deleteAllStoreUnavailable = '기록은 삭제했습니다 · 사진 저장소를 열지 못해 사진 파일은 다음 실행 때 다시 시도합니다';
   static const String writeBlocked = '모든 기록 삭제가 진행 중입니다 · 마무리된 뒤 다시 시도';
 
   // Footer

@@ -48,4 +48,4 @@ final class PhotoStoreProvider
   }
 }
 
-String _$photoStoreHash() => r'10aba8401c58f1ba808e7128bcd1f65b9ff3670d';
+String _$photoStoreHash() => r'7af85d3e0b58f8d0b400e8272db4f7ddec6137a2';

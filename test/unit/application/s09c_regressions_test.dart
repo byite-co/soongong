@@ -334,8 +334,10 @@ void main() {
       expect((await h.container.read(localPurgeProvider).state()).stage, PurgeStage.requested);
       expect(await settings.setTheme(ThemeSetting.dark), isFalse, reason: 'nothing is written until the server answers');
 
-      backend.profileError = null; // reachable again · purge_epoch 0 == local 0 → the call never purged
-      expect(await h.container.read(purgeRecoveryProvider).resume(), isNull);
+      backend.profileError = null; // reachable again · purge_epoch 0 == local 0 · id not served
+      expect(await h.container.read(purgeRecoveryProvider).resume(), isA<DeleteAllUnconfirmed>(), reason: 'inside the server execution window the lost call may still run (S09d)');
+      h.clock.advance(kPurgeRequestSettleWindow + const Duration(seconds: 1));
+      expect(await h.container.read(purgeRecoveryProvider).resume(), isNull, reason: 'window passed → the call never purged');
       expect((await h.container.read(localPurgeProvider).state()).stage, PurgeStage.none);
       expect(await settings.setTheme(ThemeSetting.dark), isTrue);
       expect(backend.callNames.where((n) => n == 'purge-all').length, 1, reason: 'the server purge is not retried by the recovery');
