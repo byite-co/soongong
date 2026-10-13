@@ -464,9 +464,7 @@ void main() {
         task.release();
         await prior.sweep();
 
-        now = now.add(
-          Duration(hours: 24, milliseconds: overdueMilliseconds),
-        );
+        now = now.add(Duration(hours: 24, milliseconds: overdueMilliseconds));
         expect((await store().sweep()).complete, isTrue);
         expect(file.existsSync(), isFalse);
       },

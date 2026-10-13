@@ -61,7 +61,7 @@ class OwnedTempStore {
   /// False means pre-ledger files may remain. They are never owned by a scope.
   final Future<bool> Function()? legacyClean;
   final Map<String, Stopwatch> _leases = {};
-  final Map<String, Stopwatch> _ages = {};
+  final Map<String, ({Stopwatch clock, Duration budget})> _ages = {};
   final Set<String> _revoked = {};
   Future<void> _tail = Future<void>.value();
   Future<TempCleanupResult>? _sweep;
@@ -155,7 +155,7 @@ class OwnedTempStore {
     Directory(p.join(dir.path, 'payload')).createSync();
     final age = Stopwatch()..start();
     _leases['$scope/$id'] = age;
-    _ages['$scope/$id'] = age;
+    _ages['$scope/$id'] = (clock: age, budget: policy.shareGrace);
     return OwnedTempTask._(this, base, scope, id, kind, dir);
   });
 
@@ -337,13 +337,14 @@ class OwnedTempStore {
         final shared = File(p.join(entity.path, '.shared')).existsSync();
         final expires = data?['expires'];
         final created = data?['created'];
+        final current = now().toUtc().millisecondsSinceEpoch;
         final valid =
             data?['version'] == 1 &&
             data?['scope'] == scope &&
             data?['task'] == id &&
             {'picker', 'export'}.contains(data?['kind']) &&
             created is int &&
-            created <= now().toUtc().millisecondsSinceEpoch &&
+            created <= current &&
             expires is int &&
             expires >= created &&
             expires - created <= policy.shareGrace.inMilliseconds;
@@ -353,8 +354,8 @@ class OwnedTempStore {
             !deletion &&
             !clockBad &&
             valid &&
-            now().toUtc().millisecondsSinceEpoch < expires &&
-            (_ages[key] == null || _ages[key]!.elapsed < policy.shareGrace);
+            current < expires &&
+            _withinGrace(key, expires - current);
         if (retain) continue;
         result = result.plus(await _deleteTask(base, scope, id, entity));
       } on Object {
@@ -364,6 +365,19 @@ class OwnedTempStore {
       }
     }
     return result;
+  }
+
+  bool _withinGrace(String key, int remainingMilliseconds) {
+    // Restored files have no process-local age. Capture only their original
+    // remaining grace once, so a later wall-clock freeze cannot extend it.
+    final age = _ages.putIfAbsent(
+      key,
+      () => (
+        clock: Stopwatch()..start(),
+        budget: Duration(milliseconds: remainingMilliseconds),
+      ),
+    );
+    return age.clock.elapsed < age.budget;
   }
 
   Future<TempCleanupResult> _deleteTask(
