@@ -1,8 +1,8 @@
 import 'package:go_router/go_router.dart';
 
+import 'presentation/grading_screen.dart';
 import 'presentation/problem_solver_screen.dart';
 import 'presentation/transcription_screen.dart';
-import 'presentation/grading_screen.dart';
 
 /// Routes owned by the `reading` feature.
 ///

@@ -12,8 +12,9 @@ class AiQuote {
         points <= 0 ||
         terms.isEmpty ||
         terms.length > 200 ||
-        !RegExp(r'^[0-9a-f-]{36}$').hasMatch(id))
+        !RegExp(r'^[0-9a-f-]{36}$').hasMatch(id)) {
       throw const FormatException('invalid_quote');
+    }
   }
   final String id, operation, terms;
   final int points;
@@ -49,8 +50,9 @@ class AiApprovalController {
   }
 
   void check() {
-    if (_ticket == null || _valid?.call() != true)
+    if (_ticket == null || _valid?.call() != true) {
       throw const StudyEngineException('approval_cancelled');
+    }
   }
 
   void close() {
@@ -68,18 +70,21 @@ class AiApprovalController {
     final ticket = _ticket;
     void guard() {
       check();
-      if (!identical(ticket, _ticket))
+      if (!identical(ticket, _ticket)) {
         throw const StudyEngineException('approval_cancelled');
+      }
     }
 
     // Re-read before dispatch. A changed policy needs a new explicit decision.
     var quote = AiQuote(await jobs.quote(operation, epoch));
     guard();
     for (var changes = 0; changes < 3; changes++) {
-      if (quote.operation != operation)
+      if (quote.operation != operation) {
         throw const FormatException('invalid_quote');
-      if (!await _present!(quote))
+      }
+      if (!await _present!(quote)) {
         throw const StudyEngineException('approval_cancelled');
+      }
       guard();
       final latest = AiQuote(await jobs.quote(operation, epoch));
       guard();

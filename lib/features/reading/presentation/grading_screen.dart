@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+
 import '../../../core/config/app_config.dart';
 import '../../../core/contracts/providers.dart';
 import '../../../core/contracts/reading_engine.dart';
-import '../../../core/domain/enums.dart';
 import '../../../core/domain/entities/subject.dart';
+import '../../../core/domain/enums.dart';
 import '../../../core/domain/ids.dart';
 import '../../../data/auth/auth_gate.dart';
 import '../../../data/photos/owned_picker_coordinator.dart';
@@ -81,8 +83,9 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
   Future<void> pick(ImageSource source) async {
     if (busy ||
         (source == ImageSource.camera &&
-            ref.read(measureControllerProvider).isLive))
+            ref.read(measureControllerProvider).isLive)) {
       return;
+    }
     final op = ++operation;
     final owner = ref.read(currentUserIdProvider);
     final writer = ref.read(syncWriterProvider);
@@ -109,8 +112,9 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
           );
       if (picked == null) return;
       try {
-        if (await picked.length() > 4194304)
+        if (await picked.length() > 4194304) {
           throw const FormatException('image_too_large');
+        }
         final bytes = await picked.readAsBytes();
         if (!current()) {
           bytes.fillRange(0, bytes.length, 0);
@@ -146,8 +150,9 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
           (status) {
             if (!mounted ||
                 op != operation ||
-                ref.read(currentUserIdProvider) != owner)
+                ref.read(currentUserIdProvider) != owner) {
               return;
+            }
             setState(() {
               if (status is Done) {
                 result = status.result;
@@ -169,8 +174,9 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
             });
           },
           onError: (Object _) {
-            if (mounted && op == operation)
+            if (mounted && op == operation) {
               setState(() => message = '상태 조회 실패 · 이전 요청에서 다시 조회할 수 있습니다.');
+            }
           },
         );
   }
@@ -180,8 +186,9 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
         image == null ||
         !agreed ||
         subject == null ||
-        range.text.trim().isEmpty)
+        range.text.trim().isEmpty) {
       return;
+    }
     final gate = ref.read(authGateProvider);
     if (gate is! AuthGateSignedIn ||
         gate.profile?.readingConsentActive != true) {
@@ -254,8 +261,9 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
         );
       }
     } on Object {
-      if (current())
+      if (current()) {
         setState(() => message = '판독을 시작하지 못했습니다. 개발 설정과 이용 권한을 확인해 주세요.');
+      }
     } finally {
       await task?.cleanup();
       task = null;
@@ -268,8 +276,9 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
         id == null ||
         result == null ||
         marks.isEmpty ||
-        marks.values.any((m) => m == null))
+        marks.values.any((m) => m == null)) {
       return;
+    }
     final requestId = id!;
     final op = operation;
     final engine = ref.read(readingEngineProvider);
@@ -290,7 +299,7 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
           wrongItemId: wrong,
         ),
       );
-      if (wrong != null)
+      if (wrong != null) {
         items.add(
           WrongItemDraft(
             id: wrong,
@@ -301,6 +310,7 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
             userConfirmed: true,
           ),
         );
+      }
     }
     setState(() => busy = true);
     try {
@@ -345,8 +355,9 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
       ),
     );
     controller.dispose();
-    if (mounted && op == operation && number != null)
+    if (mounted && op == operation && number != null) {
       setState(() => marks.putIfAbsent(key(page, number), () => null));
+    }
   }
 
   @override
@@ -357,16 +368,18 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
     ref.listen(studyGenerationProvider, (_, next) {
       if (generation != null &&
           next.asData?.value != null &&
-          next.asData!.value != generation)
+          next.asData!.value != generation) {
         reset();
+      }
     });
     ref.listen(tempInvalidationProvider, (_, next) {
       if (next.asData?.value == ref.read(currentUserIdProvider)) reset();
     });
     ref.listen(authGateProvider, (_, next) {
       if (next is! AuthGateSignedIn ||
-          next.profile?.readingConsentActive != true)
+          next.profile?.readingConsentActive != true) {
         reset();
+      }
     });
     final enabled = AppConfig.devOcrEnabled && AppConfig.hasBackendConfig;
     return Scaffold(

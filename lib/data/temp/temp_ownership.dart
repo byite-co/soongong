@@ -64,8 +64,9 @@ class TempOwnership {
     if (mapping == null ||
         mapping['owner'] != writer.ctx.userId ||
         mapping['generation'] != writer.purgeGeneration ||
-        _boundaries.contains(writer.ctx.userId))
+        _boundaries.contains(writer.ctx.userId)) {
       return false;
+    }
     final owned = await store.ownsActivePayload(
       mapping['scope'] as String,
       path,

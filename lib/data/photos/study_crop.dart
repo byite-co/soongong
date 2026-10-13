@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+
 import '../temp/owned_temp_store.dart';
 
 /// Crop coordinates are normalized in the rotated image, clockwise quarter
@@ -34,8 +35,9 @@ Future<Uint8List> cropStudyImage(
   ui.Picture? picture;
   try {
     descriptor = await ui.ImageDescriptor.encoded(buffer);
-    if (descriptor.width * descriptor.height > 12000000)
+    if (descriptor.width * descriptor.height > 12000000) {
       throw const FormatException('image_too_large');
+    }
     codec = await descriptor.instantiateCodec();
     if (codec.frameCount != 1) throw const FormatException('invalid_image');
     source = (await codec.getNextFrame()).image;
@@ -59,13 +61,14 @@ Future<Uint8List> cropStudyImage(
     picture = recorder.endRecording();
     output = await picture.toImage(outWidth, outHeight);
     final encoded = await output.toByteData(format: ui.ImageByteFormat.png);
-    if (encoded == null || encoded.lengthInBytes > 4 * 1024 * 1024)
+    if (encoded == null || encoded.lengthInBytes > 4 * 1024 * 1024) {
       throw const FormatException('image_too_large');
+    }
     task.check();
     final file = task.file('crop.png');
     await file.writeAsBytes(encoded.buffer.asUint8List(), flush: true);
     task.check();
-    return file.readAsBytes();
+    return await file.readAsBytes();
   } finally {
     output?.dispose();
     picture?.dispose();

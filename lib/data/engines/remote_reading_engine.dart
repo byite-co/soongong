@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
-import 'package:drift/drift.dart' show Value, Variable;
+
+import 'package:drift/drift.dart' show Value, Variable, TableInfo, Table;
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../core/contracts/reading_engine.dart';
 import '../../core/domain/enums.dart';
 import '../repositories/reading_repository.dart';
@@ -51,8 +53,9 @@ class RemoteReadingEngine implements ReadingEngine {
     ownsFile: ownsFile,
     upload: (path, file) async {
       final bytes = await File(file).readAsBytes();
-      if (bytes.isEmpty || bytes.length > 4194304)
+      if (bytes.isEmpty || bytes.length > 4194304) {
         throw const FormatException('image_too_large');
+      }
       await client.storage
           .from('reading-photos')
           .uploadBinary(
@@ -76,8 +79,9 @@ class RemoteReadingEngine implements ReadingEngine {
   final Future<void> Function(Duration) pause;
   final Map<String, int> _generations = {};
   void _guard() {
-    if (!alive() || owner() != reading.ctx.userId)
+    if (!alive() || owner() != reading.ctx.userId) {
       throw StateError('account_changed');
+    }
   }
 
   Future<int> _generation(String id) async {
@@ -109,13 +113,15 @@ class RemoteReadingEngine implements ReadingEngine {
     try {
       if (!OwnedTempStore.validId(job.requestId) ||
           job.photoPaths.isEmpty ||
-          job.photoPaths.length > 20)
+          job.photoPaths.length > 20) {
         throw const FormatException('invalid_images');
+      }
       final paths = <String>[];
       for (var i = 0; i < job.photoPaths.length; i++) {
         await _owned(job.requestId, () async {});
-        if (!await ownsFile(job.photoPaths[i]))
+        if (!await ownsFile(job.photoPaths[i])) {
           throw StateError('image_not_owned');
+        }
         _guard();
         final path = '${reading.ctx.userId}/${job.requestId}/p$i.jpg';
         await upload(path, job.photoPaths[i]);
@@ -150,8 +156,9 @@ class RemoteReadingEngine implements ReadingEngine {
     Map<String, dynamic> raw, {
     DateTime? completed,
   }) {
-    if (raw['schema_version'] != 2 || raw['pages'] is! List)
+    if (raw['schema_version'] != 2 || raw['pages'] is! List) {
       throw const FormatException('invalid_reading_result');
+    }
     final seen = <int>{};
     final pages = <ReadingPage>[];
     for (final value in raw['pages'] as List) {
@@ -162,8 +169,9 @@ class RemoteReadingEngine implements ReadingEngine {
           index >= 20 ||
           !seen.add(index) ||
           p['items'] is! List ||
-          (p['items'] as List).length > 500)
+          (p['items'] as List).length > 500) {
         throw const FormatException('invalid_page');
+      }
       final numbers = <int>{};
       final items = <ReadingItem>[];
       for (final value in p['items'] as List) {
@@ -186,8 +194,9 @@ class RemoteReadingEngine implements ReadingEngine {
             box.length != 4 ||
             box.any((v) => !v.isFinite || v < 0 || v > 1) ||
             box[0] > box[2] ||
-            box[1] > box[3])
+            box[1] > box[3]) {
           throw const FormatException('invalid_item');
+        }
         items.add(
           ReadingItem(
             number: number,
@@ -203,8 +212,9 @@ class RemoteReadingEngine implements ReadingEngine {
     }
     if (pages.isEmpty ||
         pages.length > 20 ||
-        pages.any((p) => p.index >= pages.length))
+        pages.any((p) => p.index >= pages.length)) {
       throw const FormatException('invalid_pages');
+    }
     return ReadingResult(
       requestId: id,
       pages: pages,
@@ -269,10 +279,11 @@ class RemoteReadingEngine implements ReadingEngine {
   Future<CancelOutcome> cancel(String id) async {
     final out = await _call('reading-cancel', id);
     if (out['outcome'] == 'cancelled') return const CancelCancelled();
-    if (out['outcome'] == 'already_done')
+    if (out['outcome'] == 'already_done') {
       return CancelAlreadyDone(
         result(id, Map<String, dynamic>.from(out['result'] as Map)),
       );
+    }
     if (out['outcome'] == 'already_failed') return const CancelAlreadyFailed();
     throw StateError('cancel_unavailable');
   }
@@ -296,8 +307,9 @@ class RemoteReadingEngine implements ReadingEngine {
     Map<String, dynamic> out,
   ) => _owned(id, () async {
     final request = await reading.get(id);
-    if (request == null || request.stamp.userId != reading.ctx.userId)
+    if (request == null || request.stamp.userId != reading.ctx.userId) {
       throw StateError('request_deleted');
+    }
     final items = (out['items'] as List)
         .map((v) => _item(Map<String, dynamic>.from(v as Map)))
         .toList();
@@ -313,18 +325,23 @@ class RemoteReadingEngine implements ReadingEngine {
     }).toList();
     final itemIds = items.map((i) => i.id).toSet();
     if (itemIds.length != items.length ||
-        entries.any((e) => !itemIds.contains(e.wrongItemId)))
+        entries.any((e) => !itemIds.contains(e.wrongItemId))) {
       throw const FormatException('invalid_saved_items');
+    }
     final epoch = await reading.writer.purgeEpoch();
-    for (final table in [reading.db.wrongItems, reading.db.reviewEntries]) {
+    for (final table in <TableInfo<Table, Object?>>[
+      reading.db.wrongItems,
+      reading.db.reviewEntries,
+    ]) {
       final key = table.actualTableName == 'wrong_items' ? 'items' : 'entries';
       final rows = <Map<String, Object?>>[];
       for (final raw in out[key] as List) {
         final row = Map<String, Object?>.from(raw as Map);
         if (row['purge_epoch'] != epoch ||
             (key == 'items' && row['request_id'] != id) ||
-            (row['user_id'] != null && row['user_id'] != reading.ctx.userId))
+            (row['user_id'] != null && row['user_id'] != reading.ctx.userId)) {
           throw StateError('stale_saved_items');
+        }
         final existing = await reading.db
             .customSelect(
               'SELECT user_id,deleted_at,server_version FROM ${table.actualTableName} WHERE id=?',
@@ -332,12 +349,14 @@ class RemoteReadingEngine implements ReadingEngine {
             )
             .getSingleOrNull();
         if (existing != null) {
-          if (existing.read<String>('user_id') != reading.ctx.userId)
+          if (existing.read<String>('user_id') != reading.ctx.userId) {
             throw StateError('id_reused');
+          }
           if (existing.data['deleted_at'] != null ||
               ((existing.data['server_version'] as int? ?? 0) >
-                  (row['server_version'] as int? ?? 0)))
+                  (row['server_version'] as int? ?? 0))) {
             continue;
+          }
         }
         row['user_id'] = reading.ctx.userId;
         rows.add(row);
@@ -401,8 +420,9 @@ class RemoteReadingEngine implements ReadingEngine {
                 serverItems: saved,
               );
       }
-      if (out['outcome'] == 'not_unsaved')
+      if (out['outcome'] == 'not_unsaved') {
         return SaveNotUnsaved(out['status'] as String);
+      }
       return SaveFailed(out['outcome'] as String? ?? 'unavailable');
     } on Object {
       return const SaveOffline();
@@ -430,10 +450,12 @@ class RemoteReadingEngine implements ReadingEngine {
             )
             .toList(),
       });
-      if (out['outcome'] == 'updated')
+      if (out['outcome'] == 'updated') {
         return MarksUpdated(await _mirror(id, out));
-      if (out['outcome'] == 'not_saved')
+      }
+      if (out['outcome'] == 'not_saved') {
         return MarksNotSaved(out['status'] as String);
+      }
       return MarksFailed(out['outcome'] as String? ?? 'unavailable');
     } on Object {
       return const MarksOffline();

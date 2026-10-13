@@ -82,12 +82,14 @@ class OwnedTempStore {
               !validId(parts[1]) ||
               parts[2] != 'payload' ||
               !_leases.containsKey('$scope/${parts[1]}') ||
-              _revoked.contains(scope))
+              _revoked.contains(scope)) {
             return false;
+          }
           final task = Directory(p.join(base.path, scope, parts[1]));
           if (File(p.join(task.path, '.delete')).existsSync() ||
-              File(p.join(task.parent.path, '.revoked')).existsSync())
+              File(p.join(task.parent.path, '.revoked')).existsSync()) {
             return false;
+          }
           return FileSystemEntity.typeSync(path, followLinks: false) ==
               FileSystemEntityType.file;
         } on Object {

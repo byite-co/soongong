@@ -1,6 +1,8 @@
 import 'dart:convert';
+
 import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
+
 import '../../core/contracts/transcription_engine.dart';
 import '../engines/transcription/remote_ai_jobs.dart';
 import 'local_purge.dart';
@@ -43,8 +45,9 @@ class AiRequestRepository {
   ) => _owned(approval.generation, () async {
     final purge = await LocalPurge.readState(documents.db);
     if (purge.epoch != approval.epoch ||
-        !{'ocr_text', 'ocr_math'}.contains(approval.operation))
+        !{'ocr_text', 'ocr_math'}.contains(approval.operation)) {
       throw StateError('stale_approval');
+    }
     final digest = sha256.convert(utf8.encode(jsonEncode(input))).toString();
     // INSERT (never replace) makes an ID collision or repeated dispatch fail closed.
     await documents.db.customStatement(
@@ -116,8 +119,9 @@ class AiRequestRepository {
         );
         if ('ocr_${result.kind.name}' != old.operation ||
             job['state'] != 'succeeded' ||
-            expired)
+            expired) {
           throw const FormatException('invalid_job');
+        }
       }
       await documents.db.customStatement(
         'UPDATE study_ai_requests SET state=?,points_state=?,result_json=?,result_expired=? WHERE request_id=? AND user_id=?',
@@ -155,8 +159,9 @@ class AiRequestRepository {
     if (request == null ||
         request.expired ||
         request.state != 'succeeded' ||
-        request.transcription == null)
+        request.transcription == null) {
       throw StateError('result_unavailable');
+    }
     if (request.documentId != null && expectedRevision == null) {
       final existing = await documents.get(request.documentId!);
       if (existing == null) throw StateError('document_deleted');

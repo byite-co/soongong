@@ -85,7 +85,7 @@ export async function callEngine(job: ClaimedJob, call: RpcCall = rpc, fetcher: 
 
 export async function runOnce(
   engine: (j: ClaimedJob) => Promise<EngineResult> = callEngine,
-  maxJobs = 20,
+  maxJobs = 1,
   call: RpcCall = rpc,
   remove?: (paths: string[]) => Promise<string[]>,
 ): Promise<{ processed: { user_id: string; request_id: string }[] }> {

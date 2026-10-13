@@ -1,12 +1,13 @@
 import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:soongong/features/reading/application/ai_approval_controller.dart';
 import 'package:soongong/data/engines/transcription/remote_ai_jobs.dart';
+import 'package:soongong/features/reading/application/ai_approval_controller.dart';
 
 void main() {
   const q1 = '11111111-1111-4111-8111-111111111111',
       q2 = '22222222-2222-4222-8222-222222222222';
-  for (final cancel in [true, false])
+  for (final cancel in [true, false]) {
     test(
       'A04 quote cancel=$cancel and changed quote requires another explicit approval',
       () async {
@@ -49,6 +50,7 @@ void main() {
         }
       },
     );
+  }
   test(
     'A05 owner consent epoch invalidation and old dialog cannot approve new scope',
     () async {

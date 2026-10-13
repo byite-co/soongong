@@ -81,8 +81,9 @@ class RemoteAiJobs {
     }
     await beforeSend?.call(approval, input);
     checkCurrent?.call();
-    if (!identical(session(), owner))
+    if (!identical(session(), owner)) {
       throw const StudyEngineException('account_changed');
+    }
     final job = await invoke('study-infer', {
       'version': 2,
       'request_id': approval.requestId,
@@ -138,8 +139,9 @@ class RemoteAiJobs {
       'purge_epoch': epoch,
       'operation': operation,
     });
-    if (!identical(session(), owner))
+    if (!identical(session(), owner)) {
       throw const StudyEngineException('account_changed');
+    }
     return result;
   }
 

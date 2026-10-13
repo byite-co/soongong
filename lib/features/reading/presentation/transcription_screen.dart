@@ -11,15 +11,15 @@ import '../../../core/strings/study_strings.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../data/auth/auth_gate.dart';
 import '../../../data/photos/owned_picker_coordinator.dart';
+import '../../../data/photos/study_crop.dart';
 import '../../../data/photos/study_image_picker.dart';
+import '../../../data/repositories/ai_request_repository.dart';
 import '../../../data/repositories/local_purge.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../data/repositories/study_repository.dart';
 import '../../../data/temp/temp_providers.dart';
 import '../../measure/application/measure_controller.dart';
 import '../application/study_providers.dart';
-import '../../../data/repositories/ai_request_repository.dart';
-import '../../../data/photos/study_crop.dart';
 import 'crop_dialog.dart';
 
 class TranscriptionScreen extends ConsumerStatefulWidget {
@@ -182,8 +182,9 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
             op != _operation ||
             ref.read(currentUserIdProvider) != owner ||
             writer.purgeGeneration != generation ||
-            !_agreed)
+            !_agreed) {
           return false;
+        }
         final gate = ref.read(authGateProvider);
         return gate is AuthGateSignedIn &&
             gate.profile?.readingConsentActive == true;
@@ -413,8 +414,10 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
     final jobs = ref.read(remoteAiJobsProvider);
     if (jobs == null) return;
     final gate = ref.read(authGateProvider);
-    if (gate is! AuthGateSignedIn || gate.profile?.readingConsentActive != true)
+    if (gate is! AuthGateSignedIn ||
+        gate.profile?.readingConsentActive != true) {
       return;
+    }
     final owner = gate.userId;
     final op = ++_operation;
     final repository = ref.read(aiRequestRepositoryProvider);
@@ -431,8 +434,9 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       if (!current() || updated == null) return;
       final currentGate = ref.read(authGateProvider);
       if (currentGate is! AuthGateSignedIn ||
-          currentGate.profile?.readingConsentActive != true)
+          currentGate.profile?.readingConsentActive != true) {
         return;
+      }
       final document = updated.documentId == null
           ? null
           : await repository.documents.get(updated.documentId!);
@@ -453,11 +457,12 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
             '${_requestState(updated)}\n원본 사진은 보관하지 않았습니다. 요청을 자동 재실행하지 않습니다.';
       });
     } on Object {
-      if (current())
+      if (current()) {
         setState(
           () => _message =
               '요청을 조회하지 못했습니다. 요청 없음·연결 오류는 다시 실행하지 않습니다. 상태를 다시 확인해 주세요.',
         );
+      }
     } finally {
       if (current()) {
         ref.invalidate(aiRequestsProvider);
@@ -492,8 +497,9 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
     final requests = ref.watch(aiRequestsProvider);
     ref.listen(authGateProvider, (_, next) {
       if (next is AuthGateSignedIn &&
-          next.profile?.readingConsentActive == true)
+          next.profile?.readingConsentActive == true) {
         return;
+      }
       _releaseApproval?.call();
       _operation++;
       _image?.fillRange(0, _image!.length, 0);
@@ -647,10 +653,11 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
                       .read(aiRequestRepositoryProvider)
                       .correct(id, value, generation)
                       .catchError((Object _) {
-                        if (mounted)
+                        if (mounted) {
                           setState(
                             () => _message = '교정 내용 보관에 실패했습니다. 입력은 유지됩니다.',
                           );
+                        }
                       });
                 }
               },

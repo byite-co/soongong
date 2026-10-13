@@ -1,0 +1,27 @@
+{
+  "revision": "paddle-v3-next02",
+  "files": {
+    "detection/README.md": "b56d9e9d1a85aa59a69db6f5e546e69897a8c9e85d0b2076953402a7607eacc1",
+    "detection/config.json": "c9d07ea65624c3df541a634a302fe76d53baecf98b5ee9678910b955638d7d80",
+    "detection/inference.json": "26c59bd5c5bea8b63efecb9115c35b7eea300081bd8703dc464da4aa19825b98",
+    "detection/inference.pdiparams": "7e9518c6ab706fe87842a8de1c098f990e67f9212b67c9ef8bc4bca6dc17b91a",
+    "detection/inference.yml": "ccfc8b069bb0d5505ecefa6defc54140c10bf0194fde5395aba0a1a99e5ea90f",
+    "korean/README.md": "0296766162c1ae59243dc1ef284821f2eb282675a6adae5a5cfeb1721a7802f1",
+    "korean/config.json": "8d334e8e79a7406739c0e8522ff5ecc6b4bda99b654baaa10cc37bc7469cdf7c",
+    "korean/inference.json": "144c90b27085fc785affa3bd6ccb331ccce37f035fbd6fd70305f4d0f83da7c2",
+    "korean/inference.pdiparams": "b08f266ec3f6ea687a089677146cefddee6d6e823abb2aeb66667be0e3707a4b",
+    "korean/inference.yml": "065ec6bae5f71389edc46cc0ca0a97047534cfe5f9002aa24025cd1ca951b609"
+  },
+  "sources": [
+    {
+      "repository": "PaddlePaddle/PP-OCRv3_mobile_det",
+      "commit": "58f4e5b132e34e516486fb0d0266c662feb48ca1",
+      "license": "apache-2.0"
+    },
+    {
+      "repository": "PaddlePaddle/korean_PP-OCRv3_mobile_rec",
+      "commit": "02b8bcc0041d794ecc5cf3cd8aa40fc23626ec87",
+      "license": "apache-2.0"
+    }
+  ]
+}

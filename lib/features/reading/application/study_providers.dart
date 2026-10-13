@@ -5,13 +5,13 @@ import '../../../core/config/app_config.dart';
 import '../../../core/contracts/problem_solver.dart';
 import '../../../core/contracts/study_restore.dart';
 import '../../../core/contracts/transcription_engine.dart';
+import '../../../data/engines/transcription/remote_ai_jobs.dart';
 import '../../../data/engines/transcription/remote_problem_solver.dart';
 import '../../../data/engines/transcription/remote_transcription_engine.dart';
+import '../../../data/repositories/ai_request_repository.dart';
 import '../../../data/repositories/remote_study_restore.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../data/repositories/study_repository.dart';
-import '../../../data/repositories/ai_request_repository.dart';
-import '../../../data/engines/transcription/remote_ai_jobs.dart';
 import 'ai_approval_controller.dart';
 
 final aiApprovalControllerProvider = Provider<AiApprovalController>((ref) {

@@ -11,19 +11,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart'
     show ProviderListenableSelect;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../data/auth/auth_gate.dart';
+import '../../data/engines/remote_reading_engine.dart';
 import '../../data/engines/seat_engine_impl.dart';
 import '../../data/network/connectivity_network_status.dart';
 import '../../data/notifications/local_notification_gateway.dart';
+import '../../data/repositories/repository_providers.dart';
+import '../../data/temp/temp_providers.dart';
 import '../config/app_config.dart';
 import '../dev/dev_fake_settings.dart';
 import 'contracts.dart';
 import 'fakes/fakes.dart';
-import '../../data/engines/remote_reading_engine.dart';
-import '../../data/repositories/repository_providers.dart';
-import '../../data/temp/temp_providers.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../data/auth/auth_gate.dart';
 
 part 'providers.g.dart';
 
@@ -54,8 +54,9 @@ SeatEngine seatEngine(Ref ref) {
 
 @Riverpod(keepAlive: true)
 ReadingEngine readingEngine(Ref ref) {
-  if (!AppConfig.devOcrEnabled || !AppConfig.hasBackendConfig)
+  if (!AppConfig.devOcrEnabled || !AppConfig.hasBackendConfig) {
     return const UnavailableReadingEngine();
+  }
   final reading = ref.watch(readingRepositoryProvider);
   final wrongs = ref.watch(wrongsRepositoryProvider);
   final ownership = ref.watch(tempOwnershipProvider);
