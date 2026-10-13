@@ -48,6 +48,37 @@ void main() {
     await pressStudy(tester, StudyStrings.recognize);
   }
 
+  testWidgets(
+    'A01/A04 actual approval injection cancel zero and repeated taps one durable request',
+    (tester) async {
+      final rig = StudyRaceHarness(useApproval: true);
+      addTearDown(rig.h.dispose);
+      await rig.ready(tester);
+      await rig.mount(
+        tester,
+        TranscriptionScreen(pickImage: (_) async => _Image()),
+      );
+      await selectAndRecognize(tester);
+      expect(find.textContaining('3 AI 포인트'), findsOneWidget);
+      expect(find.textContaining('fixture-terms'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, '취소'));
+      await pumpStudy(tester);
+      expect(rig.approvedDispatches, 0);
+      final button = tester.widget<AppButton>(
+        find.widgetWithText(AppButton, StudyStrings.recognize),
+      );
+      button.onPressed?.call();
+      button.onPressed?.call();
+      await pumpStudy(tester);
+      await tester.tap(find.widgetWithText(TextButton, '포인트 확인 · 실행'));
+      await pumpStudy(tester);
+      expect(rig.approvedDispatches, 1);
+      expect(await completeStudy(tester, rig.repo.list()), isEmpty);
+      await pressStudy(tester, StudyStrings.confirm);
+      expect((await completeStudy(tester, rig.repo.list())).length, 1);
+    },
+  );
+
   for (final change in ['purge', 'account']) {
     testWidgets(
       'RC05-RACE06 $change while delete dialog is open preserves replacement',

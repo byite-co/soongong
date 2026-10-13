@@ -10,6 +10,8 @@ import 'package:soongong/core/theme/app_theme.dart';
 import 'package:soongong/core/widgets/app_button.dart';
 import 'package:soongong/data/auth/auth_gate.dart';
 import 'package:soongong/data/auth/auth_models.dart';
+import 'package:soongong/data/engines/transcription/remote_ai_jobs.dart';
+import 'package:soongong/data/engines/transcription/remote_transcription_engine.dart';
 import 'package:soongong/data/repositories/local_purge.dart';
 import 'package:soongong/data/repositories/repository_providers.dart';
 import 'package:soongong/data/repositories/study_repository.dart';
@@ -142,7 +144,7 @@ Future<void> pressStudy(WidgetTester tester, String label) async {
 }
 
 class StudyRaceHarness {
-  StudyRaceHarness() {
+  StudyRaceHarness({bool useApproval = false}) {
     h = AppHarness(
       backend: FakeAuthBackend(
         session: const AuthSession(userId: 'u-1', email: 'a@x.io'),
@@ -166,13 +168,52 @@ class StudyRaceHarness {
               ControlledStudyRepository(h.db, ref.watch(syncWriterProvider)),
         ),
         problemSolverProvider.overrideWithValue(solver),
-        transcriptionEngineProvider.overrideWithValue(transcriber),
+        if (!useApproval)
+          transcriptionEngineProvider.overrideWithValue(transcriber)
+        else
+          transcriptionEngineProvider.overrideWith((ref) {
+            final controller = ref.watch(aiApprovalControllerProvider);
+            final repository = ref.watch(aiRequestRepositoryProvider);
+            late RemoteAiJobs jobs;
+            jobs = RemoteAiJobs.withTransport(
+              session: () => ref.read(currentUserIdProvider),
+              approve: (op, epoch) => controller.approve(jobs, op, epoch),
+              checkCurrent: controller.check,
+              beforeSend: repository.prepare,
+              onJob: repository.record,
+              invoke: (name, body) async {
+                if (name == 'study-job') {
+                  return {
+                    'version': 2,
+                    'quote_id': '22222222-2222-4222-8222-222222222222',
+                    'operation': body['operation'],
+                    'points': 3,
+                    'terms_version': 'fixture-terms',
+                  };
+                }
+                approvedDispatches++;
+                final request = body['request_id'] as String;
+                expect((await repository.get(request))!.state, 'submitting');
+                return {
+                  'version': 2,
+                  'job_id': '33333333-3333-4333-8333-333333333333',
+                  'request_id': request,
+                  'state': 'succeeded',
+                  'points_state': 'settled',
+                  'result_expired': false,
+                  'result': raceTranscription.toJson(),
+                };
+              },
+            );
+            return RemoteTranscriptionEngine.withJobs(jobs);
+          }),
       ],
     );
   }
   late final AppHarness h;
   final solver = ControlledSolver();
   final transcriber = ControlledTranscriber();
+  int approvedDispatches = 0;
   ControlledStudyRepository get repo =>
       h.container.read(studyRepositoryProvider) as ControlledStudyRepository;
 

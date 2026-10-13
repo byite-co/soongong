@@ -262,8 +262,9 @@ class RemoteReadingEngine implements ReadingEngine {
             out['user_id'] != reading.ctx.userId ||
             out['request_id'] != requestId ||
             out['purge_epoch'] != await reading.writer.purgeEpoch() ||
-            out['deleted_at'] != null)
+            out['deleted_at'] != null) {
           throw StateError('stale_request_snapshot');
+        }
         final existing = await reading.db
             .customSelect(
               'SELECT id FROM reading_requests WHERE id=?',
