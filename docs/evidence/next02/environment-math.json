@@ -1,0 +1,826 @@
+{
+  "python": "3.11.17",
+  "system": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+  "scope": "Installed distribution metadata; not legal approval of redistribution; preserve each license file.",
+  "packages": [
+    {
+      "name": "aiohappyeyeballs",
+      "version": "2.7.1",
+      "license_expression": null,
+      "license_declared": "PSF-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Python Software Foundation License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "aiohttp",
+      "version": "3.14.5",
+      "license_expression": "Apache-2.0 AND MIT",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "aiosignal",
+      "version": "1.4.0",
+      "license_expression": null,
+      "license_declared": "Apache 2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": "https://github.com/aio-libs/aiosignal"
+    },
+    {
+      "name": "albucore",
+      "version": "0.0.23",
+      "license_expression": null,
+      "license_declared": "MIT License\n\nCopyright (c) 2024 Vladimir Iglovikov\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), t",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "albumentations",
+      "version": "1.4.24",
+      "license_expression": null,
+      "license_declared": "MIT License\n\nCopyright (c) 2017 Vladimir Iglovikov, Alexander Buslaev, Alexander Parinov,\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated ",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "annotated-types",
+      "version": "0.8.0",
+      "license_expression": "MIT",
+      "license_declared": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "attrs",
+      "version": "26.1.0",
+      "license_expression": "MIT",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "braceexpand",
+      "version": "0.1.7",
+      "license_expression": null,
+      "license_declared": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "home_page": "https://github.com/trendels/braceexpand"
+    },
+    {
+      "name": "certifi",
+      "version": "2026.7.22",
+      "license_expression": null,
+      "license_declared": "MPL-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)"
+      ],
+      "home_page": "https://github.com/certifi/python-certifi"
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.5.2",
+      "license_expression": null,
+      "license_declared": "MIT",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "contourpy",
+      "version": "1.3.3",
+      "license_expression": null,
+      "license_declared": "BSD 3-Clause License\n\n Copyright (c) 2021-2025, ContourPy Developers.\n All rights reserved.\n\n Redistribution and use in source and binary forms, with or without\n modification, are permitted provided t",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "cycler",
+      "version": "0.12.1",
+      "license_expression": null,
+      "license_declared": "Copyright (c) 2015, matplotlib project\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are m",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "datasets",
+      "version": "2.14.4",
+      "license_expression": null,
+      "license_declared": "Apache 2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": "https://github.com/huggingface/datasets"
+    },
+    {
+      "name": "dill",
+      "version": "0.3.7",
+      "license_expression": null,
+      "license_declared": "BSD-3-Clause",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "home_page": "https://github.com/uqfoundation/dill"
+    },
+    {
+      "name": "evaluate",
+      "version": "0.4.6",
+      "license_expression": null,
+      "license_declared": "Apache 2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": "https://github.com/huggingface/evaluate"
+    },
+    {
+      "name": "fairscale",
+      "version": "0.4.13",
+      "license_expression": null,
+      "license_declared": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "filelock",
+      "version": "3.32.3",
+      "license_expression": "MIT",
+      "license_declared": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "fonttools",
+      "version": "4.66.1",
+      "license_expression": null,
+      "license_declared": "MIT",
+      "license_classifiers": [],
+      "home_page": "http://github.com/fonttools/fonttools"
+    },
+    {
+      "name": "frozenlist",
+      "version": "1.8.0",
+      "license_expression": null,
+      "license_declared": "Apache-2.0",
+      "license_classifiers": [],
+      "home_page": "https://github.com/aio-libs/frozenlist"
+    },
+    {
+      "name": "fsspec",
+      "version": "2026.7.0",
+      "license_expression": "BSD-3-Clause",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "ftfy",
+      "version": "6.3.1",
+      "license_expression": null,
+      "license_declared": "Apache-2.0",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "hf-xet",
+      "version": "1.7.0",
+      "license_expression": "Apache-2.0",
+      "license_declared": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "huggingface_hub",
+      "version": "0.36.2",
+      "license_expression": null,
+      "license_declared": "Apache",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": "https://github.com/huggingface/huggingface_hub"
+    },
+    {
+      "name": "idna",
+      "version": "3.20",
+      "license_expression": "BSD-3-Clause",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "iopath",
+      "version": "0.1.10",
+      "license_expression": null,
+      "license_declared": "MIT licensed, as found in the LICENSE file",
+      "license_classifiers": [],
+      "home_page": "https://github.com/facebookresearch/iopath"
+    },
+    {
+      "name": "Jinja2",
+      "version": "3.1.6",
+      "license_expression": null,
+      "license_declared": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "kiwisolver",
+      "version": "1.5.1",
+      "license_expression": null,
+      "license_declared": "=========================\n The Kiwi licensing terms\n=========================\nKiwi is licensed under the terms of the Modified BSD License (also known as\nNew or Revised BSD), as follows:\n\nCopyright (c",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "MarkupSafe",
+      "version": "3.0.3",
+      "license_expression": "BSD-3-Clause",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "matplotlib",
+      "version": "3.11.2",
+      "license_expression": null,
+      "license_declared": "License agreement for matplotlib versions 1.3.0 and later\n =========================================================\n\n 1. This LICENSE AGREEMENT is between the Matplotlib Development Team\n (\"MDT\"), an",
+      "license_classifiers": [
+        "License :: OSI Approved :: Python Software Foundation License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "mpmath",
+      "version": "1.3.0",
+      "license_expression": null,
+      "license_declared": "BSD",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "home_page": "http://mpmath.org/"
+    },
+    {
+      "name": "multidict",
+      "version": "7.1.0",
+      "license_expression": "Apache-2.0",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "multiprocess",
+      "version": "0.70.15",
+      "license_expression": null,
+      "license_declared": "BSD-3-Clause",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "home_page": "https://github.com/uqfoundation/multiprocess"
+    },
+    {
+      "name": "networkx",
+      "version": "3.6.1",
+      "license_expression": "BSD-3-Clause",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "numpy",
+      "version": "1.26.4",
+      "license_expression": null,
+      "license_declared": "Copyright (c) 2005-2023, NumPy Developers.\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions a",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "home_page": "https://numpy.org"
+    },
+    {
+      "name": "nvidia-cublas-cu12",
+      "version": "12.8.4.1",
+      "license_expression": null,
+      "license_declared": "NVIDIA Proprietary Software",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "home_page": "https://developer.nvidia.com/cuda-zone"
+    },
+    {
+      "name": "nvidia-cuda-cupti-cu12",
+      "version": "12.8.90",
+      "license_expression": null,
+      "license_declared": "NVIDIA Proprietary Software",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "home_page": "https://developer.nvidia.com/cuda-zone"
+    },
+    {
+      "name": "nvidia-cuda-nvrtc-cu12",
+      "version": "12.8.93",
+      "license_expression": null,
+      "license_declared": "NVIDIA Proprietary Software",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "home_page": "https://developer.nvidia.com/cuda-zone"
+    },
+    {
+      "name": "nvidia-cuda-runtime-cu12",
+      "version": "12.8.90",
+      "license_expression": null,
+      "license_declared": "NVIDIA Proprietary Software",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "home_page": "https://developer.nvidia.com/cuda-zone"
+    },
+    {
+      "name": "nvidia-cudnn-cu12",
+      "version": "9.10.2.21",
+      "license_expression": null,
+      "license_declared": "LicenseRef-NVIDIA-Proprietary",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "home_page": "https://developer.nvidia.com/cuda-zone"
+    },
+    {
+      "name": "nvidia-cufft-cu12",
+      "version": "11.3.3.83",
+      "license_expression": null,
+      "license_declared": "NVIDIA Proprietary Software",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "home_page": "https://developer.nvidia.com/cuda-zone"
+    },
+    {
+      "name": "nvidia-cufile-cu12",
+      "version": "1.13.1.3",
+      "license_expression": null,
+      "license_declared": "NVIDIA Proprietary Software",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "home_page": "https://developer.nvidia.com/cuda-zone"
+    },
+    {
+      "name": "nvidia-curand-cu12",
+      "version": "10.3.9.90",
+      "license_expression": null,
+      "license_declared": "NVIDIA Proprietary Software",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "home_page": "https://developer.nvidia.com/cuda-zone"
+    },
+    {
+      "name": "nvidia-cusolver-cu12",
+      "version": "11.7.3.90",
+      "license_expression": null,
+      "license_declared": "NVIDIA Proprietary Software",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "home_page": "https://developer.nvidia.com/cuda-zone"
+    },
+    {
+      "name": "nvidia-cusparse-cu12",
+      "version": "12.5.8.93",
+      "license_expression": null,
+      "license_declared": "NVIDIA Proprietary Software",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "home_page": "https://developer.nvidia.com/cuda-zone"
+    },
+    {
+      "name": "nvidia-cusparselt-cu12",
+      "version": "0.7.1",
+      "license_expression": null,
+      "license_declared": "NVIDIA Proprietary Software",
+      "license_classifiers": [],
+      "home_page": "https://developer.nvidia.com/cusparselt"
+    },
+    {
+      "name": "nvidia-nccl-cu12",
+      "version": "2.27.3",
+      "license_expression": null,
+      "license_declared": "BSD-3-Clause",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "home_page": "https://developer.nvidia.com/cuda-zone"
+    },
+    {
+      "name": "nvidia-nvjitlink-cu12",
+      "version": "12.8.93",
+      "license_expression": null,
+      "license_declared": "NVIDIA Proprietary Software",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "home_page": "https://developer.nvidia.com/cuda-zone"
+    },
+    {
+      "name": "nvidia-nvtx-cu12",
+      "version": "12.8.90",
+      "license_expression": null,
+      "license_declared": "Apache 2.0",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "home_page": "https://developer.nvidia.com/cuda-zone"
+    },
+    {
+      "name": "omegaconf",
+      "version": "2.4.0",
+      "license_expression": null,
+      "license_declared": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "home_page": "https://github.com/hydra-ecosystem/omegaconf"
+    },
+    {
+      "name": "opencv-python",
+      "version": "4.11.0.86",
+      "license_expression": null,
+      "license_declared": "Apache 2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": "https://github.com/opencv/opencv-python"
+    },
+    {
+      "name": "opencv-python-headless",
+      "version": "4.11.0.86",
+      "license_expression": null,
+      "license_declared": "Apache 2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": "https://github.com/opencv/opencv-python"
+    },
+    {
+      "name": "packaging",
+      "version": "26.3",
+      "license_expression": "Apache-2.0 OR BSD-2-Clause",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "pandas",
+      "version": "3.0.6",
+      "license_expression": null,
+      "license_declared": "BSD 3-Clause License\n\n Copyright (c) 2008-2011, AQR Capital Management, LLC, Lambda Foundry, Inc. and PyData Development Team\n All rights reserved.\n\n Copyright (c) 2011-2026, Open source contributors.",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "pillow",
+      "version": "12.3.0",
+      "license_expression": "MIT-CMU",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "portalocker",
+      "version": "4.4.0",
+      "license_expression": "BSD-3-Clause",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "propcache",
+      "version": "0.5.4",
+      "license_expression": null,
+      "license_declared": "Apache-2.0",
+      "license_classifiers": [],
+      "home_page": "https://github.com/aio-libs/propcache"
+    },
+    {
+      "name": "pyarrow",
+      "version": "14.0.2",
+      "license_expression": null,
+      "license_declared": "Apache License, Version 2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": "https://arrow.apache.org/"
+    },
+    {
+      "name": "pydantic",
+      "version": "2.14.1",
+      "license_expression": "MIT",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "pydantic_core",
+      "version": "2.50.1",
+      "license_expression": "MIT",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": "https://github.com/pydantic/pydantic"
+    },
+    {
+      "name": "pyparsing",
+      "version": "3.3.3",
+      "license_expression": "MIT",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "python-dateutil",
+      "version": "2.9.0.post0",
+      "license_expression": null,
+      "license_declared": "Dual License",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License",
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": "https://github.com/dateutil/dateutil"
+    },
+    {
+      "name": "PyYAML",
+      "version": "6.0.3",
+      "license_expression": null,
+      "license_declared": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "home_page": "https://pyyaml.org/"
+    },
+    {
+      "name": "RapidFuzz",
+      "version": "3.14.6",
+      "license_expression": "MIT",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "regex",
+      "version": "2026.9.29",
+      "license_expression": "Apache-2.0 AND CNRI-Python",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "requests",
+      "version": "2.34.2",
+      "license_expression": null,
+      "license_declared": "Apache-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "safetensors",
+      "version": "0.8.0",
+      "license_expression": null,
+      "license_declared": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "scipy",
+      "version": "1.17.1",
+      "license_expression": null,
+      "license_declared": "Copyright (c) 2001-2002 Enthought, Inc. 2003, SciPy Developers.\n All rights reserved.\n\n Redistribution and use in source and binary forms, with or without\n modification, are permitted provided that th",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "setuptools",
+      "version": "78.1.0",
+      "license_expression": null,
+      "license_declared": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "simsimd",
+      "version": "6.5.16",
+      "license_expression": null,
+      "license_declared": "Apache-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": "https://github.com/ashvardanian/simsimd"
+    },
+    {
+      "name": "six",
+      "version": "1.17.0",
+      "license_expression": null,
+      "license_declared": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "home_page": "https://github.com/benjaminp/six"
+    },
+    {
+      "name": "stringzilla",
+      "version": "5.2.0",
+      "license_expression": null,
+      "license_declared": "Apache-2.0",
+      "license_classifiers": [],
+      "home_page": "https://github.com/ashvardanian/StringZilla"
+    },
+    {
+      "name": "sympy",
+      "version": "1.14.0",
+      "license_expression": null,
+      "license_declared": "BSD",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "home_page": "https://sympy.org"
+    },
+    {
+      "name": "timm",
+      "version": "0.9.16",
+      "license_expression": null,
+      "license_declared": "Apache-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": "https://github.com/huggingface/pytorch-image-models"
+    },
+    {
+      "name": "tokenizers",
+      "version": "0.19.1",
+      "license_expression": null,
+      "license_declared": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "torch",
+      "version": "2.8.0+cu128",
+      "license_expression": null,
+      "license_declared": "BSD-3-Clause",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "home_page": "https://pytorch.org/"
+    },
+    {
+      "name": "torchvision",
+      "version": "0.23.0+cu128",
+      "license_expression": null,
+      "license_declared": "BSD",
+      "license_classifiers": [],
+      "home_page": "https://github.com/pytorch/vision"
+    },
+    {
+      "name": "tqdm",
+      "version": "4.70.1",
+      "license_expression": null,
+      "license_declared": "MPL-2.0 AND MIT",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "transformers",
+      "version": "4.42.4",
+      "license_expression": null,
+      "license_declared": "Apache 2.0 License",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": "https://github.com/huggingface/transformers"
+    },
+    {
+      "name": "triton",
+      "version": "3.4.0",
+      "license_expression": null,
+      "license_declared": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "home_page": "https://github.com/triton-lang/triton/"
+    },
+    {
+      "name": "typing-inspection",
+      "version": "0.4.4",
+      "license_expression": "MIT",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.16.0",
+      "license_expression": "PSF-2.0",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "unimernet",
+      "version": "0.2.3",
+      "license_expression": null,
+      "license_declared": "Apache-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "home_page": "https://github.com/opendatalab/UniMERNet"
+    },
+    {
+      "name": "urllib3",
+      "version": "2.8.0",
+      "license_expression": "MIT",
+      "license_declared": "",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "Wand",
+      "version": "0.6.13",
+      "license_expression": null,
+      "license_declared": "MIT License",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "home_page": "http://wand-py.org/"
+    },
+    {
+      "name": "wcwidth",
+      "version": "0.9.2",
+      "license_expression": null,
+      "license_declared": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "home_page": null
+    },
+    {
+      "name": "webdataset",
+      "version": "0.2.111",
+      "license_expression": null,
+      "license_declared": "BSD-3-Clause",
+      "license_classifiers": [],
+      "home_page": null
+    },
+    {
+      "name": "xxhash",
+      "version": "4.0.1",
+      "license_expression": null,
+      "license_declared": "BSD-2-Clause",
+      "license_classifiers": [],
+      "home_page": "https://github.com/ifduyue/python-xxhash"
+    },
+    {
+      "name": "yarl",
+      "version": "1.25.1",
+      "license_expression": null,
+      "license_declared": "Apache-2.0",
+      "license_classifiers": [],
+      "home_page": "https://github.com/aio-libs/yarl"
+    }
+  ]
+}

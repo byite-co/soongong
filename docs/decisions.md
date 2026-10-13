@@ -641,10 +641,14 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - **판정 단위**: 임시 task 잔여와 기존 사진 파일 잔여의 합은 UI에 ‘정리 N건’으로 적는다. unknown이면 개수 미확인을 표시한다. 새 40개 자동 시나리오, 기존 58개 복합 판정, 실기기 12개를 분리한다. host mock·실제 파일/DB·native bridge·실기기를 섞지 않는다. S13 실제 동기화, 승인된 모델 환경/평가, 공개 서비스 준비는 별도 미완료다. 세부 경로 원장과 검증은 `docs/handoff/EXT-FIX-02.md`를 따른다.
 
 
-## NEXT-02 · 2026-10-13 · 구현 중 (Draft)
+## NEXT-02 · 2026-10-13 · 개발 구현·평가 (Draft)
 
 - SCHEMA-CHANGE: 암호화 로컬 DB v5의 study_ai_requests는 전송 전에 승인 ID/요청 ID/owner/epoch/generation/input SHA256을 기록한다. 사진·토큰은 저장하지 않는다. 상태 조회는 추론을 재실행하지 않는다. 확정 문서와 요청 연결은 같은 트랜잭션에 저장한다.
 - CONTRACT-CHANGE: 내부 OCR 결과 v1은 유지하고 private worker receipt v1을 추가한다. 채점표시 결과 v2는 mark/confidence null을 허용하며 모든 후보에 needs_review=true를 요구한다. 수동 확정 오답에서도 없는 confidence를 1.0으로 만들지 않는다.
 - 기존 판독은 포인트 원장을 건드리지 않고 reading_ai_costs를 통해 ai_budgets를 공유한다. 실행 불명은 unknown으로 유지하며 재실행하지 않는다. 외부 API 0원 증거와 월 서버 운영비는 별개다.
 - DEV_OCR_ENABLED는 기본 false이며 prod에서는 항상 false다. 품질 미달/표본 부족을 개발 화면의 교정 기능으로 합격 처리하지 않는다.
 - 실제 모델·평가·새 최종 SHA 검증 결과는 NEXT-02 인계에 별도로 기록한다. 이 커밋만으로 품질이나 실기기 검증 완료를 선언하지 않는다.
+- 운영 선택: 한국어 v3 비교baseline 유지, v5는개발후보, 수식 tiny 개발실행. 실제 인쇄60개 exact match20%와 한국어 표본/정답부족 때문에 공개품질합격으로 처리하지않는다. threshold를사후조정하지않는다. 채점표시 불확실은null+직접확정이다.
+- 로컬Storage FD21/22는 실제Auth/Storage/Edge합성bytes및만료/삭제재시도로검증했다. 자료의정답·필기자·문서ID가없으면null, 합성자료는기능smoke로만분류한다. 외부전송권한불명 자료는로컬전용이다.
+- 원본hash/normalized 회전crop이력을로컬요청에보관하고 동의철회/계정변경경계전후검사를적용한다. LaTeX는안전한원문편집이며 typeset/풀이검증이아니다. 앱프로세스종료·실기기및전체S13은후속범위다.
+- 공유24시간 기본값은변경가능한제품정책으로유지하며 OS의보관·정확한삭제시간보장이아니다. 운영단가·가격·권리seed·유료호출·배포·병합은하지않는다.

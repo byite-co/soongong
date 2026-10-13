@@ -49,6 +49,14 @@ input/output_price는 **토큰1개당 원통화**, fixed_price는 attempt당 원
 
 플래그 기본 OFF, allowlist, HTTPS private endpoint(redirect/query/userinfo 금지),32자 이상 공유 비밀키, 프로필/동의/epoch, 명시적 policy, 해당 월 budget와 points lot, 앱 quote 승인까지 있어야 진행할 수 있다. 실제 생성·배포한 설정은 없다.
 
-현재 worker HTTP는 v2와 provider=local/설정된 WORKER_MODEL_ID의 일치만 허용한다. 기존 solver/CAS helper는 유지·회귀 검사하지만 유료 remote solve HTTP는 billing_adapter_unconfigured로 닫았다. 정확한 tokenizer/최대 출력·검증 호출/usage·가격 상한을 보장할 provider adapter가 없기 때문이다. 실제 엔진·가격을 이번에 선정하지 않는다. worker는 사용자의 포인트나 service_role을 받지 않는다.
+현재 worker HTTP는 v2와 provider=local/설정된 WORKER_MODEL_ID의 일치만 허용한다. 기존 solver/CAS helper는 유지·회귀 검사하지만 유료 remote solve HTTP는 billing_adapter_unconfigured로 닫았다. 정확한 tokenizer/최대 출력·검증 호출/usage·가격 상한을 보장할 provider adapter가 없기 때문이다. NEXT-02에서 로컬 Paddle/UniMERNet을 실행했으며 운영 가격은 정하지 않았다. worker는 사용자의 포인트나 service_role을 받지 않는다.
 
-다음 세션은 실제 모델·가중치 권리/고정 해시·컨테이너와 tokenizer, 공급자 연령/보관/지역/가격 문서, 권리가 확인된 한국어 필기·수식/수능 평가셋, 정답·실패율·지연·재시도 포함 건당 비용 기준을 준비한다. approved quote 진입점 `RemoteAiJobs`와 provider transport v2를 사용하고, 실제 HTTP/Storage/OS 검증 전에는 공개 플래그를 켜지 않는다.
+## NEXT-02 인증된 사용량 봉투와 판독 운영비
+
+private 응답 `{worker_version:1,attempt_id,provider,model,result,usage,billing:"local_no_external_api"}`를 추가했다. 내부 OCR v1과 reading v2는 result 안에 유지한다. usage는 요청/이미지/페이지/수식crop/elapsed_ms의 명시적인 비음수 정수다. 한 페이지 receipt는 requests/images/pages각1, crops0또는1이고 reading다중페이지는 서버가 합산한다. 토큰이 없는 이미지 요금을 가짜 토큰으로 만들지 않는다. worker의 임의 amount는 거절한다.
+
+`ai_execution_usage`는 attempt별멱등 증거, `ai_record_evidence`는 서버전용 정산 진입점이다. 동일값 재전송은1회, 변조·누락·모델/attempt불일치는 거절한다. malformed result라도 정상 usage는 원장에 반영한다. HTTP오류·중단·부분 페이지는 실제 완료단위를 입증하지 못해 unknown 예약을 유지한다. 같은원통화/원월/FX정산을 보존한다. 기존 토큰 ai_reconcile 계약과 새이미지 usage는 구분한다.
+
+로컬0 API policy만 확실한 완료 증거에서 API0원으로 정산한다. 유효 result가없어 사용자 포인트가반환되어도 공급비용을0으로추정하지않는다. reading은 `reading_ai_policies/costs/reconcile` 비용전용 경로이며 신규 AI포인트를사용하지않고 글로벌 예산잠금을공유한다. 인프라 월예약은개별 API비용과 별개여서0원receipt가서버운영비를해제하지않는다. 실제다른사용자 reading/OCR lock 경합을 테스트했다.
+
+공급자 청구조회·클라우드 인프라배분·판매포인트수량은 후속범위다. 실제로컬평가 API0원과 미측정 인프라비용, 가정시나리오를 [NEXT-02](handoff/NEXT-02.md)에 분리했다. 공개 플래그는 계속OFF다.

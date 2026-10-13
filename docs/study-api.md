@@ -67,6 +67,16 @@ DDL·backfill·user_version4는 한 트랜잭션이다. 이전 실패는 새 exe
 
 ## 사진 URL 및 삭제
 
-bucket `study-restore`는 private이고 클라이언트 Storage policy를 추가하지 않았다. `study_photo_access`는 사용자 잠금을 기다린 **이후** 서버 시각으로 만료를 검사한다. 서명 TTL은 최대60초이고 자산 만료보다 짧게 제한한다. Storage가 반환한 token의 exp도 검사하며 서명 후 소유권/epoch/만료를 다시 확인한다. 이미 발급된 URL의 즉시 철회를 보장하지 않는다(최대 잔여60초 이내). 실제 Storage/클록/삭제와의 통합은 아직 UNVERIFIED다.
+bucket `study-restore`는 private이고 클라이언트 Storage policy를 추가하지 않았다. `study_photo_access`는 사용자 잠금을 기다린 **이후** 서버 시각으로 만료를 검사한다. 서명 TTL은 최대60초이고 자산 만료보다 짧게 제한한다. Storage가 반환한 token의 exp도 검사하며 서명 후 소유권/epoch/만료를 다시 확인한다. 이미 발급된 URL의 즉시 철회를 보장하지 않는다(최대 잔여60초 이내). NEXT-02에서 격리된 로컬 Auth/Storage/Edge와 실제 bytes/만료/삭제 재시도를 검증했다. 공개환경/기기 검증은 별개다.
 
 삭제 의무는 owner FK가 없는 opaque object path로 남는다. 문서/계정을 먼저 지워도 유지한다. `study-maintenance`는 x-job-secret, 최대50개의 단일 사용자 lease 처리, 자산 만료 최대100개, 객체 삭제 최대100개/실행, 50초 대기를 사용한다. 실제 Storage remove/list 확인 후에만 done, 실패·중단은 pending 및5분 후 재시도다. 기존 server_config가 없으면 cron의 외부 호출도 닫혀 있다. 이번에는 운영에 등록/배포하지 않았다.
+
+## NEXT-02 로컬 v5와 승인 복구 (SCHEMA-CHANGE)
+
+`study_ai_requests`는 암호화된 같은 파일에 요청 UUID/quote ID/operation/owner/epoch/generation/input SHA256/원본 hash·회전·crop 순서/명시 승인/created_at을 HTTP **전에** INSERT한다. 입력 사진/credential은 저장하지 않는다. INSERT 실패·ID충돌은 dispatch0회다. JSON export는 명시적인 요청 metadata만 포함하고 wipe/purge가 이 테이블도 제거한다. 기존 v3→v4 metadata 이전 뒤 v5를 같은 migration transaction에서 생성하며 실패/잘못된 키/0byte 초기화 보호는 유지한다.
+
+개발 provider는 AiApprovalController를 실제 RemoteAiJobs에 주입한다. quote는 operation/points/terms/정책 ID를 표시하고 직전 재조회에서 변경되면 다시 확인한다. scope ticket와 계정/동의/epoch/generation 검사는 await 전후와 저장 transaction 끝에 적용한다. 실제 사용자 전환과 같은 사용자 토큰 갱신을 구분한다. 이전 operation의 finally는 새 scope를 해제하지 않는다.
+
+서버 status/cancel만으로 복구하며 자동 infer/새 UUID를 만들지 않는다. `result_expired`, missing, unknown은 빈 성공 본문으로 저장하지 않는다. `points_state`는 서버 사실 그대로 표시한다. 임시 원본 부재 안내와 local correction을 보존한다. 명시 confirm은 request→document ID/revision을 같은 transaction에 저장한다. 반복 confirm은 같은 문서, 수정은 revision CAS, 문서 삭제는 중복 cached body 제거 및 late replay 차단이다. 원격 확정본 업로드/다른기기 복원 UI는 여전히 NEXT-05다.
+
+수식 입력은 한 영역/한 모드다. crop 좌표는 회전한 이미지의 normalized 좌표이고 원본 hash 및 변환 순서를 요청에 남긴다. 안전한 LaTeX 원문 편집만 제공하고 자동 실행·verified 판정을 하지 않는다. 실제 엔진·자료·검증은 [NEXT-02](handoff/NEXT-02.md)를 참조한다.
