@@ -245,7 +245,7 @@ class BodyTests(unittest.TestCase):
 class HttpTests(unittest.TestCase):
     def setUp(self):
         self.secret = "synthetic-test-only-0000000000000000"
-        self.env = patch.dict(os.environ, {"WORKER_SECRET": self.secret}); self.env.start()
+        self.env = patch.dict(os.environ, {"WORKER_SECRET": self.secret, "WORKER_MODEL_ID": "fixture"}); self.env.start()
         self.slot = patch.object(worker, "SLOT", threading.BoundedSemaphore(1)); self.slot.start()
         self.started = threading.Event()
         self.finished = threading.Event()
@@ -283,7 +283,7 @@ class HttpTests(unittest.TestCase):
         return client
 
     def normal(self, raw=None):
-        raw = raw or b'{"schema_version":1,"operation":"ocr","kind":"text"}'
+        raw = raw or json.dumps({"version": 2, "attempt_id": "11111111-1111-4111-8111-111111111111", "provider": "local", "model": "fixture", "limits": {"max_input_tokens": 100, "max_output_tokens": 100, "max_attempts": 1}, "input": {"schema_version":1,"operation":"ocr","kind":"text", "image":"YQ==", "purge_epoch":0,"consent_version":"study-2026-10-13"}}).encode()
         with self.connect(len(raw)) as client:
             client.sendall(raw)
             return client.recv(4096).split(b"\r\n", 1)[0]
@@ -336,7 +336,7 @@ class HttpTests(unittest.TestCase):
                 threading.Event().wait(.001)
             exited.set(); raise TimeoutError()
         self.handler.execute = staticmethod(execute)
-        raw = b'{"schema_version":1,"operation":"ocr","kind":"text"}'
+        raw = json.dumps({"version": 2, "attempt_id": "11111111-1111-4111-8111-111111111111", "provider": "local", "model": "fixture", "limits": {"max_input_tokens": 100, "max_output_tokens": 100, "max_attempts": 1}, "input": {"schema_version":1,"operation":"ocr","kind":"text", "image":"YQ==", "purge_epoch":0,"consent_version":"study-2026-10-13"}}).encode()
         client = self.connect(len(raw)); client.sendall(raw)
         self.assertTrue(self.started.wait(2)); client.close()
         self.assertTrue(exited.wait(2)); self.assert_free()

@@ -43,7 +43,7 @@ class _FaultDatabase extends AppDatabase {
 
   @override
   Future<void> customStatement(String statement, [List<Object?>? args]) async {
-    if (statement == 'PRAGMA user_version = 3') {
+    if (statement == 'PRAGMA user_version = 4') {
       if (fault == _Fault.beforeVersion) {
         throw StateError('injected_before_version');
       }
@@ -168,7 +168,7 @@ void main() {
       (await db.customSelect('PRAGMA user_version').getSingle()).read<int>(
         'user_version',
       ),
-      3,
+      4,
     );
     expect(
       (await db.customSelect('PRAGMA journal_mode').getSingle()).read<String>(
@@ -299,7 +299,7 @@ void main() {
   for (final version in [0, 1, 2]) {
     for (final fault in [_Fault.afterCommit, _Fault.afterPolicy]) {
       test(
-        'MIG-03 v$version $fault leaves completed v3 and retries without duplicate mutation',
+        'MIG-03 v$version $fault leaves completed v4 and retries without duplicate mutation',
         () async {
           if (version == 0) {
             DatabaseProtection(file, key).prepare();
@@ -310,7 +310,7 @@ void main() {
             requireReadyDatabase(_FaultDatabase(executor(), fault)),
             throwsA(isA<DatabaseProtectionException>()),
           );
-          expect(inspect((db) => db.userVersion), 3);
+          expect(inspect((db) => db.userVersion), 4);
           final committed = inspect(databaseFingerprint);
           final retry = AppDatabase(executor());
           try {

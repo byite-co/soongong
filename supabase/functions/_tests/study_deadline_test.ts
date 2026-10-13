@@ -1,4 +1,5 @@
 import { assertEquals, assertRejects } from "@std/assert";
+import { AiJobs } from "../_shared/ai_jobs.ts";
 import { handle } from "../study-infer/index.ts";
 import { requireUser } from "../_shared/auth.ts";
 import { boundedJson } from "../_shared/study.ts";
@@ -56,6 +57,9 @@ function fixture() {
   const calls = { user: 0, profile: 0, worker: 0 };
   const io = {
     clock,
+    jobs: new AiJobs(<T>(name: string) => Promise.resolve((name === "ai_dispatch"
+      ? {claimed:true,attempt_id:"33333333-3333-4333-8333-333333333333",provider:"local",model:"fixture",limits:{max_input_tokens:100,max_output_tokens:100,max_attempts:1}}
+      : {version:2,job_id:"44444444-4444-4444-8444-444444444444",request_id:"11111111-1111-4111-8111-111111111111",state:name === "ai_finish" ? "succeeded" : "reserved",result}) as T)),
     user: async (_req: Request, _signal: AbortSignal) => {
       calls.user++;
       return { userId: "fixture", deviceId: null };
@@ -74,7 +78,7 @@ function fixture() {
 function request(signal?: AbortSignal, body?: BodyInit) {
   return new Request("https://fixture.invalid/study-infer", {
     method: "POST",
-    body: body ?? JSON.stringify(payload),
+    body: body ?? JSON.stringify({version:2,request_id:"11111111-1111-4111-8111-111111111111",quote_id:"22222222-2222-4222-8222-222222222222",input:payload}),
     signal,
   });
 }

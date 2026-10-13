@@ -117,8 +117,8 @@ select is(
   (select string_agg(p.proname::text, ',' order by p.proname::text collate "C") from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and has_function_privilege('authenticated', p.oid, 'execute')
       and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')),   -- local pgTAP lives in public
-  'has_profile,profile_set_onboarding_done,sync_pull,sync_push',
-  'authenticated can execute only sync_push · sync_pull · profile_set_onboarding_done (+ policy helper has_profile)');
+  'has_profile,profile_set_onboarding_done,study_body_v1,study_delete_v1,study_metadata_v1,study_photo_register_v1,study_save_v1,study_solution_v1,sync_pull,sync_push',
+  'authenticated exact allowlist: existing D2/profile helpers plus six NEXT-01 owner/epoch RPCs');
 
 -- partial unique indexes exist (merge check §8)
 select has_index('public', 'reading_requests', 'reading_requests_one_active', 'D17 partial unique index (active)');

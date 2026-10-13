@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/contracts/transcription_engine.dart';
+import '../../../core/contracts/study_restore.dart';
 import '../../../core/strings/study_strings.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../data/auth/auth_gate.dart';
@@ -237,7 +238,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
     }
   }
 
-  Future<void> _delete(StudyDocument document) async {
+  Future<void> _delete(StudySummary document) async {
     if (_busy) return;
     final repo = ref.read(studyRepositoryProvider);
     final owner = ref.read(currentUserIdProvider);
@@ -412,7 +413,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
                 .map(
                   (document) => ListTile(
                     title: Text(
-                      document.text,
+                      document.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),

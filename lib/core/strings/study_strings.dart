@@ -1,4 +1,6 @@
 abstract final class StudyStrings {
+  static const bodyNotCached = '본문을 아직 내려받지 못했습니다. 저장된 기록이 삭제된 것은 아닙니다.';
+  static const bodyLoading = '본문을 불러오는 중입니다.';
   static const solveTitle = '수학 풀이';
   static const solve = '풀이 요청';
   static const solveHint =

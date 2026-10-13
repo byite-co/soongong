@@ -211,6 +211,37 @@ def read_body(stream, connection, length, deadline):
     return raw
 
 
+def transport_input(envelope):
+    """Private v2 transport. No user wallet or Supabase credential in worker.
+
+    Only fixed-cost local inference is supported until a provider-specific
+    tokenizer/usage/idempotency adapter can prove the quoted paid upper bound.
+    """
+    import re
+    def integer(value, minimum, maximum):
+        return type(value) is int and minimum <= value <= maximum
+    if not isinstance(envelope, dict) or set(envelope) != {"version", "attempt_id", "provider", "model", "limits", "input"}:
+        raise ValueError("invalid_envelope")
+    if type(envelope["version"]) is not int or envelope["version"] != 2 or not isinstance(envelope["attempt_id"], str) or not re.fullmatch(r"[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", envelope["attempt_id"]):
+        raise ValueError("invalid_envelope")
+    limits = envelope["limits"]
+    if not isinstance(limits, dict) or set(limits) != {"max_input_tokens", "max_output_tokens", "max_attempts"} or not integer(limits["max_input_tokens"], 1, 100000) or not integer(limits["max_output_tokens"], 1, 16000) or not integer(limits["max_attempts"], 1, 3):
+        raise ValueError("invalid_limits")
+    body = envelope["input"]
+    if not isinstance(body, dict) or type(body.get("schema_version")) is not int or body["schema_version"] != 1 or not integer(body.get("purge_epoch"), 0, 2**53-1) or body.get("consent_version") != "study-2026-10-13":
+        raise ValueError("invalid_payload")
+    if body.get("operation") == "ocr":
+        if set(body) != {"schema_version", "operation", "kind", "image", "purge_epoch", "consent_version"} or body.get("kind") not in {"text", "math"} or not isinstance(body.get("image"), str) or not 4 <= len(body["image"]) <= 5592408 or not re.fullmatch(r"[A-Za-z0-9+/]+={0,2}", body["image"]):
+            raise ValueError("invalid_payload")
+    else:
+        # Existing solver/CAS remains tested but its paid HTTP adapter has no
+        # verified token accounting yet. Never call it under an invented cap.
+        raise ValueError("billing_adapter_unconfigured")
+    if envelope["provider"] != "local" or not os.environ.get("WORKER_MODEL_ID") or envelope["model"] != os.environ["WORKER_MODEL_ID"]:
+        raise ValueError("billing_adapter_unconfigured")
+    return body
+
+
 class Handler(BaseHTTPRequestHandler):
     body_seconds = BODY_SECONDS
     request_seconds = REQUEST_SECONDS
@@ -237,9 +268,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             raw = read_body(self.rfile, self.connection, length,
                             min(deadline, time.monotonic() + self.body_seconds))
-            body = json.loads(raw)
-            if body.get("schema_version") != 1 or body.get("operation") not in {"ocr", "solve"} or (body.get("operation") == "ocr" and body.get("kind") not in {"text", "math"}):
-                raise ValueError("invalid_payload")
+            body = transport_input(json.loads(raw))
             result = json.dumps(self.execute(body, timeout=deadline - time.monotonic(),
                 cancelled=self.disconnected), ensure_ascii=False, allow_nan=False).encode()
             if len(result) > MAX_RESPONSE: raise ValueError("result_too_large")

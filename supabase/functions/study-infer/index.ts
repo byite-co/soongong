@@ -1,6 +1,5 @@
-// Bounded, stateless pilot. Images never enter Storage/SQL or logs. No
-// reading-quota mutation and no unconfigured/Fake success. Broader release
-// requires a durable usage policy and the held-out model evaluation.
+// v2 durable jobs; v1 inference results remain unchanged. No reading-quota
+// mutation. No result is automatically a user-confirmed restore document.
 import { type Caller, requireUser } from "../_shared/auth.ts";
 import { serviceClient } from "../_shared/db.ts";
 import { env, envList, envOr } from "../_shared/env.ts";
@@ -9,10 +8,11 @@ import {
   boundedJson,
   requireStudyProfile,
   solutionResponse,
-  studyRequest,
+  studyEnvelope,
   transcriptionResponse,
 } from "../_shared/study.ts";
 import { type DeadlineClock, STUDY_DEADLINE_MS, StudyDeadline } from "../_shared/study_deadline.ts";
+import { AiJobs, inputDigest } from "../_shared/ai_jobs.ts";
 
 interface StudyDependencies {
   user: (req: Request, signal: AbortSignal) => Promise<Caller>;
@@ -20,6 +20,7 @@ interface StudyDependencies {
   fetch: typeof fetch;
   deadlineMs: number;
   clock?: DeadlineClock;
+  jobs: AiJobs;
 }
 const defaults: StudyDependencies = {
   user: requireUser,
@@ -32,6 +33,7 @@ const defaults: StudyDependencies = {
   },
   fetch: (input, init) => fetch(input, init),
   deadlineMs: STUDY_DEADLINE_MS,
+  jobs: new AiJobs(),
 };
 
 /** Test seams replace I/O, never the handler's lifetime/validation logic. */
@@ -41,6 +43,7 @@ export async function handle(
 ): Promise<Response> {
   const deps = { ...defaults, ...overrides };
   const deadline = new StudyDeadline(req.signal, deps.deadlineMs, deps.clock);
+  let currentJob: string | undefined;
   try {
     deadline.check();
     const mna = methodNotAllowed(req);
@@ -52,11 +55,12 @@ export async function handle(
     ) {
       throw new HttpError(503, "engine_unavailable");
     }
-    const parsed = studyRequest.safeParse(
+    const parsed = studyEnvelope.safeParse(
       await deadline.run((signal) => boundedJson(req.body, 5600000, signal)),
     );
     if (!parsed.success) throw new HttpError(400, "invalid_payload");
-    const body = parsed.data;
+    const envelope = parsed.data;
+    const body = envelope.input;
     const profile = () => deadline.run((signal) => deps.profile(caller.userId, signal));
     requireStudyProfile(await profile(), body.purge_epoch);
     const endpoint = new URL(
@@ -74,6 +78,20 @@ export async function handle(
     ) {
       throw new HttpError(503, "engine_unavailable");
     }
+    // Validate configuration before reserving anything. No secret crosses the app.
+    const secret = env("STUDY_WORKER_SECRET");
+    if (secret.length < 32) throw new HttpError(503, "engine_unavailable");
+    const digest = await deadline.run(() => inputDigest(body));
+    const job = await deadline.run(signal => deps.jobs.reserve({
+      p_user: caller.userId, p_epoch: body.purge_epoch, p_request: envelope.request_id,
+      p_quote: envelope.quote_id, p_operation: body.operation === "solve" ? "solve" : `ocr_${body.kind}`,
+      p_digest: digest, p_document: body.operation === "solve" ? body.document_id : null,
+      p_revision: body.operation === "solve" ? body.revision : null,
+    }, signal));
+    if (job.state !== "reserved") return json(job, job.state === "succeeded" ? 200 : 202, { "cache-control": "no-store" });
+    currentJob = job.job_id;
+    const dispatch = await deadline.run(signal => deps.jobs.dispatch(caller.userId, body.purge_epoch, job.job_id, signal));
+    if (!dispatch.claimed) return json(dispatch.job, 202, { "cache-control": "no-store" });
     const response = await deadline.run((signal) =>
       deps.fetch(endpoint, {
         method: "POST",
@@ -81,9 +99,10 @@ export async function handle(
         signal,
         headers: {
           "content-type": "application/json",
-          "authorization": `Bearer ${env("STUDY_WORKER_SECRET")}`,
+          "authorization": `Bearer ${secret}`,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ version: 2, attempt_id: dispatch.attempt_id, provider: dispatch.provider,
+          model: dispatch.model, limits: dispatch.limits, input: body }),
       })
     );
     if (!response.ok) {
@@ -111,8 +130,17 @@ export async function handle(
     await deadline.run((signal) => deps.user(req, signal));
     requireStudyProfile(await profile(), body.purge_epoch);
     deadline.check();
-    return json(result, 200, { "cache-control": "no-store" });
+    const saved = await deadline.run(signal => deps.jobs.finish(job.job_id, "succeeded", result, signal));
+    return json(saved, saved.state === "succeeded" ? 200 : 409, { "cache-control": "no-store" });
   } catch (error) {
+    if (currentJob) {
+      try {
+        // Within the original budget only. If cancelled/expired, the durable
+        // lease becomes reconciliation_required; never another HTTP allowance.
+        deadline.check();
+        await deadline.run(signal => deps.jobs.finish(currentJob!, "failed", null, signal));
+      } catch { /* Reservation/unknown cost remains for the bounded maintenance job. */ }
+    }
     if (error instanceof HttpError) throw error;
     throw new HttpError(503, "engine_unavailable");
   } finally {

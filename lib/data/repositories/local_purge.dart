@@ -80,8 +80,8 @@ class PurgeState {
   PurgeStage get stage => pendingEpoch != null
       ? PurgeStage.pending
       : requested
-          ? PurgeStage.requested
-          : PurgeStage.none;
+      ? PurgeStage.requested
+      : PurgeStage.none;
 
   bool get inProgress => stage != PurgeStage.none;
 }
@@ -102,16 +102,27 @@ class LocalPurge {
 
   /// Reads the whole purge state in one go (usable inside a transaction).
   static Future<PurgeState> readState(AppDatabase db) async {
-    final rows = await (db.select(db.syncMeta)
-          ..where((m) => m.key.isIn(const <String>[purgeEpochKey, pendingEpochKey, requestedKey, requestedAtKey, expectedEpochKey, generationKey])))
-        .get();
+    final rows =
+        await (db.select(db.syncMeta)..where(
+              (m) => m.key.isIn(const <String>[
+                purgeEpochKey,
+                pendingEpochKey,
+                requestedKey,
+                requestedAtKey,
+                expectedEpochKey,
+                generationKey,
+              ]),
+            ))
+            .get();
     final map = <String, String>{for (final r in rows) r.key: r.value};
     final requestedAt = map[requestedAtKey];
     return PurgeState(
       epoch: int.tryParse(map[purgeEpochKey] ?? '') ?? 0,
       pendingEpoch: int.tryParse(map[pendingEpochKey] ?? ''),
       requestId: map[requestedKey],
-      requestedAt: requestedAt == null ? null : DateTime.tryParse(requestedAt)?.toUtc(),
+      requestedAt: requestedAt == null
+          ? null
+          : DateTime.tryParse(requestedAt)?.toUtc(),
       expectedEpoch: int.tryParse(map[expectedEpochKey] ?? ''),
       generation: int.tryParse(map[generationKey] ?? '') ?? 0,
     );
@@ -125,11 +136,14 @@ class LocalPurge {
   /// Records that a `purge-all` call with [requestId] is being made (before
   /// the call), formed against the server's [expectedEpoch]. Re-marking the
   /// same id (a resend) only refreshes the time.
-  Future<void> markRequested(String requestId, {int? expectedEpoch}) => db.transaction(() async {
+  Future<void> markRequested(String requestId, {int? expectedEpoch}) =>
+      db.transaction(() async {
         await _put(requestedKey, requestId);
         await _put(requestedAtKey, ctx.nowUtc().toIso8601String());
         if (expectedEpoch == null) {
-          await (db.delete(db.syncMeta)..where((m) => m.key.equals(expectedEpochKey))).go();
+          await (db.delete(
+            db.syncMeta,
+          )..where((m) => m.key.equals(expectedEpochKey))).go();
         } else {
           await _put(expectedEpochKey, '$expectedEpoch');
         }
@@ -139,71 +153,91 @@ class LocalPurge {
   /// The server confirmed it never served the request (or refused it):
   /// nothing to finish.
   Future<void> clearRequested() => db.transaction(() async {
-        await _clearRequest();
-        await _bump();
-      });
+    await _clearRequest();
+    await _bump();
+  });
 
   /// Stores the server's [epoch] and marks the local purge as pending. The
   /// stored epoch never moves backwards ([S09e]: a replayed answer carries
   /// the account's current epoch; an older one is never applied) — the
   /// epoch actually stored is returned and is the one the local steps use.
   Future<int> markPending(int epoch) => db.transaction(() async {
-        final current = (await state()).epoch;
-        final target = epoch > current ? epoch : current;
-        await _put(purgeEpochKey, '$target');
-        await _put(pendingEpochKey, '$target');
-        await _clearRequest();
-        await _bump();
-        return target;
-      });
+    final current = (await state()).epoch;
+    final target = epoch > current ? epoch : current;
+    await _put(purgeEpochKey, '$target');
+    await _put(pendingEpochKey, '$target');
+    await _clearRequest();
+    await _bump();
+    return target;
+  });
 
   Future<void> _clearRequest() =>
-      (db.delete(db.syncMeta)..where((m) => m.key.isIn(const <String>[requestedKey, requestedAtKey, expectedEpochKey]))).go();
+      (db.delete(db.syncMeta)..where(
+            (m) => m.key.isIn(const <String>[
+              requestedKey,
+              requestedAtKey,
+              expectedEpochKey,
+            ]),
+          ))
+          .go();
 
   Future<void> clearPending() => db.transaction(() async {
-        await (db.delete(db.syncMeta)..where((m) => m.key.equals(pendingEpochKey))).go();
-        await _bump();
-      });
+    await (db.delete(
+      db.syncMeta,
+    )..where((m) => m.key.equals(pendingEpochKey))).go();
+    await _bump();
+  });
 
   /// Deletes the user's records of the generations before [epoch] (not the
   /// photo rows), their outbox entries, conflicts, the snapshot and the
   /// cursor, and stores [epoch].
   Future<void> run({required int epoch}) => db.transaction(() async {
-        for (final t in db.syncTables) {
-          final name = t.actualTableName;
-          await db.customStatement(
-            'DELETE FROM "sync_outbox" WHERE table_name = ? AND row_id IN '
-            '(SELECT id FROM "$name" WHERE user_id = ? AND purge_epoch < ?)',
-            <Object>[name, ctx.userId, epoch],
-          );
-          await db.customStatement(
-            'DELETE FROM "sync_conflicts" WHERE table_name = ? AND row_id IN '
-            '(SELECT id FROM "$name" WHERE user_id = ? AND purge_epoch < ?)',
-            <Object>[name, ctx.userId, epoch],
-          );
-          await db.customStatement(
-            'DELETE FROM "$name" WHERE user_id = ? AND purge_epoch < ?',
-            <Object>[ctx.userId, epoch],
-          );
-        }
-        await db.customStatement('DELETE FROM study_documents WHERE user_id=? AND purge_epoch < ?', [ctx.userId, epoch]);
-        await db.delete(db.sessionSnapshots).go();
-        await (db.delete(db.syncMeta)..where((m) => m.key.equals(cursorKey))).go();
-        await _put(purgeEpochKey, '$epoch');
-        await _bump();
-      });
+    for (final t in db.syncTables) {
+      final name = t.actualTableName;
+      await db.customStatement(
+        'DELETE FROM "sync_outbox" WHERE table_name = ? AND row_id IN '
+        '(SELECT id FROM "$name" WHERE user_id = ? AND purge_epoch < ?)',
+        <Object>[name, ctx.userId, epoch],
+      );
+      await db.customStatement(
+        'DELETE FROM "sync_conflicts" WHERE table_name = ? AND row_id IN '
+        '(SELECT id FROM "$name" WHERE user_id = ? AND purge_epoch < ?)',
+        <Object>[name, ctx.userId, epoch],
+      );
+      await db.customStatement(
+        'DELETE FROM "$name" WHERE user_id = ? AND purge_epoch < ?',
+        <Object>[ctx.userId, epoch],
+      );
+    }
+    await db.customStatement(
+      'DELETE FROM study_documents WHERE user_id=? AND purge_epoch < ?',
+      [ctx.userId, epoch],
+    );
+    await db.customStatement(
+      'DELETE FROM study_metadata WHERE user_id=? AND purge_epoch < ?',
+      [ctx.userId, epoch],
+    );
+    await db.delete(db.sessionSnapshots).go();
+    await (db.delete(db.syncMeta)..where((m) => m.key.equals(cursorKey))).go();
+    await _put(purgeEpochKey, '$epoch');
+    await _bump();
+  });
 
   Future<void> _bump() async {
-    final row = await (db.select(db.syncMeta)..where((m) => m.key.equals(generationKey))).getSingleOrNull();
+    final row = await (db.select(
+      db.syncMeta,
+    )..where((m) => m.key.equals(generationKey))).getSingleOrNull();
     final next = (int.tryParse(row?.value ?? '') ?? 0) + 1;
     await _put(generationKey, '$next');
     db.purgeGate.update(next);
   }
 
-  Future<void> _put(String key, String value) =>
-      db.into(db.syncMeta).insertOnConflictUpdate(SyncMetaCompanion.insert(key: key, value: value));
+  Future<void> _put(String key, String value) => db
+      .into(db.syncMeta)
+      .insertOnConflictUpdate(SyncMetaCompanion.insert(key: key, value: value));
 }
 
 /// keepAlive: watched by the keepAlive `privacyActionsProvider`.
 @Riverpod(keepAlive: true)
-LocalPurge localPurge(Ref ref) => LocalPurge(ref.watch(appDatabaseProvider), ref.watch(writeContextProvider));
+LocalPurge localPurge(Ref ref) =>
+    LocalPurge(ref.watch(appDatabaseProvider), ref.watch(writeContextProvider));

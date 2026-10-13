@@ -23,7 +23,11 @@ part 'export_service.g.dart';
 enum ExportFormat { json, csv }
 
 class ExportFile {
-  const ExportFile({required this.name, required this.bytes, required this.mimeType});
+  const ExportFile({
+    required this.name,
+    required this.bytes,
+    required this.mimeType,
+  });
 
   final String name;
   final Uint8List bytes;
@@ -51,9 +55,9 @@ class ExportService {
   final bool encodeInBackground;
 
   Future<ExportFile> build(ExportFormat format) => switch (format) {
-        ExportFormat.json => buildJson(),
-        ExportFormat.csv => buildCsvZip(),
-      };
+    ExportFormat.json => buildJson(),
+    ExportFormat.csv => buildCsvZip(),
+  };
 
   // ---------------------------------------------------------------------
   // JSON
@@ -63,16 +67,32 @@ class ExportService {
     for (final t in db.syncTables) {
       tables[t.actualTableName] = await _liveRows(t);
     }
-    final photos = await (db.select(db.photos)
-          ..where((p) => p.userId.equals(userId) & p.deletedAt.isNull())
-          ..orderBy([(p) => OrderingTerm.asc(p.takenAt)]))
-        .get();
-    tables['study_documents'] = (await db.customSelect(
-      'SELECT id,revision,kind,text,solution_json,planner_item_id,updated_at FROM study_documents WHERE user_id=?',
-      variables: [Variable(userId)],
-    ).get()).map((r) => r.data).toList();
+    final photos =
+        await (db.select(db.photos)
+              ..where((p) => p.userId.equals(userId) & p.deletedAt.isNull())
+              ..orderBy([(p) => OrderingTerm.asc(p.takenAt)]))
+            .get();
+    tables['study_documents'] =
+        (await db
+                .customSelect(
+                  'SELECT id,revision,kind,text,solution_json,planner_item_id,updated_at FROM study_documents WHERE user_id=?',
+                  variables: [Variable(userId)],
+                )
+                .get())
+            .map((r) => r.data)
+            .toList();
+    tables['study_metadata'] =
+        (await db
+                .customSelect(
+                  'SELECT id,revision,kind,title,has_body,has_solution,has_photo,cache_state,updated_at FROM study_metadata WHERE user_id=? AND deleted=0',
+                  variables: [Variable(userId)],
+                )
+                .get())
+            .map((r) => r.data)
+            .toList();
     tables['photos'] = <Map<String, Object?>>[
-      for (final p in photos) (Map<String, Object?>.of(p.toJson())..remove('local_path')),
+      for (final p in photos)
+        (Map<String, Object?>.of(p.toJson())..remove('local_path')),
     ];
     return <String, Object?>{
       'schema_version': schemaVersion,
@@ -87,7 +107,9 @@ class ExportService {
     final map = await db.transaction(exportMap);
     // Only a detached value snapshot crosses the isolate boundary. Neither
     // the database, a provider, nor the authenticated client is captured.
-    final bytes = encodeInBackground ? await compute(_encodeJson, map) : _encodeJson(map);
+    final bytes = encodeInBackground
+        ? await compute(_encodeJson, map)
+        : _encodeJson(map);
     return ExportFile(
       name: 'soongong-${_stamp()}.json',
       bytes: bytes,
@@ -95,8 +117,12 @@ class ExportService {
     );
   }
 
-  Future<List<Map<String, Object?>>> _liveRows(TableInfo<Table, Object?> t) async {
-    final owner = t.$columns.singleWhere((c) => c.$name == 'user_id') as GeneratedColumn<String>;
+  Future<List<Map<String, Object?>>> _liveRows(
+    TableInfo<Table, Object?> t,
+  ) async {
+    final owner =
+        t.$columns.singleWhere((c) => c.$name == 'user_id')
+            as GeneratedColumn<String>;
     final deleted = t.$columns.singleWhere((c) => c.$name == 'deleted_at');
     Expression<bool> live = owner.equals(userId) & deleted.isNull();
     for (final column in t.$columns) {
@@ -122,7 +148,9 @@ class ExportService {
 
   Future<ExportFile> buildCsvZip() async {
     final payload = await db.transaction(_csvSnapshot);
-    final bytes = encodeInBackground ? await compute(_encodeCsvZip, payload) : _encodeCsvZip(payload);
+    final bytes = encodeInBackground
+        ? await compute(_encodeCsvZip, payload)
+        : _encodeCsvZip(payload);
     return ExportFile(
       name: 'soongong-${_stamp()}.zip',
       bytes: bytes,
@@ -132,7 +160,9 @@ class ExportService {
 
   Future<Map<String, String>> _csvSnapshot() async {
     final subjects = <String, String>{
-      for (final s in await (db.select(db.subjects)..where((s) => s.userId.equals(userId))).get())
+      for (final s in await (db.select(
+        db.subjects,
+      )..where((s) => s.userId.equals(userId))).get())
         if (s.deletedAt == null && s.name != null) s.id: s.name!,
     };
     final payload = <String, String>{
@@ -144,14 +174,29 @@ class ExportService {
   }
 
   Future<String> sessionsCsv(Map<String, String> subjects) async {
-    final rows = await (db.select(db.sessions)
-          ..where((s) => s.userId.equals(userId) & s.deletedAt.isNull() & s.pendingDeleteUntil.isNull())
-          ..orderBy([(s) => OrderingTerm.asc(s.startedAt)]))
-        .get();
+    final rows =
+        await (db.select(db.sessions)
+              ..where(
+                (s) =>
+                    s.userId.equals(userId) &
+                    s.deletedAt.isNull() &
+                    s.pendingDeleteUntil.isNull(),
+              )
+              ..orderBy([(s) => OrderingTerm.asc(s.startedAt)]))
+            .get();
     final lines = <String>[
       csvLine(const <Object?>[
-        'id', 'date', 'started_at', 'ended_at', 'kind', 'mode', 'status',
-        'subject', 'seated_minutes', 'sensitivity_level', 'note',
+        'id',
+        'date',
+        'started_at',
+        'ended_at',
+        'kind',
+        'mode',
+        'status',
+        'subject',
+        'seated_minutes',
+        'sensitivity_level',
+        'note',
       ]),
       for (final s in rows)
         csvLine(<Object?>[
@@ -172,14 +217,34 @@ class ExportService {
   }
 
   Future<String> plannerCsv(Map<String, String> subjects) async {
-    final rows = await (db.select(db.plannerItems)
-          ..where((p) => p.userId.equals(userId) & p.deletedAt.isNull() & p.pendingDeleteUntil.isNull())
-          ..orderBy([(p) => OrderingTerm.asc(p.date), (p) => OrderingTerm.asc(p.sortOrder)]))
-        .get();
+    final rows =
+        await (db.select(db.plannerItems)
+              ..where(
+                (p) =>
+                    p.userId.equals(userId) &
+                    p.deletedAt.isNull() &
+                    p.pendingDeleteUntil.isNull(),
+              )
+              ..orderBy([
+                (p) => OrderingTerm.asc(p.date),
+                (p) => OrderingTerm.asc(p.sortOrder),
+              ]))
+            .get();
     final lines = <String>[
       csvLine(const <Object?>[
-        'id', 'date', 'kind', 'title', 'subject', 'range_text', 'target_minutes',
-        'start_time', 'end_time', 'is_done', 'done_at', 'band_start', 'band_end',
+        'id',
+        'date',
+        'kind',
+        'title',
+        'subject',
+        'range_text',
+        'target_minutes',
+        'start_time',
+        'end_time',
+        'is_done',
+        'done_at',
+        'band_start',
+        'band_end',
       ]),
       for (final p in rows)
         csvLine(<Object?>[
@@ -202,24 +267,43 @@ class ExportService {
   }
 
   Future<String> wrongsCsv(Map<String, String> subjects) async {
-    final rows = await (db.select(db.wrongItems)
-          ..where((w) => w.userId.equals(userId) & w.deletedAt.isNull())
-          ..orderBy([(w) => OrderingTerm.asc(w.createdAt), (w) => OrderingTerm.asc(w.number)]))
-        .get();
+    final rows =
+        await (db.select(db.wrongItems)
+              ..where((w) => w.userId.equals(userId) & w.deletedAt.isNull())
+              ..orderBy([
+                (w) => OrderingTerm.asc(w.createdAt),
+                (w) => OrderingTerm.asc(w.number),
+              ]))
+            .get();
     final entries = <String, ReviewEntryRow>{
-      for (final e in await (db.select(db.reviewEntries)..where((e) => e.userId.equals(userId) & e.deletedAt.isNull())).get())
+      for (final e in await (db.select(
+        db.reviewEntries,
+      )..where((e) => e.userId.equals(userId) & e.deletedAt.isNull())).get())
         e.wrongItemId: e,
     };
     final retries = <String, int>{};
-    for (final r in await (db.select(db.retryRecords)..where((r) => r.userId.equals(userId) & r.deletedAt.isNull())).get()) {
+    for (final r in await (db.select(
+      db.retryRecords,
+    )..where((r) => r.userId.equals(userId) & r.deletedAt.isNull())).get()) {
       if (r.voided ?? false) continue;
       retries[r.wrongItemId] = (retries[r.wrongItemId] ?? 0) + 1;
     }
     final lines = <String>[
       csvLine(const <Object?>[
-        'id', 'request_id', 'subject', 'range_text', 'page', 'number', 'mark',
-        'confidence', 'user_confirmed', 'status', 'resolved_at',
-        'review_due_at', 'review_interval_days', 'retry_count',
+        'id',
+        'request_id',
+        'subject',
+        'range_text',
+        'page',
+        'number',
+        'mark',
+        'confidence',
+        'user_confirmed',
+        'status',
+        'resolved_at',
+        'review_due_at',
+        'review_interval_days',
+        'retry_count',
       ]),
       for (final w in rows)
         csvLine(<Object?>[
@@ -251,7 +335,8 @@ class ExportService {
     return '${t.year}${two(t.month)}${two(t.day)}-${two(t.hour)}${two(t.minute)}';
   }
 
-  static String _local(DateTime? t) => t == null ? '' : t.toLocal().toIso8601String();
+  static String _local(DateTime? t) =>
+      t == null ? '' : t.toLocal().toIso8601String();
 
   /// UTF-8 with BOM so spreadsheet apps open Korean text correctly.
   static Uint8List _csvBytes(String content) =>
@@ -259,7 +344,10 @@ class ExportService {
 
   static String csvEscape(Object? v) {
     final s = v == null ? '' : v.toString();
-    if (s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r')) {
+    if (s.contains(',') ||
+        s.contains('"') ||
+        s.contains('\n') ||
+        s.contains('\r')) {
       return '"${s.replaceAll('"', '""')}"';
     }
     return s;
@@ -268,20 +356,23 @@ class ExportService {
   static String csvLine(List<Object?> cells) => cells.map(csvEscape).join(',');
 }
 
-Uint8List _encodeJson(Map<String, Object?> value) =>
-    Uint8List.fromList(utf8.encode(const JsonEncoder.withIndent('  ').convert(value)));
+Uint8List _encodeJson(Map<String, Object?> value) => Uint8List.fromList(
+  utf8.encode(const JsonEncoder.withIndent('  ').convert(value)),
+);
 
 Uint8List _encodeCsvZip(Map<String, String> csv) {
   final archive = Archive();
   for (final entry in csv.entries) {
-    archive.addFile(ArchiveFile.bytes(entry.key, ExportService._csvBytes(entry.value)));
+    archive.addFile(
+      ArchiveFile.bytes(entry.key, ExportService._csvBytes(entry.value)),
+    );
   }
   return ZipEncoder().encodeBytes(archive);
 }
 
 @Riverpod(keepAlive: true)
 ExportService exportService(Ref ref) => ExportService(
-      db: ref.watch(appDatabaseProvider),
-      userId: ref.watch(currentUserIdProvider),
-      clock: ref.watch(appClockProvider),
-    );
+  db: ref.watch(appDatabaseProvider),
+  userId: ref.watch(currentUserIdProvider),
+  clock: ref.watch(appClockProvider),
+);

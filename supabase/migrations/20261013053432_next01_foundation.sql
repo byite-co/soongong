@@ -54,15 +54,15 @@ create function public.study_valid_transcription(p jsonb,p_kind text) returns bo
 set search_path='' as $$
 declare b jsonb; total integer:=0; x numeric; a numeric[];
 begin
- if p is null or jsonb_typeof(p)<>'object' or octet_length(p::text)>256000
+ if (p is null or jsonb_typeof(p)<>'object' or octet_length(p::text)>256000
  or (select array_agg(k order by k) from jsonb_object_keys(p) k)<>array['blocks','engine','kind','schema_version']
  or p->>'schema_version'<>'1' or p->>'kind'<>p_kind or jsonb_typeof(p->'engine')<>'string'
  or length(p->>'engine') not between 1 and 200 or jsonb_typeof(p->'blocks')<>'array'
- or jsonb_array_length(p->'blocks')>500 then return false; end if;
+ or jsonb_array_length(p->'blocks')>500) is not false then return false; end if;
  for b in select value from jsonb_array_elements(p->'blocks') loop
-  if jsonb_typeof(b)<>'object' or (select array_agg(k order by k) from jsonb_object_keys(b) k)<>array['box','confidence','text']
+  if (jsonb_typeof(b)<>'object' or (select array_agg(k order by k) from jsonb_object_keys(b) k)<>array['box','confidence','text']
   or jsonb_typeof(b->'text')<>'string' or length(b->>'text')>20000
-  or jsonb_typeof(b->'box')<>'array' or jsonb_array_length(b->'box')<>4 then return false; end if;
+  or jsonb_typeof(b->'box')<>'array' or jsonb_array_length(b->'box')<>4) is not false then return false; end if;
   total:=total+length(b->>'text')+1; a:='{}';
   for x in select value::text::numeric from jsonb_array_elements(b->'box') loop
    if x<0 or x>1 then return false; end if; a:=array_append(a,x);
@@ -195,11 +195,12 @@ end $$;
 create function public.study_photo_expire() returns integer language plpgsql security definer set search_path='' as $$
 declare a record; n integer:=0;
 begin
- for a in select id,user_id from public.study_photo_assets where expires_at<=public.study_now() and not delete_requested order by user_id,id loop
+ for a in select id,user_id,document_id from public.study_photo_assets where expires_at<=public.study_now() and not delete_requested order by user_id,id limit 100 loop
   perform public.user_lock(a.user_id);
   insert into public.study_object_deletions(object_path)
   select object_path from public.study_photo_assets where id=a.id and expires_at<=public.study_now() on conflict(object_path) do nothing;
   update public.study_photo_assets set delete_requested=true where id=a.id and expires_at<=public.study_now();
+  update public.study_documents set server_seq=public.next_server_seq(a.user_id),updated_at=public.study_now() where user_id=a.user_id and id=a.document_id and deleted_at is null;
   n:=n+1;
  end loop;
  return n;
@@ -533,3 +534,11 @@ grant execute on function public.study_photo_access(uuid,integer,uuid),public.st
  public.ai_budget_set(date,numeric,numeric,numeric),public.ai_grant(uuid,text,text,integer,timestamptz),public.ai_quote(uuid,integer,text),
  public.ai_reserve(uuid,integer,uuid,uuid,text,text,uuid,integer),public.ai_dispatch(uuid,integer,uuid),public.ai_finish(uuid,text,jsonb),
  public.ai_reconcile(uuid,uuid,numeric,jsonb),public.ai_status(uuid,integer,uuid),public.ai_maintenance() to service_role;
+
+-- No outbound request until existing server_config is explicitly provisioned.
+-- Register only in the deployment migration; this session applies it in CI only.
+select public.cron_upsert('soongong-study-maintenance','*/5 * * * *',
+ $$select public.invoke_edge('study-maintenance','{"source":"cron"}'::jsonb)
+ where exists(select from public.study_photo_assets where not delete_requested and expires_at<=public.study_now())
+ or exists(select from public.study_object_deletions where status='pending' and next_at<=public.study_now())
+ or exists(select from public.ai_jobs where (state in ('reserved','dispatching') and lease_until<=public.study_now()) or (result is not null and result_expires_at<=public.study_now()));$$);

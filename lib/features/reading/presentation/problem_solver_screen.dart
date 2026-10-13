@@ -167,9 +167,12 @@ class _ProblemSolverScreenState extends ConsumerState<ProblemSolverScreen> {
         });
       }
     });
-    final document = rows.asData?.value
+    final summary = rows.asData?.value
         .where((d) => d.id == widget.documentId)
         .firstOrNull;
+    final body = ref.watch(studyDocumentProvider(widget.documentId));
+    final loaded = body.asData?.value;
+    final document = loaded?.revision == summary?.revision ? loaded : null;
     ref.listen(currentUserIdProvider, (_, _) {
       _operation++;
       setState(() {
@@ -204,7 +207,10 @@ class _ProblemSolverScreenState extends ConsumerState<ProblemSolverScreen> {
           const Text(StudyStrings.solveHint),
           const SizedBox(height: 16),
           SelectableText(
-            document?.text ?? _document?.text ?? StudyStrings.error,
+            document?.text ??
+                (body.isLoading
+                    ? StudyStrings.bodyLoading
+                    : StudyStrings.bodyNotCached),
           ),
           TextField(
             controller: _reference,

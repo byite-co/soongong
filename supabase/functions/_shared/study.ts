@@ -22,6 +22,10 @@ const solutionRequest = z.object({
   consent_version: z.literal("study-2026-10-13"),
 }).strict();
 export const studyRequest = z.discriminatedUnion("operation", [ocrRequest, solutionRequest]);
+// v1 is only the INTERNAL inference input/result. Public execution requires v2.
+export const studyEnvelope = z.object({
+  version: z.literal(2), request_id: z.string().uuid(), quote_id: z.string().uuid(), input: studyRequest,
+}).strict();
 export const solutionResponse = z.object({
   schema_version: z.literal(1),
   document_id: z.string().uuid(),

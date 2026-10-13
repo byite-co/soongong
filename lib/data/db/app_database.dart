@@ -1,4 +1,4 @@
-// AppDatabase (S02 + EXT) — drift, local schema v3. Offline-first: the server is only a
+// AppDatabase (S02 + EXT) — drift, local schema v4. Offline-first: the server is only a
 // sync target (CLAUDE.md §2). Single file + `user_id` column; the whole file
 // is wiped on account switch / purge / epoch mismatch. Logout preserves DB
 // records and the device encryption key (the current S09 implementation).
@@ -68,7 +68,7 @@ class AppDatabase extends _$AppDatabase {
   /// v1 — S02 tables. v2 — S02c: partial unique index on
   /// `review_entries(wrong_item_id) WHERE deleted_at IS NULL` (SCHEMA-CHANGE).
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   /// Partial unique indexes (drift `@TableIndex` cannot express `WHERE`).
   /// Same statements in the S03 DDL (docs/data-model.md §4).
@@ -82,13 +82,19 @@ class AppDatabase extends _$AppDatabase {
     onCreate: (m) => transaction(() async {
       await m.createAll();
       await _ensureStudyDocuments();
+      await customStatement(createStudyMetadata);
       for (final sql in partialUniqueIndexes) {
         await customStatement(sql);
       }
       await customStatement('PRAGMA user_version = $schemaVersion');
     }),
     onUpgrade: (m, from, to) => transaction(() async {
-      if (from < 3) await _ensureStudyDocuments();
+      // Inspect the exact historical v3 body table before introducing v4.
+      if (from < 4) {
+        await _ensureStudyDocuments();
+        await customStatement(createStudyMetadata);
+        await customStatement(backfillStudyMetadata);
+      }
       if (from < 2) {
         await _dedupeLiveReviewEntries();
         for (final sql in partialUniqueIndexes) {
@@ -100,6 +106,8 @@ class AppDatabase extends _$AppDatabase {
       await customStatement('PRAGMA user_version = $to');
     }),
     beforeOpen: (details) async {
+      await _validateStudyTable('study_documents', createStudyDocuments);
+      await _validateStudyTable('study_metadata', createStudyMetadata);
       await customStatement('PRAGMA foreign_keys = OFF');
       // Journal changes cannot run inside the schema transaction. This
       // is the sole runtime journal policy, including the encrypted opener.
@@ -120,6 +128,10 @@ class AppDatabase extends _$AppDatabase {
       if (temporary.read<int>('temp_store') != 2) {
         throw const DatabaseProtectionException('temp_policy_failed');
       }
+      // A process-local download cannot still be in flight after reopening.
+      await customStatement(
+        "UPDATE study_metadata SET cache_state='missing' WHERE cache_state='loading'",
+      );
     },
   );
 
@@ -135,17 +147,24 @@ class AppDatabase extends _$AppDatabase {
       await customStatement(createStudyDocuments);
       return;
     }
+    await _validateStudyTable('study_documents', createStudyDocuments);
+  }
+
+  Future<void> _validateStudyTable(String name, String definition) async {
+    final objects = await customSelect(
+      'SELECT type,name,sql FROM sqlite_master WHERE name=? OR tbl_name=?',
+      variables: [Variable(name), Variable(name)],
+    ).get();
     String normalize(String sql) => sql.replaceAll(RegExp(r'\s+'), ' ').trim();
     final tables = objects.where((row) => row.read<String>('type') == 'table');
     final indexes = objects.where((row) => row.read<String>('type') == 'index');
     if (objects.length != 2 ||
         tables.length != 1 ||
         indexes.length != 1 ||
-        tables.single.read<String>('name') != 'study_documents' ||
+        tables.single.read<String>('name') != name ||
         normalize(tables.single.readNullable<String>('sql') ?? '') !=
-            normalize(createStudyDocuments) ||
-        indexes.single.read<String>('name') !=
-            'sqlite_autoindex_study_documents_1' ||
+            normalize(definition) ||
+        indexes.single.read<String>('name') != 'sqlite_autoindex_${name}_1' ||
         indexes.single.readNullable<String>('sql') != null) {
       throw const DatabaseProtectionException('study_schema_mismatch');
     }
@@ -206,6 +225,7 @@ class AppDatabase extends _$AppDatabase {
   /// Deletes every row of every table (account switch · logout · purge-all ·
   /// epoch mismatch, D27 · D2). Photo files are deleted by the caller.
   Future<void> wipeAll() => transaction(() async {
+    await customStatement('DELETE FROM study_metadata');
     await customStatement('DELETE FROM study_documents');
     for (final t in allTables) {
       await delete(t).go();
