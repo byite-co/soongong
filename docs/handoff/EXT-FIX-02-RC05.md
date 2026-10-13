@@ -78,3 +78,11 @@ RC02/03 담당자의 작업 중 소스를 독립 검토하여 두 문제와 보�
 - [통합 중단 실행 38345226868](https://github.com/byite-co/soongong/actions/runs/38345226868), `73708d6`: codegen/Analyze/문구 검사는 성공했으나 overlap picker fixture가 완료되지 않아 실행을 취소했다. 마지막 부분 집계는 908 PASS / 4 FAIL이며 완료된 전체 테스트 결과가 아니다. 명시 실패는 같은 계정 재로그인의 purge 복구 2건, A→B→A에서 폐기된 PhotoRetention 재사용 1건, 파일 목록 조회 전 취소의 기존 fixture 기대값 1건이었다. auth 경계에서 이전 인스턴스를 즉시 dispose하고 provider도 invalidate하여 새 인스턴스를 만들도록 수정했다. 취소 테스트는 조회 전 unknown/조회 0회와 조회 후 알려진 left 집합 보존을 각각 검증한다. 이전 파일 보존·기존 purge 복구 assertions는 완화하지 않았다.
 
 최종 PR HEAD와 그 CI checkout/tree, 신규 40개 각 판정은 PR 본문 및 최종 전달 보고서가 기록한다. 위 기록은 실패를 숨기지 않기 위한 중간 증거이고 최종 CI 대체물이 아니다.
+
+## 추가 조합과 접근성 검토
+
+- [통합 실행 38346734126](https://github.com/byite-co/soongong/actions/runs/38346734126), `deaf1fd`: codegen/Analyze/문구 검사와 Flutter **915 PASS**. 폐기된 사진 provider 재사용, 기존 purge 복구, 중첩 정리 fixture 대기 보강까지 포함한다. 아래 추가 9개 테스트 및 후속 수정 이전 결과이므로 최종 HEAD PASS로 사용하지 않는다.
+- 정상 시간 진행을 동반한 재시작 이후 시계가 멈추는 조합에서 recovered share의 monotonic age가 없던 정적 경로를 확인했다. 최초 복구 시 기존 expires까지 남은 시간만 Stopwatch budget으로 기록하고 이후 sweep에서 갱신하지 않도록 수정했다. 새 24시간을 부여하지 않는다. frozen-after-restart, 남은 grace, 정확한 만료/+1ms 네 가지 회귀를 추가했다.
+- 실제 AccountScreen의 logout unknown 및 서버 계정 삭제 후 local pending 창을 390×844·200% 글자·light/dark 네 가지로 검증한다. 긴 AppModal 내용과 버튼을 SafeArea 안에서 스크롤 가능하게 했다. 잠금·확인·오류 코드, 버튼/색/semantics는 유지한다.
+- PICK-07 연결 회귀는 동일 계정의 실제 PrivacyActions 전체 삭제, DB epoch·TempOwnership 새 scope, 이전 lost-data metadata discard, 새 OCR 선택·동의·확인·저장을 한 순서로 실행한다. native ImagePicker와 모델 응답만 fixture이며 실제 OS kill 검증은 아니다.
+- [추가 테스트 기준선 38347149825](https://github.com/byite-co/soongong/actions/runs/38347149825), `3c8dac4`: 위 9개 테스트를 clock/modal 수정 이전 소스에서 실행하도록 제출했다. 이 문서 작성 시 결과는 대기이며, 실제 assertion 결과와 수정판 결과는 최종 보고서에 각각 기록한다. 미실행 예상 실패를 실제 FAIL로 집계하지 않는다.
