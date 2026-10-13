@@ -393,8 +393,11 @@ class PrivacyActions {
       if (joined != null) return joined;
       return deleteAll();
     }
-    temporary?.invalidate(writer.ctx.userId);
-    final f = _deleteAll().whenComplete(() => _inFlight = null);
+    temporary?.beginBoundary(writer.ctx.userId);
+    final f = _deleteAll().whenComplete(() {
+      _inFlight = null;
+      temporary?.endBoundary(writer.ctx.userId);
+    });
     _inFlight = f;
     return await f;
   }

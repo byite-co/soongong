@@ -15,11 +15,18 @@ class TempOwnership {
   static const key = 'owned_temporary_scope_v1';
   final Map<String, int> _epochs = {};
   final Map<String, Set<String>> _known = {};
+  final Set<String> _boundaries = {};
   final _invalidations = StreamController<String>.broadcast(sync: true);
   Stream<String> get invalidations => _invalidations.stream;
   void dispose() => _invalidations.close();
 
   int epoch(String userId) => _epochs[userId] ?? 0;
+  void beginBoundary(String userId) {
+    _boundaries.add(userId);
+    invalidate(userId);
+  }
+
+  void endBoundary(String userId) => _boundaries.remove(userId);
   void invalidate(String userId) {
     _epochs[userId] = epoch(userId) + 1;
     _invalidations.add(userId);
@@ -57,6 +64,7 @@ class TempOwnership {
     final token = epoch(owner);
     bool current() =>
         alive() &&
+        !_boundaries.contains(owner) &&
         epoch(owner) == token &&
         writer.purgeGeneration == generation;
     final scope = await writer.runOwnedTransaction(
