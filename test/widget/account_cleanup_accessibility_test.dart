@@ -204,8 +204,9 @@ void main() {
             expect(rows, deleting ? isEmpty : hasLength(1));
             expect(tester.takeException(), isNull);
           } finally {
-            if (response != null && !response.isCompleted)
+            if (response != null && !response.isCompleted) {
               response.complete({});
+            }
             await h.unmount(tester);
             semantics.dispose();
           }
