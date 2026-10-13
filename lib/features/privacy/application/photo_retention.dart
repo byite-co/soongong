@@ -280,7 +280,7 @@ class PhotoRetention {
     if (!pending) {
       return temp.unknown ? null : temp.remaining;
     }
-    final live = await _owned(op, () => reading.getAllPhotos());
+    final live = await _owned(op, reading.getAllPhotos);
     final sweep = await store.sweep(
       keep: <String>{for (final p in live) p.localPath},
       proceed: op.current,
@@ -303,8 +303,7 @@ class PhotoRetention {
       if (temp.unknown) return null;
       if (!await _owned(op, reading.photoSweepPending)) return temp.remaining;
       final live = <String>{
-        for (final p in await _owned(op, () => reading.getAllPhotos()))
-          p.localPath,
+        for (final p in await _owned(op, reading.getAllPhotos)) p.localPath,
       };
       final files = await store.listAll();
       op.check();
