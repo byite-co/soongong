@@ -10,6 +10,8 @@ import '../../../core/strings/study_strings.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../data/auth/auth_gate.dart';
 import '../../../data/photos/study_image_picker.dart';
+import '../../../data/photos/owned_picker_coordinator.dart';
+import '../../../data/temp/temp_providers.dart';
 import '../../../data/repositories/local_purge.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../data/repositories/study_repository.dart';
@@ -36,7 +38,6 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
   String? _message;
   int _operation = 0;
   int? _generation;
-  late final _picker = widget.pickImage ?? StudyImagePicker().pick;
 
   @override
   void dispose() {
@@ -55,10 +56,13 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
     final operation = ++_operation;
     final owner = ref.read(currentUserIdProvider);
     final writer = ref.read(syncWriterProvider);
+    final ownership = ref.read(tempOwnershipProvider);
+    final tempEpoch = ownership.epoch(owner);
     int? generation;
     bool ownsOperation() =>
         mounted &&
         operation == _operation &&
+        ownership.epoch(owner) == tempEpoch &&
         ref.read(currentUserIdProvider) == owner;
     bool current() =>
         ownsOperation() &&
@@ -78,7 +82,21 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       // No picker resize/compression: it may leave an undisclosed original copy.
       // ImagePicker-created app cache files are removed below. A user's
       // original outside our temporary directory is never deleted.
-      picked = await _picker(source);
+      picked = widget.pickImage != null
+          ? await widget.pickImage!(source)
+          : await ref
+                .read(ownedPickerCoordinatorProvider)
+                .pick(
+                  source,
+                  createTask: () => ref
+                      .read(tempOwnershipProvider)
+                      .create(
+                        writer,
+                        'picker',
+                        generation: generation!,
+                        alive: current,
+                      ),
+                );
       if (picked == null || !current()) return;
       final length = await picked.length();
       if (!current()) return;
@@ -247,6 +265,19 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
   @override
   Widget build(BuildContext context) {
     final documents = ref.watch(studyDocumentsProvider);
+    ref.listen(tempInvalidationProvider, (_, next) {
+      if (next.asData?.value != ref.read(currentUserIdProvider)) return;
+      _operation++;
+      _image?.fillRange(0, _image!.length, 0);
+      setState(() {
+        _image = null;
+        _transcription = null;
+        _text.clear();
+        _agreed = false;
+        _busy = false;
+        _generation = null;
+      });
+    });
     ref.listen(studyGenerationProvider, (_, next) {
       final generation = next.asData?.value;
       if (_generation != null &&

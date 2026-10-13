@@ -30,6 +30,7 @@ import '../../features/settings/application/notification_scheduler.dart';
 import '../auth/auth_gate.dart';
 import '../repositories/repositories.dart';
 import '../seed/dev_seeder.dart';
+import '../temp/temp_recovery.dart';
 
 part 'startup_tasks.g.dart';
 
@@ -54,7 +55,8 @@ class UserStartupTasks {
 
   final Ref _ref;
   final Set<String> _done = <String>{};
-  final Map<String, Future<StartupReport?>> _inFlight = <String, Future<StartupReport?>>{};
+  final Map<String, Future<StartupReport?>> _inFlight =
+      <String, Future<StartupReport?>>{};
 
   /// Users whose startup tasks ran in this app run.
   Set<String> get ranFor => Set<String>.unmodifiable(_done);
@@ -81,14 +83,19 @@ class UserStartupTasks {
   Future<StartupReport?> _run(String userId) async {
     _done.add(userId);
     try {
-      await _ref.read(syncWriterProvider).refreshPurgeGeneration(); // [S09c] barrier mirror
+      await _ref
+          .read(syncWriterProvider)
+          .refreshPurgeGeneration(); // [S09c] barrier mirror
       final settled = await _ref.read(deleteSettlerProvider).settle();
       // S09: expired photos (D14 row 3) and the notification plan; S09b ·
       // S09c: a 모든 기록 삭제 left open is continued (`PurgeRecovery`).
-      final expiredPhotos = await _ref.read(photoRetentionProvider).purgeExpired();
+      final expiredPhotos = await _ref
+          .read(photoRetentionProvider)
+          .purgeExpired();
       final recovery = _ref.read(purgeRecoveryProvider)..start();
       final pendingPurge = await recovery.resume();
-      if (pendingPurge != null) appLog.i('startup · pending local purge → ${pendingPurge.runtimeType}');
+      if (pendingPurge != null)
+        appLog.i('startup · pending local purge → ${pendingPurge.runtimeType}');
       _ref.read(notificationSchedulerProvider).start();
       final today = LocalDate.of(_ref.read(appClockProvider).now());
       final created = await _ref.read(activityRepositoryProvider).touch(today);
@@ -126,6 +133,13 @@ UserStartupTasks userStartupTasks(Ref ref) => UserStartupTasks(ref);
 /// tasks whenever a user becomes available (restored session, local-only
 /// build, or a login later in the run). Tests call this too.
 Future<void> runStartupTasks(ProviderContainer container) async {
+  // Recovery precedes any new picker, including before login. An unavailable
+  // store blocks the picker itself and is retried on foreground/privacy entry.
+  final temporary = await recoverTemporaryFilesAtStartup(container);
+  if (!temporary.complete)
+    appLog.w(
+      'temporary cleanup pending (unknown=${temporary.unknown}, tasks=${temporary.remaining})',
+    );
   if (AppConfig.isDev) {
     try {
       await container.read(devSeederProvider).seedSubjects();
@@ -138,19 +152,17 @@ Future<void> runStartupTasks(ProviderContainer container) async {
 
 /// Listens to the auth gate and runs [UserStartupTasks.ensureRunFor] on every
 /// transition into a signed-in / local-only state.
-ProviderSubscription<AuthGateState> attachStartupListener(ProviderContainer container) {
-  return container.listen<AuthGateState>(
-    authGateProvider,
-    (_, next) {
-      final userId = next.userId;
-      if (userId == null) {
-        if (next is AuthGateSignedOut) {
-          appLog.i('startup · no signed-in user, user writes deferred');
-        }
-        return;
+ProviderSubscription<AuthGateState> attachStartupListener(
+  ProviderContainer container,
+) {
+  return container.listen<AuthGateState>(authGateProvider, (_, next) {
+    final userId = next.userId;
+    if (userId == null) {
+      if (next is AuthGateSignedOut) {
+        appLog.i('startup · no signed-in user, user writes deferred');
       }
-      unawaited(container.read(userStartupTasksProvider).ensureRunFor(userId));
-    },
-    fireImmediately: true,
-  );
+      return;
+    }
+    unawaited(container.read(userStartupTasksProvider).ensureRunFor(userId));
+  }, fireImmediately: true);
 }
