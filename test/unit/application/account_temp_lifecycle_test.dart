@@ -57,8 +57,12 @@ void main() {
     expect(h.container.read(authGateProvider), isA<AuthGateSignedIn>());
   });
   tearDown(() async {
+    // Forced sign-out deliberately does not wait for its best-effort cleanup.
+    // Close the fixture root before disposal so a late revoke cannot recreate
+    // it while the fixture itself is being removed.
+    rootUnavailable = true;
     await h.dispose();
-    await directory.delete(recursive: true);
+    directory.deleteSync(recursive: true);
   });
 
   Future<OwnedTempTask> create(String kind) async {

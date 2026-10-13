@@ -98,6 +98,14 @@ void main() {
       unavailable = false;
       await tester.tap(find.text(CommonStrings.retry));
       await pumpStudy(tester);
+      // The local work starts the reverse route animation only after its
+      // asynchronous receipt/sign-out sequence finishes. Wait for that
+      // transition as well; the bounded wait still fails if retry stays busy.
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 20),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 5),
+      );
       expect(find.byType(AppModal), findsNothing);
       expect(backend.currentSession, isNull);
       expect(
