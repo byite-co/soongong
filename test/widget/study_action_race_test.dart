@@ -74,6 +74,11 @@ void main() {
       await pumpStudy(tester);
       expect(rig.approvedDispatches, 1);
       expect(await completeStudy(tester, rig.repo.list()), isEmpty);
+      await tester.scrollUntilVisible(
+        find.widgetWithText(AppButton, StudyStrings.confirm),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await pressStudy(tester, StudyStrings.confirm);
       expect((await completeStudy(tester, rig.repo.list())).length, 1);
     },
