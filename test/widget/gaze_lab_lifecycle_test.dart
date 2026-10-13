@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:camera/camera.dart';
+import 'package:soongong/data/engines/seat/camera_lease.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -88,6 +89,7 @@ class _Controller extends CameraController {
 }
 
 CameraFrameSource _cameraSource(_Controller controller) => CameraFrameSource(
+  lease: CameraLease(),
   listCameras: () async => <CameraDescription>[_front],
   controllerFactory:
       (camera, {required int fps, ImageFormatGroup? imageFormatGroup}) =>

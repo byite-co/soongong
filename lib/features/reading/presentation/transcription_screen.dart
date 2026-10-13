@@ -201,12 +201,18 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
     if (transcription == null || _generation == null || _busy) return;
     final repo = ref.read(studyRepositoryProvider);
     final owner = ref.read(currentUserIdProvider);
+    final op = ++_operation;
+    final generation = _generation!;
+    bool current() =>
+        mounted &&
+        op == _operation &&
+        ref.read(currentUserIdProvider) == owner &&
+        repo.writer.purgeGeneration == generation;
     setState(() {
       _busy = true;
       _message = null;
     });
     try {
-      final generation = _generation!;
       final result = await repo.save(
         transcription: transcription,
         text: _text.text,
@@ -215,50 +221,65 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
         expectedRevision: _saved?.revision,
         plannerItemId: widget.plannerItemId,
       );
-      if (!mounted || ref.read(currentUserIdProvider) != owner) return;
+      final purge = await LocalPurge.readState(repo.db);
+      if (!current() || purge.inProgress || purge.generation != generation) {
+        return;
+      }
       ref.invalidate(studyDocumentsProvider);
       setState(() {
         _saved = result;
         _message = StudyStrings.saved;
       });
     } on Object {
-      if (mounted) setState(() => _message = StudyStrings.error);
+      if (current()) setState(() => _message = StudyStrings.error);
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (current()) setState(() => _busy = false);
     }
   }
 
   Future<void> _delete(StudyDocument document) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        content: const Text(StudyStrings.deletePrompt),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(StudyStrings.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(StudyStrings.delete),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
+    if (_busy) return;
     final repo = ref.read(studyRepositoryProvider);
-    setState(() => _busy = true);
+    final owner = ref.read(currentUserIdProvider);
+    final op = ++_operation;
+    bool current() =>
+        mounted && op == _operation && ref.read(currentUserIdProvider) == owner;
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
     try {
+      // Capture ownership before displaying the dialog. Confirmation cannot
+      // adopt the account/generation that replaced the document underneath it.
       final generation = await repo.writer.refreshPurgeGeneration();
+      if (!current()) return;
+      _generation = generation;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          content: const Text(StudyStrings.deletePrompt),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text(StudyStrings.cancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text(StudyStrings.delete),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !current()) return;
       await repo.delete(document.id, generation);
-      if (mounted) {
+      if (current() && repo.writer.purgeGeneration == generation) {
         ref.invalidate(studyDocumentsProvider);
         if (_saved?.id == document.id) setState(() => _saved = null);
       }
     } on Object {
-      if (mounted) setState(() => _message = StudyStrings.error);
+      if (current()) setState(() => _message = StudyStrings.error);
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (current()) setState(() => _busy = false);
     }
   }
 
