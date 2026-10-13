@@ -301,7 +301,13 @@ class StudyRepository {
     required int generation,
     bool online = true,
   }) async {
-    final cached = await get(id);
+    // Cached/offline reads must validate the caller's captured generation too.
+    final cached = await writer.runOwnedTransaction(
+      () => get(id),
+      generation: generation,
+      alive: alive,
+    );
+    _guard();
     if (cached != null || !online) {
       return cached;
     }

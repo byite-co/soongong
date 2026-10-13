@@ -1,5 +1,7 @@
 # 동기화 RPC (`docs/sync-rpc.md`) — S03 확정 · S13 접점
 
+> NEXT-01 추가 계약: 아래 D2의12개 테이블·push/pull은 그대로다. `study_*_v1`6개 owner RPC는 별도 버전의 metadata/body API로 추가했고 본문을 sync_tables에 넣지 않았다. 사용자 함수의 최신 exact 허용 목록은 `01_rls.sql`, 계약은 [study-api.md](study-api.md), 금액/worker는 [ai-usage.md](ai-usage.md)를 따른다. 문서 cursor는 D2 cursor와 별도로 유지해야 하며 실제 S13 연결은 미완료다.
+
 D2 의 서버 구현. 함수는 `supabase/migrations/0003_sync_rpc.sql`, 테스트는 `supabase/tests/02_sync_push.sql`(pgTAP 47건). 사용자 토큰으로 호출할 수 있는 RPC 는 **`sync_push` · `sync_pull` · `profile_set_onboarding_done`** 세 개뿐이다(D24).
 
 ## 1. 공통

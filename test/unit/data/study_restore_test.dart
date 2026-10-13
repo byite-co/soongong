@@ -112,6 +112,36 @@ void main() {
       expect(await h.raw('study_metadata', 'a'), isNotNull);
     },
   );
+  for (final online in [true, false]) {
+    test(
+      'FD-07 cached return rejects an old purge generation online=$online',
+      () async {
+        final oldGeneration = generation;
+        final purge = LocalPurge(h.db, h.ctx);
+        await purge.markPending(1);
+        await purge.run(epoch: 1);
+        await purge.clearPending();
+        final fresh = await h.writer.refreshPurgeGeneration();
+        final saved = await repo.save(
+          transcription: tr,
+          text: 'new generation',
+          generation: fresh,
+        );
+        final remote = BodyTransport();
+        await expectLater(
+          repo.loadBody(
+            saved.id,
+            remote,
+            generation: oldGeneration,
+            online: online,
+          ),
+          throwsA(isA<StateError>()),
+        );
+        expect(remote.calls, isEmpty);
+        expect((await repo.get(saved.id))!.text, 'new generation');
+      },
+    );
+  }
   test(
     'FD-05 invalid body enters error; metadata remains and no body is saved',
     () async {

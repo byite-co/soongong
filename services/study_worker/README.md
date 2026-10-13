@@ -2,8 +2,9 @@
 
 Private, bounded inference worker for `study-infer`. No images or problem
 text are written to disk. This is an allowlisted pilot, disabled by default;
-it does not charge the existing reading quota. Production usage accounting
-and held-out Korean handwriting/CSAT evaluations remain release gates.
+it does not charge the existing reading quota. NEXT-01 adds a separate durable
+point/cost ledger. Production commercial settings and held-out Korean
+handwriting/CSAT evaluations remain release gates.
 
 Run the OCR deployment on Linux with Python 3.11+, a separately provisioned environment
 from `requirements-ocr.txt`, and `python worker.py`. UniMERNet uses its own
@@ -30,6 +31,15 @@ against PyPI on 2026-10-13 KST. The initial requirements files are deployment
 inputs, not a claim that all transitive dependencies have been reproducibly
 locked or installed. Pin the final container digest and dependency hashes.
 
+NEXT-01 uses a strict v2 transport envelope (see `docs/study-api.md`). Configure
+`WORKER_MODEL_ID` to the exact approved local model identifier. Only provider
+`local` with a matching model is accepted by the current HTTP handler. Remote
+paid solve is deliberately unavailable until a provider-specific billing-bound
+adapter is implemented; the existing solver/CAS helpers remain regression-tested.
+The old bare v1 HTTP request is rejected. Do not turn on the pilot as part of
+NEXT-01. Server quote/policy/budget/points and explicit app quote approval are
+also required; none has a production default.
+
 Set a random WORKER_SECRET (at least 32 characters). Use a non-root container,
 read-only root filesystem/models, bounded memory/CPU/processes, disabled core
 dumps, outbound network denied, and TLS/private ingress. The subprocess
@@ -43,8 +53,10 @@ explicit pilot users), `STUDY_WORKER_URL=https://<private-host>/infer`, and
 `STUDY_WORKER_SECRET`. Missing configuration fails closed. No secrets belong in
 the Flutter environment. Deploy Edge and the worker explicitly; committing
 this code does not deploy it. Consent and purge epoch are rechecked after
-inference. Results remain local-only confirmed drafts, included in JSON export
-and local purge/account wipe; S13 synchronization is not implied.
+inference. Inference results are private temporary job results, not automatically confirmed
+records. Confirmed app records remain local until S13 is connected; restore RPCs
+and adapters are implemented separately. Local JSON export/purge/wipe include
+the new metadata/body distinction. Full S13 synchronization is not implied.
 
 Tests without model downloads: `python -m unittest discover -s services/study_worker`.
 Tests exercise image boundaries and manifest integrity, not OCR accuracy.
@@ -53,7 +65,8 @@ PaddleOCR API via its pinned package. No upstream assets or datasets copied.
 
 ## EXT-02 math solver
 
-The `solve` operation uses a separately deployed worker provisioned with
+The retained solver helper (HTTP execution is closed by NEXT-01 until verified
+billing bounds are implemented) targets a separately provisioned worker with
 `requirements-solver.lock` (`pip install --require-hashes -r ...`). Set
 `STUDY_SOLVER_WORKER_URL` on Edge, and `MATH_MODEL_URL` (HTTPS chat-completions
 endpoint), `MATH_MODEL_ID`, `MATH_MODEL_KEY` on that private worker. Choose and

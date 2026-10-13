@@ -3,7 +3,7 @@
 import { requireJobSecret } from "../_shared/auth.ts";
 import { AiJobs } from "../_shared/ai_jobs.ts";
 import { deleteObjects } from "../_shared/storage.ts";
-import { json } from "../_shared/http.ts";
+import { json, methodNotAllowed } from "../_shared/http.ts";
 import { StudyDeadline } from "../_shared/study_deadline.ts";
 
 export type DeleteStorage = (paths: string[]) => Promise<boolean>;
@@ -24,6 +24,7 @@ export async function runMaintenance(jobs = new AiJobs(), erase: DeleteStorage =
 }
 export async function handle(req:Request) {
   requireJobSecret(req);
+  const mna=methodNotAllowed(req); if(mna) return mna;
   const deadline=new StudyDeadline(req.signal,50_000);
   try {return json(await deadline.run(signal=>runMaintenance(undefined,undefined,signal)));}
   finally {deadline.close();}
