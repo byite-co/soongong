@@ -23,7 +23,7 @@ class LabRig {
   final Object? openError;
   final Object? startError;
   final Object? batteryError;
-  late final _LabSource source = _LabSource(openError);
+  late final LabSource source = LabSource(openError);
   final FakePresenceDetector detector = FakePresenceDetector();
   final FakeCameraPermissionGateway gateway = FakeCameraPermissionGateway();
   final FakeLifecycleSource lifecycle = FakeLifecycleSource();
@@ -83,8 +83,8 @@ class LabRig {
   String get csv => utf8.decode(shared.last.bytes);
 }
 
-class _LabSource extends FakeSeatFrameSource {
-  _LabSource(this.failure);
+class LabSource extends FakeSeatFrameSource {
+  LabSource(this.failure);
   final Object? failure;
   Object? probeError;
   Future<SeatCameraHandle>? delayedOpen;
