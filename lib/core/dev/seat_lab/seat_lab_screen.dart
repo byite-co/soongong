@@ -304,8 +304,8 @@ class _SeatLabScreenState extends ConsumerState<SeatLabScreen> {
     _logLine(SeatLabStrings.eventStarted);
     try {
       await engine.start(SeatEngineConfig(lowPower: _lowPower));
-    } catch (e, st) {
-      appLog.w('seat lab: start failed', error: e, stackTrace: st);
+    } catch (e) {
+      appLog.w('seat lab: start failed (${e.runtimeType})');
     }
     if (!mounted) return;
     setState(() {
@@ -377,7 +377,7 @@ class _SeatLabScreenState extends ConsumerState<SeatLabScreen> {
     try {
       return await (widget.batteryReader ?? _platformBattery)();
     } catch (e) {
-      appLog.d('seat lab: battery unavailable ($e)');
+      appLog.d('seat lab: battery unavailable (${e.runtimeType})');
       return null;
     }
   }

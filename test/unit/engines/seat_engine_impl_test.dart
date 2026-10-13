@@ -120,7 +120,7 @@ void main() {
       r.source.fault(CameraFault.inUse, 'The camera was already in use');
       async.flushMicrotasks();
       expect(r.events.single, isA<SeatCameraLost>());
-      expect(r.engine.lastFault, 'The camera was already in use');
+      expect(r.engine.lastFault, CameraFault.inUse.name);
       r.source.fault(CameraFault.fatal, 'fatal');
       expect(r.events.length, 1);
       r.stream(const Duration(seconds: 1), present: true);

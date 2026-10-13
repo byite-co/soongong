@@ -466,7 +466,7 @@ class SeatEngineImpl implements SeatEngine {
       },
       onError: (Object e, StackTrace st) {
         timer.cancel();
-        appLog.w('seat engine: camera probe failed', error: e, stackTrace: st);
+        appLog.w('seat engine: camera probe failed (${e.runtimeType})');
         if (!done.isCompleted) done.complete(CameraProbeResult.failed);
       },
     );
@@ -545,10 +545,18 @@ class SeatEngineImpl implements SeatEngine {
         ),
       );
     } on SeatFrameSourceException catch (e) {
-      _failStart(run, e.code, 'camera open failed (${e.code})');
+      // Only contract codes may reach logs, the lab screen or its CSV. A
+      // platform exception's arbitrary code/detail can carry private data.
+      final code = switch (e.code) {
+        SeatErrorCode.permissionDenied || SeatErrorCode.noCamera ||
+        SeatErrorCode.cameraBusy || SeatErrorCode.cameraInitFailed ||
+        SeatErrorCode.cameraInitTimeout => e.code,
+        _ => SeatErrorCode.cameraInitFailed,
+      };
+      _failStart(run, code, 'camera open failed ($code)');
       return;
-    } catch (e, st) {
-      _failStart(run, SeatErrorCode.cameraInitFailed, 'camera open failed', e, st);
+    } catch (e) {
+      _failStart(run, SeatErrorCode.cameraInitFailed, 'camera open failed', e);
       return;
     }
     if (camera == null) {
@@ -598,14 +606,14 @@ class SeatEngineImpl implements SeatEngine {
 
   /// A start that could not run. Nothing is reported for a run that is no
   /// longer current (`stop()` cancelled it, or a later `start()` replaced it).
-  void _failStart(_Run run, String code, String why, [Object? e, StackTrace? st]) {
+  void _failStart(_Run run, String code, String why, [Object? e]) {
     if (!_isCurrent(run)) {
       appLog.d('seat engine: $why (run no longer current)');
       return;
     }
     _gate.cancel();
     _detachLifecycle();
-    appLog.w('seat engine: $why', error: e, stackTrace: st);
+    appLog.w('seat engine: $why${e == null ? '' : ' (${e.runtimeType})'}');
     _events.add(SeatError(code));
   }
 
@@ -632,7 +640,7 @@ class SeatEngineImpl implements SeatEngine {
         if (!done.isCompleted) {
           done.completeError(e, st);
         } else {
-          appLog.w('seat engine: late camera open failed', error: e, stackTrace: st);
+          appLog.w('seat engine: late camera open failed (${e.runtimeType})');
         }
       },
     );
@@ -757,12 +765,14 @@ class SeatEngineImpl implements SeatEngine {
     handle.close().then(
       (r) {
         timer.cancel();
-        if (!r.isOk) appLog.w('seat engine: camera release ended ${r.outcome.name} ($why): $r');
+        if (!r.isOk) {
+          appLog.w('seat engine: camera release ended ${r.outcome.name} ($why)');
+        }
         if (!done.isCompleted) done.complete(r);
       },
       onError: (Object e, StackTrace st) {
         timer.cancel();
-        appLog.w('seat engine: camera close threw ($why)', error: e, stackTrace: st);
+        appLog.w('seat engine: camera close threw ($why; ${e.runtimeType})');
         if (!done.isCompleted) done.complete(CloseResult.failed(e, st));
       },
     );
@@ -869,8 +879,8 @@ class SeatEngineImpl implements SeatEngine {
   Future<void> _closeDetectorQuietly(_DetectorSlot slot) async {
     try {
       await slot.detector.close();
-    } catch (e, st) {
-      appLog.w('seat engine: detector #${slot.id} close failed', error: e, stackTrace: st);
+    } catch (e) {
+      appLog.w('seat engine: detector #${slot.id} close failed (${e.runtimeType})');
     }
   }
 
@@ -971,8 +981,8 @@ class SeatEngineImpl implements SeatEngine {
 
   void _onDetectorFailure(Object e, StackTrace st) {
     _detectorFailures++;
-    // Message only — never the frame.
-    appLog.w('seat engine: detector failed (${_detectorFailures}x)', error: e, stackTrace: st);
+    // The exception may include native frame metadata. Retain its type only.
+    appLog.w('seat engine: detector failed (${_detectorFailures}x; ${e.runtimeType})');
     if (_detectorFailures >= detectorFailureLimit) _reportDetectorFailed();
   }
 
@@ -1013,8 +1023,8 @@ class SeatEngineImpl implements SeatEngine {
 
   void _onFault(CameraFault fault, String description, int gen) {
     if (!_gate.generation.isCurrent(gen)) return; // a closed camera session
-    _lastFault = description;
-    appLog.w('seat engine: camera fault ${fault.name}: $description');
+    _lastFault = fault.name;
+    appLog.w('seat engine: camera fault ${fault.name}');
     switch (fault) {
       case CameraFault.inUse:
       case CameraFault.fatal:

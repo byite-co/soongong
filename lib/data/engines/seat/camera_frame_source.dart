@@ -282,9 +282,7 @@ class CameraFrameSource implements SeatFrameSource {
     void failed(Object e, StackTrace st) {
       timer.cancel();
       appLog.w(
-        'camera source: dispose failed ($why)',
-        error: e,
-        stackTrace: st,
+        'camera source: dispose failed ($why; ${e.runtimeType})',
       );
       if (!done.isCompleted) done.complete(CloseResult.failed(e, st));
     }
