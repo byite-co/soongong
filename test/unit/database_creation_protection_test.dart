@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:drift/drift.dart' show MigrationStrategy;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/data/db/app_database.dart';
 import 'package:soongong/data/db/database_protection.dart';
@@ -16,6 +18,21 @@ class _MemoryKeys implements DatabaseKeyStore {
   Future<void> write(String key) async {
     writes++;
     value = key;
+  }
+}
+
+class _FailingSchemaOpen extends AppDatabase {
+  _FailingSchemaOpen(super.executor);
+  @override
+  MigrationStrategy get migration {
+    final strategy = super.migration;
+    return MigrationStrategy(
+      onCreate: strategy.onCreate,
+      onUpgrade: strategy.onUpgrade,
+      beforeOpen: (_) async {
+        throw StateError('injected_schema_open_failure');
+      },
+    );
   }
 }
 
@@ -118,6 +135,108 @@ void main() {
       }
       await prepareDatabaseFile(file, store);
       expect(store.writes, 1, reason: 'normal restart reuses the durable key');
+    },
+  );
+
+  test(
+    'DB-01 successful preparation is not reused after failed schema open',
+    () async {
+      final store = _MemoryKeys(key);
+      final preparations = DatabasePreparations();
+      var calls = 0;
+      Future<PreparedDatabase> prepare() => preparations.run('synthetic', () {
+        calls++;
+        return prepareDatabaseFile(file, store);
+      });
+      final prepared = await prepare();
+      await expectLater(
+        requireReadyDatabase(
+          _FailingSchemaOpen(encryptedDatabaseFromPrepared(prepared)),
+        ),
+        throwsA(isA<DatabaseProtectionException>()),
+      );
+      // The failed executor has closed. Damage after successful preparation
+      // must be seen by bootstrap's next preparation, before any new schema SQL.
+      file.writeAsBytesSync([]);
+      final before = files();
+      await expectLater(prepare(), throwsA(isA<DatabaseProtectionException>()));
+      expect(calls, 2);
+      expect(files(), before);
+      expect(file.lengthSync(), 0);
+      expect(store.writes, 0);
+      expect(store.value == key, isTrue);
+    },
+  );
+
+  for (final damage in ['empty', 'missing']) {
+    test(
+      'DB-01 stale prepared executor refuses $damage file at first query',
+      () async {
+        final store = _MemoryKeys(key);
+        final prepared = await prepareDatabaseFile(file, store);
+        final original = file.readAsBytesSync();
+        final app = AppDatabase(encryptedDatabaseFromPrepared(prepared));
+        // The public production opener must re-check even when its caller skips
+        // preparation and retains an old descriptor/executor across a retry.
+        if (damage == 'empty') {
+          file.writeAsBytesSync([]);
+        } else {
+          file.deleteSync();
+        }
+        final before = files();
+        await expectLater(
+          requireReadyDatabase(app),
+          throwsA(isA<DatabaseProtectionException>()),
+        );
+        expect(files(), before);
+        expect(store.writes, 0);
+        expect(store.value == key, isTrue);
+
+        // Only fixture restoration makes the file usable again; the guard did
+        // not replace it. A fresh real executor can then open the same key.
+        file.writeAsBytesSync(original);
+        final restored = await requireReadyDatabase(
+          AppDatabase(encryptedDatabaseFromPrepared(prepared)),
+        );
+        expect(
+          (await restored.customSelect('PRAGMA user_version').getSingle())
+              .read<int>('user_version'),
+          3,
+        );
+        await restored.close();
+      },
+    );
+  }
+
+  test(
+    'DB-03 preparation joins only concurrent work and revalidates later success',
+    () async {
+      final store = _MemoryKeys();
+      final preparations = DatabasePreparations();
+      final release = Completer<void>();
+      var calls = 0;
+      Future<PreparedDatabase> prepare() =>
+          preparations.run('synthetic', () async {
+            calls++;
+            await release.future;
+            return prepareDatabaseFile(file, store);
+          });
+      final first = prepare();
+      final concurrent = prepare();
+      expect(identical(first, concurrent), isTrue);
+      expect(calls, 1);
+      release.complete();
+      final prepared = await first;
+      expect(identical(prepared, await concurrent), isTrue);
+      final later = await prepare();
+      expect(calls, 2);
+      expect(identical(prepared, later), isFalse);
+      expect(store.writes, 1);
+      final app = await requireReadyDatabase(
+        AppDatabase(encryptedDatabaseFromPrepared(later)),
+      );
+      await app.close();
+      expect(isPlainDatabase(file), isFalse);
     },
   );
 

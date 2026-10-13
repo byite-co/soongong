@@ -35,17 +35,27 @@ class PreparedDatabase {
   String toString() => 'PreparedDatabase';
 }
 
-final _preparations = <String, Future<PreparedDatabase>>{};
+/// Coalesces concurrent preparation only. A later open/retry must inspect the
+/// file and durable key again, even after an earlier preparation succeeded.
+class DatabasePreparations {
+  final _pending = <String, Future<PreparedDatabase>>{};
+
+  Future<PreparedDatabase> run(
+    String name,
+    Future<PreparedDatabase> Function() prepare,
+  ) => _pending.putIfAbsent(
+    name,
+    () => Future<PreparedDatabase>.sync(prepare).whenComplete(() {
+      _pending.remove(name);
+    }),
+  );
+}
+
+final _preparations = DatabasePreparations();
 
 /// Bootstrap calls this before any repositories, auth startup or DB writers.
 Future<PreparedDatabase> prepareDeviceDatabase(String name) =>
-    _preparations.putIfAbsent(
-      name,
-      () => _prepare(name).onError((Object error, StackTrace stack) {
-        _preparations.remove(name);
-        Error.throwWithStackTrace(error, stack);
-      }),
-    );
+    _preparations.run(name, () => _prepare(name));
 
 Future<PreparedDatabase> _prepare(String name) async {
   try {
@@ -105,13 +115,38 @@ QueryExecutor encryptedDatabase(String name) => LazyDatabase(() async {
 QueryExecutor encryptedDatabaseFromPrepared(PreparedDatabase prepared) {
   // Do not capture plugin objects/provider state into the database isolate.
   final key = prepared.key;
-  return NativeDatabase.createInBackground(
-    File(prepared.path),
-    setup: (db) {
-      configureDatabaseCipher(db, key);
-      db.select(
-        'SELECT count(*) FROM sqlite_master',
-      ); // Key checked before Drift.
-    },
-  );
+  final path = prepared.path;
+  return LazyDatabase(() {
+    // A prepared descriptor is not proof the file is still intact. Check when
+    // the executor actually opens, not only when the descriptor was issued.
+    _requirePreparedFile(path);
+    return NativeDatabase.createInBackground(
+      File(path),
+      setup: (db) {
+        // Check again in the background connection before any cipher/schema
+        // SQL can turn an empty file into a new database.
+        _requirePreparedFile(path);
+        configureDatabaseCipher(db, key);
+        db.select(
+          'SELECT count(*) FROM sqlite_master',
+        ); // Key checked before Drift.
+      },
+    );
+  });
+}
+
+void _requirePreparedFile(String path) {
+  try {
+    final file = File(path);
+    if (!file.existsSync()) {
+      throw const DatabaseProtectionException('prepared_database_missing');
+    }
+    if (file.lengthSync() == 0) {
+      throw const DatabaseProtectionException('empty_existing_database');
+    }
+  } on DatabaseProtectionException {
+    rethrow;
+  } catch (_) {
+    throw const DatabaseProtectionException('storage_unavailable');
+  }
 }
