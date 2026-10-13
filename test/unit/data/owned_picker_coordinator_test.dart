@@ -218,6 +218,44 @@ void main() {
     },
   );
 
+  test('PICK callback waits for its native writer before release', () async {
+    var checks = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_channel, (call) async {
+          methods.add(call.method);
+          if (call.method == 'status') {
+            return {'active': ++checks < 3, 'unknown': false};
+          }
+          if (call.method == 'release') expect(checks, 3);
+          return {'active': false, 'unknown': false};
+        });
+    picker.select = () async =>
+        XFile((current.file('photo.jpg')..writeAsBytesSync([8])).path);
+    final selected = (await coordinator.pick(
+      ImageSource.camera,
+      createTask: create,
+    ))!;
+    expect(await selected.readAsBytes(), [8]);
+    expect(methods.where((m) => m == 'release'), hasLength(1));
+    await selected.cleanup();
+  });
+
+  test('PICK unknown native writer is never released as completed', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_channel, (call) async {
+          methods.add(call.method);
+          return {'active': false, 'unknown': call.method == 'status'};
+        });
+    picker.select = () async =>
+        XFile((current.file('photo.jpg')..writeAsBytesSync([8])).path);
+    await expectLater(
+      coordinator.pick(ImageSource.camera, createTask: create),
+      throwsA(isA<TempStoreUnavailable>()),
+    );
+    expect(methods, isNot(contains('release')));
+    expect(current.directory.existsSync(), isFalse);
+  });
+
   test(
     'PICK-10 out-of-scope original cannot become OCR input or be deleted',
     () async {

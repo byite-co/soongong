@@ -238,7 +238,10 @@ void main() {
         );
         await store.sweep();
         await store.delete('cache/private.jpg');
-        await store.clearCache(now: DateTime.now());
+        await expectLater(
+          store.clearCache(now: DateTime.now()),
+          throwsA(isA<PhotoStoreUnavailable>()),
+        );
         expect(logs, isNotEmpty);
         for (final e in logs) {
           expect(

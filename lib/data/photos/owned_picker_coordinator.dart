@@ -42,6 +42,29 @@ class OwnedPickerCoordinator {
   bool _recovered = false;
   PickerRecoveryState state = PickerRecoveryState.none;
 
+  Future<void> _releaseCompleted(OwnedTempTask task) async {
+    // A camera result can reach Dart just before its native writer's finally.
+    // Wait briefly for that completed callback, never for an unbounded writer.
+    final elapsed = Stopwatch()..start();
+    while (true) {
+      final status = await channel
+          .invokeMapMethod<String, dynamic>('status', task.nativeArguments)
+          .timeout(const Duration(milliseconds: 500));
+      if (status == null || status['unknown'] != false) {
+        throw const TempStoreUnavailable();
+      }
+      if (status['active'] == false) break;
+      if (status['active'] != true ||
+          elapsed.elapsed >= const Duration(milliseconds: 500)) {
+        throw const TempStoreUnavailable();
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    await channel
+        .invokeMethod<void>('release', task.nativeArguments)
+        .timeout(const Duration(seconds: 5));
+  }
+
   Future<PickerRecoveryState> recover() =>
       _recovery ??= _recover().then((result) {
         state = result;
@@ -92,7 +115,9 @@ class OwnedPickerCoordinator {
     try {
       task = await createTask();
       task.check();
-      await channel.invokeMethod<void>('prepare', task.nativeArguments);
+      await channel
+          .invokeMethod<void>('prepare', task.nativeArguments)
+          .timeout(const Duration(seconds: 5));
       task.check();
       XFile? file;
       try {
@@ -101,7 +126,7 @@ class OwnedPickerCoordinator {
           requestFullMetadata: false,
         );
       } finally {
-        await channel.invokeMethod<void>('release', task.nativeArguments);
+        await _releaseCompleted(task);
       }
       task.check();
       if (file == null) return null;
