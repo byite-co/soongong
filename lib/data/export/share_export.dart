@@ -1,53 +1,81 @@
-// shareExportFile (S02): writes an [ExportFile] to the temp directory and
-// hands it to the system share sheet (share_plus). On failure the caller
-// shows a toast whose retry re-runs the SAME format (PRD 4.4).
-
 import 'dart:io';
 
-import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/domain/ids.dart';
+import '../temp/owned_temp_store.dart';
 import 'export_guard.dart';
 import 'export_service.dart';
 
 Future<void> shareExportFile(
   ExportFile file, {
   required ExportGuard guard,
+  Future<OwnedTempTask> Function()? createTask,
+  // Adapter test seams; production always supplies createTask.
   Future<Directory> Function()? temporaryDirectory,
   Future<void> Function(File, List<int>)? writeFile,
   Future<void> Function(ShareParams)? shareFile,
+  MethodChannel channel = const MethodChannel('co.byite.soongong/owned_share'),
 }) async {
-  Directory? owned;
-  var handedOff = false;
+  OwnedTempTask? task;
+  var attempted = false;
   try {
     await guard.check();
-    final dir = await (temporaryDirectory ?? getTemporaryDirectory)();
+    if (createTask != null) {
+      task = await createTask();
+    } else if (temporaryDirectory != null && shareFile != null) {
+      final dir = await temporaryDirectory();
+      final store = OwnedTempStore(
+        () async => Directory(p.join(dir.path, 'soongong-owned-v1')),
+      );
+      task = await store.create(newUuid(), 'export');
+    } else {
+      throw StateError('owned export scope required');
+    }
     await guard.check();
-    // The directory belongs only to this request, even for identical names.
-    owned = await dir.createTemp('soongong-export-');
-    await guard.check();
-    final out = File('${owned.path}/${file.name}');
+    task.check();
+    final extension = switch (file.mimeType) {
+      'application/json' => '.json',
+      'text/csv' => '.csv',
+      'application/zip' => '.zip',
+      _ => '.txt',
+    };
+    final relativeName = 'attachment$extension';
+    final out = task.file(relativeName);
     if (writeFile == null) {
-      await out.writeAsBytes(file.bytes, flush: true);
+      // Registered first; no event-loop ownership change during this write.
+      out.writeAsBytesSync(file.bytes, flush: true);
     } else {
       await writeFile(out, file.bytes);
     }
     await guard.check();
+    task.check();
     final params = ShareParams(
-      files: <XFile>[XFile(out.path, mimeType: file.mimeType, name: file.name)],
-      subject: file.name,
+      files: [
+        XFile(out.path, mimeType: file.mimeType, name: p.basename(file.name)),
+      ],
+      subject: p.basename(file.name),
     );
-    guard.checkNow(); // No await between this check and platform invocation.
-    handedOff = true;
-    await (shareFile == null
-        ? SharePlus.instance.share(params)
-        : shareFile(params));
+    // Every OS result, including throw/timeout, has the same bounded grace.
+    task.markShared();
+    guard.checkNow(); // No await between final guard and platform invocation.
+    attempted = true;
+    final call = shareFile != null
+        ? shareFile(params)
+        : channel.invokeMethod<void>('share', {
+            ...task.nativeArguments,
+            'relativeName': relativeName,
+            'name': p.basename(file.name),
+            'mimeType': file.mimeType,
+          });
+    await call.timeout(const Duration(seconds: 30));
   } finally {
-    // A platform call may have consumed/retained the file even if it throws.
-    // Do not remove an OS-owned attachment based on a share-sheet return.
-    // Cancelled preparations, however, are exclusively ours to delete.
-    if (!handedOff && owned != null && await owned.exists()) {
-      await owned.delete(recursive: true);
+    if (task != null) {
+      task.release();
+      if (!attempted && !(await task.cleanup()).complete)
+        throw const TempStoreUnavailable();
     }
   }
 }
