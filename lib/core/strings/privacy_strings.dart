@@ -26,13 +26,13 @@ abstract final class PrivacyStrings {
   static const String storedColumns = '데이터 · 위치 · 보관·삭제';
   static const List<(String, String, String)> d14Rows = <(String, String, String)>[
     ('착석 감지 프레임', '기기 메모리', '처리 즉시 해제 · 파일 저장·외부 전송 없음'),
-    ('착석 샘플(불리언·시각)', '기기 → 계정 동기화', '세션 구간으로만 저장 · 사용자가 지울 때까지'),
+    ('착석 샘플(불리언·시각)', '기기 · 현재 계정 동기화 미지원', '세션 구간으로만 저장 · 사용자가 지울 때까지'),
     ('판독 사진·파생 이미지(압축본·크롭)', '기기', '최초 보관일 +30일 · 즉시 삭제·로그아웃 삭제 · 재시도로 연장 없음 · 앱 시작·포그라운드·접근 시 만료분 삭제'),
     ('판독 사진·파생 이미지', '자사 서버', '처리 종료 직후 삭제 시도 · 실패분은 5분마다 재시도 · 잔여분은 업로드 +24시간 안에 삭제'),
     ('판독 사진', '외부 AI 벤더', '전송 사실 명시 · 보관·학습 사용·로그 정책은 확정 전(확인 중)'),
     ('미저장 판독 결과', '서버 → 기기 캐시', '7일 뒤 또는 버리기 시 서버 원문 삭제 · 저장한 확정 마크는 오답 기록의 일부'),
-    ('판독 결과·오답·복습·재풀이', '기기 → 계정 동기화', '사용자가 지울 때까지 · 구독 종료 시 읽기 전용'),
-    ('세션·플래너·과목·설정', '기기 → 계정 동기화', '사용자가 지울 때까지'),
+    ('판독 결과·오답·복습·재풀이', '기기 · 현재 계정 동기화 미지원', '사용자가 지울 때까지 · 구독 종료 시 읽기 전용'),
+    ('세션·플래너·과목·설정', '기기 · 현재 계정 동기화 미지원', '사용자가 지울 때까지'),
     ('계정(이메일·로그인 방식·동의 이력)', '서버', '계정 삭제까지 · 생년월일은 어디에도 저장하지 않음'),
     ('가입 패스', '서버', '소비 시 즉시 삭제 · 미소비는 발급 +10분 뒤 삭제 · 생년월일 미포함'),
     ('가입 승인 기록', '서버', '계정 삭제 시 삭제 · 연령 확인 결과·승인 시각·로그인 방식만'),
@@ -86,7 +86,7 @@ abstract final class PrivacyStrings {
   static const String photosRetry = '다시 시도';
 
   // Export
-  static const String deviceBackup = '기기 기록은 암호화되어 있으며 OS 백업이나 기기 이전으로 복원되지 않습니다. 필요한 기록은 내보내기로 보관해주세요.';
+  static const String deviceBackup = '기록은 이 기기에 암호화되어 저장됩니다. 현재 계정 동기화와 기기 변경 복원은 지원하지 않으며 OS 백업으로도 복원되지 않습니다. 내보내기는 파일 보관·공유 기능으로, 앱으로 가져오기나 복원은 지원하지 않습니다.';
   static const String export = '내 기록 내보내기';
   static const String exportCsv = 'CSV로 내보내기';
   static const String exportJson = 'JSON으로 내보내기';
@@ -106,7 +106,7 @@ abstract final class PrivacyStrings {
     '· 기기에 보관된 판독 사진',
     '· 직접 추가한 과목 · 앱 설정',
   ];
-  static const String deleteAllKeeps = '계정의 동기화 기록도 함께 지워집니다 · 구독과 로그인은 유지';
+  static const String deleteAllKeeps = '이 기기의 기록과 서버에 남은 관련 기록을 지웁니다 · 구독과 로그인은 유지';
   static const String deleteAllNext = '다음';
   static const String deleteAllFinalTitle = '정말 모든 기록을 삭제할까요?';
   static const String deleteAllFinalBody = '서버와 이 기기의 기록이 지금 지워지며 되돌릴 수 없습니다.\n로그인과 구독 상태는 유지됩니다.';
@@ -132,6 +132,6 @@ abstract final class PrivacyStrings {
 
   // Footer
   static const String footer =
-      '기록은 내 계정에 동기화되어 기기를 바꿔도 이어집니다.\n사진은 계정에 올라가지 않고 이 기기에만 30일 보관됩니다.\n제3자에게 기록을 넘기지 않습니다.';
+      '기록은 이 기기에 저장됩니다. 현재 다른 기기에서 로그인해도 기록이 복원되지 않습니다.\n손글씨 인식·풀이를 요청하면 별도 동의한 사진·문제 텍스트를 외부 처리에 사용합니다.\n착석·시선 관측 프레임은 기기 안에서만 처리합니다.';
   static const String loadFailed = '개인정보 화면을 불러오지 못했습니다';
 }

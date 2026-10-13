@@ -134,7 +134,7 @@ abstract final class SettingsStrings {
   static const String logoutBody = '기록은 계정에 저장되어 있어 다시 로그인하면 그대로 보입니다.\n이 기기의 판독 사진은 로그아웃 시 삭제됩니다.';
   static const String deleteAccountTitle = '계정을 삭제할까요?';
   static const String deleteAccountBody =
-      '계정과 동기화된 모든 기록(세션·플래너·오답·과목·설정)이 지워지고 되돌릴 수 없습니다.\n구독은 스토어에서 따로 해지해야 합니다.';
+      '계정과 이 기기의 모든 기록(세션·플래너·오답·과목·설정)이 지워지고 되돌릴 수 없습니다.\n구독은 스토어에서 따로 해지해야 합니다.';
   static const String deleteAccountConfirm = '삭제';
   static const String logoutConfirm = '로그아웃';
 

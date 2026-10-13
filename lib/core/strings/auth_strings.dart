@@ -24,7 +24,7 @@ abstract final class AuthStrings {
 
   // Login (00a)
   static const String loginTagline = '앉아 있던 시간만\n정직하게 잽니다';
-  static const String loginSub = '기록은 계정에 저장되어 기기를 바꿔도 이어집니다.';
+  static const String loginSub = '기록은 이 기기에 저장됩니다. 현재 기기 변경 복원은 지원하지 않습니다.';
   static const String loginApple = 'Apple로 계속';
   static const String loginGoogle = 'Google로 계속';
   static const String loginKakao = '카카오로 계속';
@@ -71,7 +71,7 @@ abstract final class AuthStrings {
 
   // Consent ① (/signup/complete)
   static const String consentAccountIntro = '계정을 만들려면 아래 처리에 동의가 필요합니다.';
-  static const String consentAccountItem1 = '세션·플래너·오답 기록이 계정에 저장되어 기기를 바꿔도 이어집니다.';
+  static const String consentAccountItem1 = '계정 정보는 서버에, 세션·플래너·오답 기록은 이 기기에 저장됩니다. 현재 기록의 계정 동기화와 기기 변경 복원은 지원하지 않습니다.';
   static const String consentAccountItem2 = '생년월일은 확인 즉시 폐기되며 어디에도 저장되지 않습니다.';
   static const String consentAccountItem3 = '판독 사진은 이 기기에만 30일 보관되고 계정에는 저장되지 않습니다.';
   static const String consentAccountCheck = '확인했습니다';
@@ -117,6 +117,6 @@ abstract final class AuthStrings {
 
   // Account (PRD 4.3c)
   static const String signOutConfirm = '기록은 계정에 남습니다 · 이 기기의 판독 사진은 삭제됩니다';
-  static const String deleteAccountConfirm = '동기화된 기록 전체가 삭제됩니다 · 구독은 스토어에서 별도로 해지합니다';
+  static const String deleteAccountConfirm = '계정과 이 기기의 기록이 삭제됩니다 · 구독은 스토어에서 별도로 해지합니다';
   static const String passwordResetSent = '재설정 링크를 보냈습니다 · 메일함을 확인하세요';
 }

@@ -75,6 +75,9 @@ void main() {
       expect(find.text(data), findsOneWidget, reason: 'D14 row: $data');
     }
     expect(find.text(PrivacyStrings.storedVendorPending), findsOneWidget);
+    expect(find.text(PrivacyStrings.deviceBackup), findsOneWidget);
+    expect(find.text(PrivacyStrings.footer), findsOneWidget);
+    expect(PrivacyStrings.footer, isNot(contains('기기를 바꿔도 이어집니다')));
     expect(find.textContaining('학습 미사용'), findsNothing, reason: 'no vendor promise beyond D14 (S09b)');
     expect(find.text(PrivacyStrings.correctionsStatus(0, AwayPolicy.thresholdFor(0).inSeconds)), findsOneWidget);
     for (final line in ConsentStrings.readingLines) {
