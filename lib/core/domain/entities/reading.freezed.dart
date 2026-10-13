@@ -642,7 +642,7 @@ as DateTime?,
 /// @nodoc
 mixin _$WrongItem {
 
- String get id; SyncStamp get stamp; String get requestId; String get subjectId; String get rangeText; int get pageIndex; int get number; WrongMark get mark; double get confidence; bool get userConfirmed; WrongItemStatus get status; DateTime? get resolvedAt;
+ String get id; SyncStamp get stamp; String get requestId; String get subjectId; String get rangeText; int get pageIndex; int get number; WrongMark get mark; double? get confidence; bool get userConfirmed; WrongItemStatus get status; DateTime? get resolvedAt;
 /// Create a copy of WrongItem
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -678,7 +678,7 @@ abstract mixin class $WrongItemCopyWith<$Res>  {
   factory $WrongItemCopyWith(WrongItem value, $Res Function(WrongItem) _then) = _$WrongItemCopyWithImpl;
 @useResult
 $Res call({
- String id, SyncStamp stamp, String requestId, String subjectId, String rangeText, int pageIndex, int number, WrongMark mark, double confidence, bool userConfirmed, WrongItemStatus status, DateTime? resolvedAt
+ String id, SyncStamp stamp, String requestId, String subjectId, String rangeText, int pageIndex, int number, WrongMark mark, double? confidence, bool userConfirmed, WrongItemStatus status, DateTime? resolvedAt
 });
 
 
@@ -695,7 +695,7 @@ class _$WrongItemCopyWithImpl<$Res>
 
 /// Create a copy of WrongItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? stamp = null,Object? requestId = null,Object? subjectId = null,Object? rangeText = null,Object? pageIndex = null,Object? number = null,Object? mark = null,Object? confidence = null,Object? userConfirmed = null,Object? status = null,Object? resolvedAt = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? stamp = null,Object? requestId = null,Object? subjectId = null,Object? rangeText = null,Object? pageIndex = null,Object? number = null,Object? mark = null,Object? confidence = freezed,Object? userConfirmed = null,Object? status = null,Object? resolvedAt = freezed,}) {
   return _then(WrongItem(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,stamp: null == stamp ? _self.stamp : stamp // ignore: cast_nullable_to_non_nullable
@@ -705,8 +705,8 @@ as String,rangeText: null == rangeText ? _self.rangeText : rangeText // ignore: 
 as String,pageIndex: null == pageIndex ? _self.pageIndex : pageIndex // ignore: cast_nullable_to_non_nullable
 as int,number: null == number ? _self.number : number // ignore: cast_nullable_to_non_nullable
 as int,mark: null == mark ? _self.mark : mark // ignore: cast_nullable_to_non_nullable
-as WrongMark,confidence: null == confidence ? _self.confidence : confidence // ignore: cast_nullable_to_non_nullable
-as double,userConfirmed: null == userConfirmed ? _self.userConfirmed : userConfirmed // ignore: cast_nullable_to_non_nullable
+as WrongMark,confidence: freezed == confidence ? _self.confidence : confidence // ignore: cast_nullable_to_non_nullable
+as double?,userConfirmed: null == userConfirmed ? _self.userConfirmed : userConfirmed // ignore: cast_nullable_to_non_nullable
 as bool,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as WrongItemStatus,resolvedAt: freezed == resolvedAt ? _self.resolvedAt : resolvedAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,
@@ -803,7 +803,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  SyncStamp stamp,  String requestId,  String subjectId,  String rangeText,  int pageIndex,  int number,  WrongMark mark,  double confidence,  bool userConfirmed,  WrongItemStatus status,  DateTime? resolvedAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  SyncStamp stamp,  String requestId,  String subjectId,  String rangeText,  int pageIndex,  int number,  WrongMark mark,  double? confidence,  bool userConfirmed,  WrongItemStatus status,  DateTime? resolvedAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _WrongItem() when $default != null:
 return $default(_that.id,_that.stamp,_that.requestId,_that.subjectId,_that.rangeText,_that.pageIndex,_that.number,_that.mark,_that.confidence,_that.userConfirmed,_that.status,_that.resolvedAt);case _:
@@ -824,7 +824,7 @@ return $default(_that.id,_that.stamp,_that.requestId,_that.subjectId,_that.range
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  SyncStamp stamp,  String requestId,  String subjectId,  String rangeText,  int pageIndex,  int number,  WrongMark mark,  double confidence,  bool userConfirmed,  WrongItemStatus status,  DateTime? resolvedAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  SyncStamp stamp,  String requestId,  String subjectId,  String rangeText,  int pageIndex,  int number,  WrongMark mark,  double? confidence,  bool userConfirmed,  WrongItemStatus status,  DateTime? resolvedAt)  $default,) {final _that = this;
 switch (_that) {
 case _WrongItem():
 return $default(_that.id,_that.stamp,_that.requestId,_that.subjectId,_that.rangeText,_that.pageIndex,_that.number,_that.mark,_that.confidence,_that.userConfirmed,_that.status,_that.resolvedAt);case _:
@@ -844,7 +844,7 @@ return $default(_that.id,_that.stamp,_that.requestId,_that.subjectId,_that.range
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  SyncStamp stamp,  String requestId,  String subjectId,  String rangeText,  int pageIndex,  int number,  WrongMark mark,  double confidence,  bool userConfirmed,  WrongItemStatus status,  DateTime? resolvedAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  SyncStamp stamp,  String requestId,  String subjectId,  String rangeText,  int pageIndex,  int number,  WrongMark mark,  double? confidence,  bool userConfirmed,  WrongItemStatus status,  DateTime? resolvedAt)?  $default,) {final _that = this;
 switch (_that) {
 case _WrongItem() when $default != null:
 return $default(_that.id,_that.stamp,_that.requestId,_that.subjectId,_that.rangeText,_that.pageIndex,_that.number,_that.mark,_that.confidence,_that.userConfirmed,_that.status,_that.resolvedAt);case _:
@@ -870,7 +870,7 @@ class _WrongItem implements WrongItem {
 @override final  int pageIndex;
 @override final  int number;
 @override final  WrongMark mark;
-@override final  double confidence;
+@override final  double? confidence;
 @override final  bool userConfirmed;
 @override@JsonKey() final  WrongItemStatus status;
 @override final  DateTime? resolvedAt;
@@ -907,7 +907,7 @@ abstract mixin class _$WrongItemCopyWith<$Res> implements $WrongItemCopyWith<$Re
   factory _$WrongItemCopyWith(_WrongItem value, $Res Function(_WrongItem) _then) = __$WrongItemCopyWithImpl;
 @override @useResult
 $Res call({
- String id, SyncStamp stamp, String requestId, String subjectId, String rangeText, int pageIndex, int number, WrongMark mark, double confidence, bool userConfirmed, WrongItemStatus status, DateTime? resolvedAt
+ String id, SyncStamp stamp, String requestId, String subjectId, String rangeText, int pageIndex, int number, WrongMark mark, double? confidence, bool userConfirmed, WrongItemStatus status, DateTime? resolvedAt
 });
 
 
@@ -924,7 +924,7 @@ class __$WrongItemCopyWithImpl<$Res>
 
 /// Create a copy of WrongItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? stamp = null,Object? requestId = null,Object? subjectId = null,Object? rangeText = null,Object? pageIndex = null,Object? number = null,Object? mark = null,Object? confidence = null,Object? userConfirmed = null,Object? status = null,Object? resolvedAt = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? stamp = null,Object? requestId = null,Object? subjectId = null,Object? rangeText = null,Object? pageIndex = null,Object? number = null,Object? mark = null,Object? confidence = freezed,Object? userConfirmed = null,Object? status = null,Object? resolvedAt = freezed,}) {
   return _then(_WrongItem(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,stamp: null == stamp ? _self.stamp : stamp // ignore: cast_nullable_to_non_nullable
@@ -934,8 +934,8 @@ as String,rangeText: null == rangeText ? _self.rangeText : rangeText // ignore: 
 as String,pageIndex: null == pageIndex ? _self.pageIndex : pageIndex // ignore: cast_nullable_to_non_nullable
 as int,number: null == number ? _self.number : number // ignore: cast_nullable_to_non_nullable
 as int,mark: null == mark ? _self.mark : mark // ignore: cast_nullable_to_non_nullable
-as WrongMark,confidence: null == confidence ? _self.confidence : confidence // ignore: cast_nullable_to_non_nullable
-as double,userConfirmed: null == userConfirmed ? _self.userConfirmed : userConfirmed // ignore: cast_nullable_to_non_nullable
+as WrongMark,confidence: freezed == confidence ? _self.confidence : confidence // ignore: cast_nullable_to_non_nullable
+as double?,userConfirmed: null == userConfirmed ? _self.userConfirmed : userConfirmed // ignore: cast_nullable_to_non_nullable
 as bool,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as WrongItemStatus,resolvedAt: freezed == resolvedAt ? _self.resolvedAt : resolvedAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,
