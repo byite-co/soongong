@@ -75,7 +75,7 @@ class StudyRepository {
       final revision = (existing?.revision ?? 0) + 1;
       if (existing == null) {
         if (await _summary(documentId) != null) {
-          throw StateError('document_changed');
+          throw Exception('document_changed');
         }
         // A generated ID is a new row, never permission to overwrite a row
         // that happens to have the same ID (including another account's row).
@@ -150,17 +150,25 @@ class StudyRepository {
     return row == null ? null : _document(row);
   }, alive: alive);
 
-  Future<List<StudySummary>> list() => writer.runOwnedTransaction(() async {
-    final rows = await db
-        .customSelect(
-          'SELECT id,user_id,purge_epoch,revision,kind,title,has_body,has_solution,has_photo,cache_state,deleted,server_seq,updated_at '
-          'FROM study_metadata WHERE user_id=? AND deleted=0 ORDER BY updated_at DESC,id LIMIT 100',
-          variables: [Variable(writer.ctx.userId)],
-        )
-        .get();
-    _guard();
-    return rows.map(_metadata).toList();
-  }, alive: alive);
+  Future<List<StudySummary>> list() => writer.runOwnedTransaction(
+    () async {
+      _guard();
+      if ((await LocalPurge.readState(db)).inProgress) {
+        return <StudySummary>[];
+      }
+      final rows = await db
+          .customSelect(
+            'SELECT id,user_id,purge_epoch,revision,kind,title,has_body,has_solution,has_photo,cache_state,deleted,server_seq,updated_at '
+            'FROM study_metadata WHERE user_id=? AND deleted=0 ORDER BY updated_at DESC,id LIMIT 100',
+            variables: [Variable(writer.ctx.userId)],
+          )
+          .get();
+      _guard();
+      return rows.map(_metadata).toList();
+    },
+    alive: alive,
+    purgeWork: true,
+  );
 
   Future<void> delete(String id, int generation) => writer.runOwnedTransaction(
     () async {

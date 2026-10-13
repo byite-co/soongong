@@ -75,6 +75,8 @@ select throws_ok($$select public.ai_reconcile((select id from fd_jobs where name
 
 -- Restore assets use a separate trusted clock and separate deletion obligations.
 select is(public.study_photo_register_v1(0,'10000000-0000-4000-8000-000000000101','50000000-0000-4000-8000-000000000101')->>'available','true','FD-21 first server asset available');
+select throws_ok($$select public.study_photo_access('bbbbbbbb-0000-4000-8000-000000000101',0,'50000000-0000-4000-8000-000000000101')$$,'P0001','asset_unavailable','FD-03 B cannot obtain A photo grant');
+select throws_ok($$select public.study_photo_access('aaaaaaaa-0000-4000-8000-000000000101',1,'50000000-0000-4000-8000-000000000101')$$,'P0001','no_profile','FD-03 photo epoch mismatch rejected');
 create temp table fd_photo as select * from public.study_photo_assets;
 create or replace function public.study_now() returns timestamptz language sql volatile set search_path='' as $$ select '2026-11-30T15:00:00Z'::timestamptz $$;
 select is(public.study_photo_register_v1(0,'10000000-0000-4000-8000-000000000101','50000000-0000-4000-8000-000000000101')->>'available','true','FD-21 one second before expiry');

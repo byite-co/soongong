@@ -104,6 +104,15 @@ void main() {
     },
   );
   test(
+    'FD-11 pending purge suppresses the list before physical row cleanup',
+    () async {
+      await seed();
+      await LocalPurge(h.db, h.ctx).markPending(1);
+      expect(await repo.list(), isEmpty);
+      expect(await h.raw('study_metadata', 'a'), isNotNull);
+    },
+  );
+  test(
     'FD-05 invalid body enters error; metadata remains and no body is saved',
     () async {
       await seed();

@@ -156,6 +156,9 @@ Deno.test("FD-06/15 actual solve points and source revision change invalidate pe
   assertEquals((await jobs.finish(job.job_id,"succeeded",solution,signal())).state,"cancelled");assertEquals(await stats(),{remaining:10,reserved:0});
   assertEquals(await value(`select result from public.ai_jobs where id='${job.job_id}'`),null);assertEquals(await value("select status from public.ai_costs"),"unknown");
   await assertRejects(()=>jobs.reserve(args,signal()),HttpError,"request_conflict");
+  const next=await jobs.reserve({...args,p_request:crypto.randomUUID(),p_revision:2},signal());
+  await jobs.dispatch(A,0,next.job_id,signal());await jobs.finish(next.job_id,"succeeded",{...solution,revision:2},signal());
+  assertEquals(await stats(),{remaining:3,reserved:0}); // Successful solve settles 7, OCR settles 3.
 });
 
 Deno.test("FD-01 no key, allowlist mismatch, revoked consent and missing budget reserve nothing",async()=>{
