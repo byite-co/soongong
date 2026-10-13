@@ -11,9 +11,9 @@ import 'package:go_router/go_router.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 import '../../data/export/export_service.dart';
-import '../../features/privacy/application/privacy_providers.dart';
 import '../../data/repositories/repositories.dart';
 import '../../data/seed/dev_seeder.dart';
+import '../../features/privacy/application/privacy_providers.dart';
 import '../config/app_config.dart';
 import '../contracts/billing_gateway.dart';
 import '../contracts/fakes/fakes.dart';
