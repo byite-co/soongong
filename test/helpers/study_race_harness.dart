@@ -216,7 +216,10 @@ class StudyRaceHarness {
                 }
                 approvedDispatches++;
                 final request = body['request_id'] as String;
-                expect((await repository.get(request))!.state, 'submitting');
+                // This callback runs while the widget tester may be pumping.
+                // Capture the pre-response state; assert in the test body so
+                // Flutter's guarded expect API cannot interrupt the request.
+                durableStateAtDispatch = (await repository.get(request))?.state;
                 return {
                   'version': 2,
                   'job_id': '33333333-3333-4333-8333-333333333333',
@@ -241,6 +244,7 @@ class StudyRaceHarness {
   final solver = ControlledSolver();
   final transcriber = ControlledTranscriber();
   int approvedDispatches = 0;
+  String? durableStateAtDispatch;
   Completer<void> approvedFinished = Completer<void>();
   Object? approvedFailure;
   ControlledStudyRepository get repo =>

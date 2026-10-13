@@ -82,6 +82,7 @@ void main() {
       expect(rig.approvedFailure, isNull);
       await pumpStudy(tester);
       expect(rig.approvedDispatches, 1);
+      expect(rig.durableStateAtDispatch, 'submitting');
       expect(await completeStudy(tester, rig.repo.list()), isEmpty);
       await tester.scrollUntilVisible(
         find.widgetWithText(AppButton, StudyStrings.confirm),
