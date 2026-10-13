@@ -66,6 +66,10 @@ select is((select sum(remaining) from public.ai_point_lots),7::bigint,'FD-16 dup
 select is((select count(*) from public.ai_point_ledger where kind='settle'),1::bigint,'FD-16 one final ledger event');
 select is((select status from public.ai_costs where job_id=(select id from fd_jobs where name='success')),'unknown','FD-17 usage absence never zero cost');
 create or replace function public.study_now() returns timestamptz language sql volatile set search_path='' as $$ select '2026-10-31T15:00:01Z'::timestamptz $$;
+select throws_ok($$select public.ai_reconcile((select id from fd_jobs where name='success'),'40000000-0000-4000-8000-000000000101',0.00000000001,'{}')$$,'P0001','invalid_cost','FD-20 reject unrepresentable original currency precision instead of rounding retry identity');
+select throws_ok($$select public.ai_reconcile((select id from fd_jobs where name='success'),'40000000-0000-4000-8000-000000000101','NaN'::numeric,'{}')$$,'P0001','invalid_cost','FD-20 nonfinite cost is not a settlement');
+select throws_ok($$select public.ai_reconcile((select id from fd_jobs where name='success'),'40000000-0000-4000-8000-000000000101',.12,'{"source_text":"not usage"}')$$,'P0001','invalid_cost','FD-27 cost usage cannot contain source text');
+select throws_ok($$select public.ai_budget_set('2026-11-01',300.000000001,0,.8)$$,'P0001','budget_invalid','FD-20 budget precision is explicit');
 select public.ai_reconcile((select id from fd_jobs where name='success'),'40000000-0000-4000-8000-000000000101',.12,'{"input_tokens":100,"output_tokens":10}');
 select public.ai_reconcile((select id from fd_jobs where name='success'),'40000000-0000-4000-8000-000000000101',.12,'{"input_tokens":100,"output_tokens":10}');
 select is((select spent_krw from public.ai_budgets where month='2026-10-01'),120::numeric,'FD-20 late settlement goes to original KST month once');

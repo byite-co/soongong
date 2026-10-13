@@ -304,7 +304,7 @@ declare b public.ai_budgets;
 begin
  perform public.ai_lock();
  select * into b from public.ai_budgets where month=p_month;
- if p_limit is null or p_limit<0 or p_limit>300000 or p_infrastructure is null or p_infrastructure<0
+ if p_limit is null or p_limit<0 or p_limit>300000 or p_limit<>trunc(p_limit,8) or p_infrastructure is null or p_infrastructure<0 or p_infrastructure<>trunc(p_infrastructure,8)
  or p_infrastructure+coalesce(b.spent_krw,0)+coalesce(b.reserved_krw,0)>p_limit then raise exception 'budget_invalid'; end if;
  insert into public.ai_budgets(month,limit_krw,infrastructure_krw,warning_ratio) values(p_month,p_limit,p_infrastructure,p_warning)
  on conflict(month) do update set limit_krw=p_limit,infrastructure_krw=p_infrastructure,warning_ratio=p_warning;
@@ -461,7 +461,7 @@ begin
  -- Cost-only path NEVER takes a user lock or creates a profile/wallet.
  perform public.ai_lock(); select * into c from public.ai_costs where job_id=p_job for update;
  if not found then raise exception 'cost_unavailable'; end if;
- if p_settlement is null or p_actual is null or p_actual<0 or p_actual::text in ('NaN','Infinity','-Infinity') or p_usage is null or jsonb_typeof(p_usage)<>'object'
+ if p_settlement is null or p_actual is null or p_actual<0 or p_actual::text in ('NaN','Infinity','-Infinity') or p_actual<>trunc(p_actual,10) or p_usage is null or jsonb_typeof(p_usage)<>'object'
  or octet_length(p_usage::text)>2000 or exists(select from jsonb_object_keys(p_usage) k where k not in ('input_tokens','output_tokens','cached_tokens','reasoning_tokens','requests'))
  or exists(select from jsonb_each(p_usage) v where jsonb_typeof(v.value)<>'number' or v.value::text !~ '^[0-9]+$') then raise exception 'invalid_cost'; end if;
  if c.status='settled' then
