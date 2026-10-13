@@ -127,7 +127,7 @@ class ImageResizer {
     try {
       exifDataCopier.copyExif(new ExifInterface(filePathOri), new ExifInterface(filePathDest));
     } catch (Exception ex) {
-      Log.e("ImageResizer", "Error preserving Exif data on selected image: " + ex);
+      Log.e("ImageResizer", "Unable to preserve image metadata.");
     }
   }
 
