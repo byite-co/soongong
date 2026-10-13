@@ -173,7 +173,7 @@ class AuthGate extends _$AuthGate {
             .revoke(previous)
             .then<void>(
               (_) {},
-              onError: (Object _, StackTrace __) {
+              onError: (Object _, StackTrace _) {
                 appLog.w('auth gate: temporary cleanup pending');
               },
             ),

@@ -8,6 +8,7 @@ import 'package:soongong/data/auth/auth_models.dart';
 import 'package:soongong/data/repositories/repositories.dart';
 import 'package:soongong/data/temp/owned_temp_store.dart';
 import 'package:soongong/data/temp/temp_providers.dart';
+import 'package:soongong/features/auth/domain/auth_redirect.dart';
 import 'package:soongong/features/privacy/application/photo_retention.dart';
 import 'package:soongong/features/settings/application/account_controller.dart';
 
@@ -162,6 +163,11 @@ void main() {
       final error = h.container.read(authGateProvider) as AuthGateProfileError;
       expect(error.storageBlocked, isTrue);
       expect(error.userId, isNull);
+      expect(error.hasUser, isFalse);
+      expect(
+        resolveAuthRedirect(gate: error, uri: Uri.parse(AppPaths.home)),
+        AppPaths.launch,
+      );
       expect(
         await h.container.read(accountBindingProvider).current(),
         _a.userId,

@@ -118,7 +118,7 @@ class AccountBinding {
 
   Future<void> finishDeletion(String userId) {
     final operation = _tail.then((_) => _finishDeletion(userId));
-    _tail = operation.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _tail = operation.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return operation;
   }
 
@@ -191,7 +191,7 @@ class AccountBinding {
         return wiped;
       });
     });
-    _tail = operation.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _tail = operation.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return operation;
   }
 
