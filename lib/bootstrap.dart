@@ -5,7 +5,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' show KakaoSdk;
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart'
+    show KakaoSdk;
 
 import 'app.dart';
 import 'core/config/app_config.dart';
@@ -18,6 +19,7 @@ import 'data/db/app_database.dart';
 import 'data/db/database_blocked_app.dart';
 import 'data/db/database_protection.dart';
 import 'data/db/encrypted_database.dart';
+import 'data/repositories/repository_providers.dart' show appDatabaseProvider;
 import 'data/startup/startup_tasks.dart';
 
 Future<void> bootstrap() async {
@@ -38,8 +40,12 @@ Future<void> bootstrap() async {
   };
 
   runApp(const ProviderScope(child: DatabasePreparingApp()));
+  late final AppDatabase database;
   try {
     await prepareDeviceDatabase(databaseNameFor(AppConfig.flavor.name));
+    database = await requireReadyDatabase(
+      AppDatabase.open(flavor: AppConfig.flavor.name),
+    );
   } on DatabaseProtectionException {
     runApp(const ProviderScope(child: DatabaseBlockedApp(retry: bootstrap)));
     return;
@@ -57,18 +63,25 @@ Future<void> bootstrap() async {
     'bootstrap · flavor=${AppConfig.flavor.name} '
     'devTools=${AppConfig.devToolsEnabled} '
     'backend=${AppConfig.hasBackendConfig} '
-    'mode=${kReleaseMode ? 'release' : kProfileMode ? 'profile' : 'debug'}',
+    'mode=${kReleaseMode
+        ? 'release'
+        : kProfileMode
+        ? 'profile'
+        : 'debug'}',
   );
 
   final container = ProviderContainer(
-    overrides: [deviceIdProvider.overrideWithValue(deviceId)],
+    overrides: [
+      deviceIdProvider.overrideWithValue(deviceId),
+      appDatabaseProvider.overrideWith((ref) {
+        ref.onDispose(database.close);
+        return database;
+      }),
+    ],
   );
   await runStartupTasks(container);
 
   runApp(
-    UncontrolledProviderScope(
-      container: container,
-      child: const SoongongApp(),
-    ),
+    UncontrolledProviderScope(container: container, child: const SoongongApp()),
   );
 }

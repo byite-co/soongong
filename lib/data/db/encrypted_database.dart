@@ -14,7 +14,10 @@ class PlatformDatabaseKeyStore implements DatabaseKeyStore {
   PlatformDatabaseKeyStore(this.name);
   final String name;
   static const _storage = FlutterSecureStorage(
-    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device, synchronizable: false),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+      synchronizable: false,
+    ),
   );
   // File/flavor scoped. Auth logout removes auth keys only, never this key.
   String get _key => 'soongong.database.$name.chacha20.v1';
@@ -36,37 +39,62 @@ final _preparations = <String, Future<PreparedDatabase>>{};
 
 /// Bootstrap calls this before any repositories, auth startup or DB writers.
 Future<PreparedDatabase> prepareDeviceDatabase(String name) =>
-    _preparations.putIfAbsent(name, () => _prepare(name).onError((Object error, StackTrace stack) {
-      _preparations.remove(name);
-      Error.throwWithStackTrace(error, stack);
-    }));
+    _preparations.putIfAbsent(
+      name,
+      () => _prepare(name).onError((Object error, StackTrace stack) {
+        _preparations.remove(name);
+        Error.throwWithStackTrace(error, stack);
+      }),
+    );
 
 Future<PreparedDatabase> _prepare(String name) async {
   try {
-    if (!RegExp(r'^soongong_(dev|prod)$').hasMatch(name)) throw const DatabaseProtectionException('invalid_scope');
+    if (!RegExp(r'^soongong_(dev|prod)$').hasMatch(name)) {
+      throw const DatabaseProtectionException('invalid_scope');
+    }
     final directory = await getApplicationDocumentsDirectory();
     // Matches drift_flutter 0.3.1's exact legacy path, including .sqlite.
     final path = p.join(directory.path, '$name.sqlite');
     if (Platform.isIOS) {
-      await const MethodChannel('co.byite.soongong/storage').invokeMethod<void>('excludeDocumentsFromBackup');
+      await const MethodChannel(
+        'co.byite.soongong/storage',
+      ).invokeMethod<void>('excludeDocumentsFromBackup');
     }
     final file = File(path);
-    final protectedData = (file.existsSync() && !isPlainDatabase(file)) ||
-        File('$path.encrypting').existsSync() || File('$path.plaintext').existsSync();
-    final key = await requireDatabaseKey(PlatformDatabaseKeyStore(name), encryptedDataExists: protectedData);
+    final protectedData =
+        (file.existsSync() && !isPlainDatabase(file)) ||
+        File('$path.encrypting').existsSync() ||
+        File('$path.plaintext').existsSync();
+    final key = await requireDatabaseKey(
+      PlatformDatabaseKeyStore(name),
+      encryptedDataExists: protectedData,
+    );
     await Isolate.run(() => DatabaseProtection(File(path), key).prepare());
     return PreparedDatabase(path, key);
-  } on DatabaseProtectionException { rethrow; }
-  catch (_) { throw const DatabaseProtectionException('storage_unavailable'); }
+  } on DatabaseProtectionException {
+    rethrow;
+  } catch (_) {
+    throw const DatabaseProtectionException('storage_unavailable');
+  }
 }
 
 QueryExecutor encryptedDatabase(String name) => LazyDatabase(() async {
   final prepared = await prepareDeviceDatabase(name);
+  return encryptedDatabaseFromPrepared(prepared);
+});
+
+/// Also used by codec integration tests with a prepared synthetic file, without
+/// replacing the production Drift executor or its cipher setup with a fake.
+QueryExecutor encryptedDatabaseFromPrepared(PreparedDatabase prepared) {
   // Do not capture plugin objects/provider state into the database isolate.
   final key = prepared.key;
-  return NativeDatabase.createInBackground(File(prepared.path), setup: (db) {
-    configureDatabaseCipher(db, key);
-    db.select('SELECT count(*) FROM sqlite_master'); // Key checked before Drift.
-    db.execute('PRAGMA journal_mode = DELETE'); // Fully encrypted header on iOS.
-  });
-});
+  return NativeDatabase.createInBackground(
+    File(prepared.path),
+    setup: (db) {
+      configureDatabaseCipher(db, key);
+      db.select(
+        'SELECT count(*) FROM sqlite_master',
+      ); // Key checked before Drift.
+    },
+  );
+}

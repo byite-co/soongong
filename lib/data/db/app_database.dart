@@ -13,6 +13,7 @@ import 'package:uuid/uuid.dart';
 // The generated part references the wire enums and converters directly.
 import '../../core/domain/enums.dart';
 import 'converters.dart';
+import 'database_protection.dart';
 import 'encrypted_database.dart';
 import 'purge_gate.dart';
 import 'study_schema.dart';
@@ -58,7 +59,7 @@ class AppDatabase extends _$AppDatabase {
 
   /// On-device encrypted database (sqlite3mc native assets, background Drift).
   AppDatabase.open({required String flavor})
-      : super(encryptedDatabase(databaseNameFor(flavor)));
+    : super(encryptedDatabase(databaseNameFor(flavor)));
 
   /// In-memory database for unit tests and the widget catalog.
   AppDatabase.inMemory() : super(NativeDatabase.memory());
@@ -77,50 +78,94 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) async {
-          await m.createAll();
-          await customStatement(createStudyDocuments);
-          for (final sql in partialUniqueIndexes) {
-            await customStatement(sql);
-          }
-        },
-        onUpgrade: (m, from, to) => transaction(() async {
-          if (from < 3) await customStatement(createStudyDocuments);
-          if (from < 2) {
-            // drift runs onUpgrade outside a transaction; dedupe and index
-            // creation must commit or roll back together (S02c), so an
-            // explicit transaction wraps both. The unique index cannot be
-            // created while duplicates exist.
-            await transaction(() async {
-              await _dedupeLiveReviewEntries();
-              for (final sql in partialUniqueIndexes) {
-                await customStatement(sql);
-              }
-            });
-          }
-        }),
-        beforeOpen: (details) async {
-          await customStatement('PRAGMA foreign_keys = OFF');
-          await customStatement('PRAGMA journal_mode = WAL');
-        },
+    onCreate: (m) => transaction(() async {
+      await m.createAll();
+      await _ensureStudyDocuments();
+      for (final sql in partialUniqueIndexes) {
+        await customStatement(sql);
+      }
+      await customStatement('PRAGMA user_version = $schemaVersion');
+    }),
+    onUpgrade: (m, from, to) => transaction(() async {
+      if (from < 3) await _ensureStudyDocuments();
+      if (from < 2) {
+        await _dedupeLiveReviewEntries();
+        for (final sql in partialUniqueIndexes) {
+          await customStatement(sql);
+        }
+      }
+      // Drift 2.35 writes this again AFTER beforeOpen. Persist it here,
+      // with the schema, so a later failure cannot leave v3 tables at v2.
+      await customStatement('PRAGMA user_version = $to');
+    }),
+    beforeOpen: (details) async {
+      await customStatement('PRAGMA foreign_keys = OFF');
+      // Journal changes cannot run inside the schema transaction. This
+      // is the sole runtime journal policy, including the encrypted opener.
+      final databases = await customSelect('PRAGMA database_list').get();
+      final main = databases.singleWhere(
+        (row) => row.read<String>('name') == 'main',
       );
+      final memory = main.read<String>('file').isEmpty;
+      final journal = await customSelect(
+        'PRAGMA journal_mode = DELETE',
+      ).getSingle();
+      if (journal.read<String>('journal_mode') !=
+          (memory ? 'memory' : 'delete')) {
+        throw const DatabaseProtectionException('journal_policy_failed');
+      }
+      await customStatement('PRAGMA temp_store = MEMORY');
+      final temporary = await customSelect('PRAGMA temp_store').getSingle();
+      if (temporary.read<int>('temp_store') != 2) {
+        throw const DatabaseProtectionException('temp_policy_failed');
+      }
+    },
+  );
+
+  /// Recover only the exact v3 object an older non-atomic upgrade could leave.
+  /// DDL comparison includes constraints; checking column names alone would
+  /// accept a different table. Extra indexes/triggers are deliberately refused.
+  Future<void> _ensureStudyDocuments() async {
+    final objects = await customSelect(
+      "SELECT type,name,sql FROM sqlite_master "
+      "WHERE name='study_documents' OR tbl_name='study_documents'",
+    ).get();
+    if (objects.isEmpty) {
+      await customStatement(createStudyDocuments);
+      return;
+    }
+    String normalize(String sql) => sql.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final tables = objects.where((row) => row.read<String>('type') == 'table');
+    final indexes = objects.where((row) => row.read<String>('type') == 'index');
+    if (objects.length != 2 ||
+        tables.length != 1 ||
+        indexes.length != 1 ||
+        tables.single.read<String>('name') != 'study_documents' ||
+        normalize(tables.single.readNullable<String>('sql') ?? '') !=
+            normalize(createStudyDocuments) ||
+        indexes.single.read<String>('name') !=
+            'sqlite_autoindex_study_documents_1' ||
+        indexes.single.readNullable<String>('sql') != null) {
+      throw const DatabaseProtectionException('study_schema_mismatch');
+    }
+  }
 
   /// Sync tables in dependency order (parents first). Used by the export,
   /// `applyServer` and the full wipe.
   List<TableInfo<Table, Object?>> get syncTables => [
-        subjects,
-        sessions,
-        sessionSegments,
-        corrections,
-        plannerItems,
-        recurrences,
-        readingRequests,
-        wrongItems,
-        reviewEntries,
-        retryRecords,
-        settings,
-        activityDays,
-      ];
+    subjects,
+    sessions,
+    sessionSegments,
+    corrections,
+    plannerItems,
+    recurrences,
+    readingRequests,
+    wrongItems,
+    reviewEntries,
+    retryRecords,
+    settings,
+    activityDays,
+  ];
 
   /// v1 → v2: keeps, per `wrong_item_id`, the live entry with the latest
   /// `client_updated_at` (ties: lowest id) and turns the others into
@@ -160,12 +205,28 @@ class AppDatabase extends _$AppDatabase {
   /// Deletes every row of every table (account switch · logout · purge-all ·
   /// epoch mismatch, D27 · D2). Photo files are deleted by the caller.
   Future<void> wipeAll() => transaction(() async {
-        await customStatement('DELETE FROM study_documents');
-        for (final t in allTables) {
-          await delete(t).go();
-        }
-      });
+    await customStatement('DELETE FROM study_documents');
+    for (final t in allTables) {
+      await delete(t).go();
+    }
+  });
 
   /// ISO UTC string helper re-exported for callers building raw SQL.
   static String iso(DateTime t) => utcIso(t);
+}
+
+/// Force migrations before repository/auth startup. Drift caches an open error
+/// on its executor: close that instance and let a retry create a fresh one.
+Future<AppDatabase> requireReadyDatabase(AppDatabase database) async {
+  try {
+    await database.customSelect('SELECT 1').get();
+    return database;
+  } catch (_) {
+    try {
+      await database.close();
+    } catch (_) {
+      /* Preserve the original file. */
+    }
+    throw const DatabaseProtectionException('schema_open_failed');
+  }
 }
