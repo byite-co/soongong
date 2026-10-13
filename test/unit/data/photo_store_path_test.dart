@@ -14,23 +14,102 @@ import 'package:soongong/data/photos/photo_store.dart';
 
 void main() {
   group('relativeOf', () {
-    test('Windows: backslash paths under the root become forward-slash relative paths', () {
-      expect(PhotoStore.relativeOf(r'C:\Users\me\photos', r'C:\Users\me\photos\cache\orphan.jpg', context: p.windows), 'cache/orphan.jpg');
-      expect(PhotoStore.relativeOf(r'C:\Users\me\photos\', r'C:\Users\me\photos\req\1.compressed.jpg', context: p.windows), 'req/1.compressed.jpg');
-      expect(PhotoStore.relativeOf(r'C:\Users\me\photos', r'C:\Users\me\photos\req\..\cache\x.jpg', context: p.windows), 'cache/x.jpg', reason: 'normalized first');
-    });
+    test(
+      'Windows: backslash paths under the root become forward-slash relative paths',
+      () {
+        expect(
+          PhotoStore.relativeOf(
+            r'C:\Users\me\photos',
+            r'C:\Users\me\photos\cache\orphan.jpg',
+            context: p.windows,
+          ),
+          'cache/orphan.jpg',
+        );
+        expect(
+          PhotoStore.relativeOf(
+            r'C:\Users\me\photos\',
+            r'C:\Users\me\photos\req\1.compressed.jpg',
+            context: p.windows,
+          ),
+          'req/1.compressed.jpg',
+        );
+        expect(
+          PhotoStore.relativeOf(
+            r'C:\Users\me\photos',
+            r'C:\Users\me\photos\req\..\cache\x.jpg',
+            context: p.windows,
+          ),
+          'cache/x.jpg',
+          reason: 'normalized first',
+        );
+      },
+    );
 
-    test('Windows: a path outside the root (sibling · parent · prefix-alike directory) is null', () {
-      expect(PhotoStore.relativeOf(r'C:\Users\me\photos', r'C:\Users\me\photos2\x.jpg', context: p.windows), isNull, reason: 'string prefix would have matched');
-      expect(PhotoStore.relativeOf(r'C:\Users\me\photos', r'C:\Users\me\other\x.jpg', context: p.windows), isNull);
-      expect(PhotoStore.relativeOf(r'C:\Users\me\photos', r'C:\Users\me\photos\..\x.jpg', context: p.windows), isNull);
-      expect(PhotoStore.relativeOf(r'C:\Users\me\photos', r'C:\Users\me\photos', context: p.windows), isNull, reason: 'the root itself is not a file inside it');
-    });
+    test(
+      'Windows: a path outside the root (sibling · parent · prefix-alike directory) is null',
+      () {
+        expect(
+          PhotoStore.relativeOf(
+            r'C:\Users\me\photos',
+            r'C:\Users\me\photos2\x.jpg',
+            context: p.windows,
+          ),
+          isNull,
+          reason: 'string prefix would have matched',
+        );
+        expect(
+          PhotoStore.relativeOf(
+            r'C:\Users\me\photos',
+            r'C:\Users\me\other\x.jpg',
+            context: p.windows,
+          ),
+          isNull,
+        );
+        expect(
+          PhotoStore.relativeOf(
+            r'C:\Users\me\photos',
+            r'C:\Users\me\photos\..\x.jpg',
+            context: p.windows,
+          ),
+          isNull,
+        );
+        expect(
+          PhotoStore.relativeOf(
+            r'C:\Users\me\photos',
+            r'C:\Users\me\photos',
+            context: p.windows,
+          ),
+          isNull,
+          reason: 'the root itself is not a file inside it',
+        );
+      },
+    );
 
     test('POSIX: same contract', () {
-      expect(PhotoStore.relativeOf('/data/photos', '/data/photos/cache/orphan.jpg', context: p.posix), 'cache/orphan.jpg');
-      expect(PhotoStore.relativeOf('/data/photos', '/data/photos2/x.jpg', context: p.posix), isNull);
-      expect(PhotoStore.relativeOf('/data/photos', '/data/photos/a/../../x.jpg', context: p.posix), isNull);
+      expect(
+        PhotoStore.relativeOf(
+          '/data/photos',
+          '/data/photos/cache/orphan.jpg',
+          context: p.posix,
+        ),
+        'cache/orphan.jpg',
+      );
+      expect(
+        PhotoStore.relativeOf(
+          '/data/photos',
+          '/data/photos2/x.jpg',
+          context: p.posix,
+        ),
+        isNull,
+      );
+      expect(
+        PhotoStore.relativeOf(
+          '/data/photos',
+          '/data/photos/a/../../x.jpg',
+          context: p.posix,
+        ),
+        isNull,
+      );
     });
   });
 
@@ -56,77 +135,123 @@ void main() {
       return f;
     }
 
-    test('root lookup fails → listAll throws PhotoStoreUnavailable, sweep is incomplete with nothing deleted', () async {
-      write('cache/private.jpg');
-      final store = PhotoStore(() async => throw FileSystemException('store unavailable', dir.path));
-      await expectLater(store.listAll(), throwsA(isA<PhotoStoreUnavailable>()));
-      final sweep = await store.sweep();
-      expect(sweep.complete, isFalse);
-      expect(sweep.clean, isFalse);
-      expect(File(p.join(dir.path, 'cache', 'private.jpg')).existsSync(), isTrue);
-    });
+    test(
+      'root lookup fails → listAll throws PhotoStoreUnavailable, sweep is incomplete with nothing deleted',
+      () async {
+        write('cache/private.jpg');
+        final store = PhotoStore(
+          () async => throw FileSystemException('store unavailable', dir.path),
+        );
+        await expectLater(
+          store.listAll(),
+          throwsA(isA<PhotoStoreUnavailable>()),
+        );
+        final sweep = await store.sweep();
+        expect(sweep.complete, isFalse);
+        expect(sweep.clean, isFalse);
+        expect(
+          File(p.join(dir.path, 'cache', 'private.jpg')).existsSync(),
+          isTrue,
+        );
+      },
+    );
 
-    test('directory listing fails → listAll throws, sweep incomplete', () async {
-      final store = _ListingFailsStore(() async => dir);
-      write('cache/private.jpg');
-      await expectLater(store.listAll(), throwsA(isA<PhotoStoreUnavailable>()));
-      expect((await store.sweep()).complete, isFalse);
-    });
+    test(
+      'directory listing fails → listAll throws, sweep incomplete',
+      () async {
+        final store = _ListingFailsStore(() async => dir);
+        write('cache/private.jpg');
+        await expectLater(
+          store.listAll(),
+          throwsA(isA<PhotoStoreUnavailable>()),
+        );
+        expect((await store.sweep()).complete, isFalse);
+      },
+    );
 
-    test('a file that cannot be deleted is left; the sweep is still complete (every file was seen)', () async {
-      write('cache/stuck.jpg');
-      write('cache/ok.jpg');
-      final store = _StuckStore(() async => dir, stuck: 'cache/stuck.jpg');
-      final sweep = await store.sweep();
-      expect(sweep.complete, isTrue);
-      expect(sweep.left, <String>['cache/stuck.jpg']);
-      expect(sweep.clean, isFalse);
-      expect(File(p.join(dir.path, 'cache', 'ok.jpg')).existsSync(), isFalse);
-    });
+    test(
+      'a file that cannot be deleted is left; the sweep is still complete (every file was seen)',
+      () async {
+        write('cache/stuck.jpg');
+        write('cache/ok.jpg');
+        final store = _StuckStore(() async => dir, stuck: 'cache/stuck.jpg');
+        final sweep = await store.sweep();
+        expect(sweep.complete, isTrue);
+        expect(sweep.left, <String>['cache/stuck.jpg']);
+        expect(sweep.clean, isFalse);
+        expect(File(p.join(dir.path, 'cache', 'ok.jpg')).existsSync(), isFalse);
+      },
+    );
 
-    test('stopped by proceed → incomplete, the unreached files listed', () async {
-      write('a/1.jpg');
-      write('b/2.jpg');
-      final store = PhotoStore(() async => dir);
-      final sweep = await store.sweep(proceed: () => false);
-      expect(sweep.complete, isFalse);
-      expect(sweep.left.toSet(), <String>{'a/1.jpg', 'b/2.jpg'});
-    });
+    test(
+      'stopped by proceed → incomplete, the unreached files listed',
+      () async {
+        write('a/1.jpg');
+        write('b/2.jpg');
+        final store = PhotoStore(() async => dir);
+        final sweep = await store.sweep(proceed: () => false);
+        expect(sweep.complete, isFalse);
+        expect(sweep.left.toSet(), <String>{'a/1.jpg', 'b/2.jpg'});
+      },
+    );
 
-    test('an empty store is clean; a missing root directory is clean too', () async {
-      final store = PhotoStore(() async => dir);
-      expect(await store.listAll(), isEmpty);
-      expect((await store.sweep()).clean, isTrue);
-      dir.deleteSync(recursive: true);
-      expect(await store.listAll(), isEmpty);
-      expect((await store.sweep()).clean, isTrue);
-    });
+    test(
+      'an empty store is clean; a missing root directory is clean too',
+      () async {
+        final store = PhotoStore(() async => dir);
+        expect(await store.listAll(), isEmpty);
+        expect((await store.sweep()).clean, isTrue);
+        dir.deleteSync(recursive: true);
+        expect(await store.listAll(), isEmpty);
+        expect((await store.sweep()).clean, isTrue);
+      },
+    );
 
-    test('derived siblings of a kept row file are kept; everything else goes; relative paths use /', () async {
-      write('req/1.jpg');
-      write('req/1.compressed.jpg');
-      write('req/2.jpg');
-      write('cache/x.jpg');
-      final store = PhotoStore(() async => dir);
-      expect((await store.listAll()).toSet(), <String>{'req/1.jpg', 'req/1.compressed.jpg', 'req/2.jpg', 'cache/x.jpg'});
-      final sweep = await store.sweep(keep: <String>{'req/1.jpg'});
-      expect(sweep.clean, isTrue);
-      expect((await store.listAll()).toSet(), <String>{'req/1.jpg', 'req/1.compressed.jpg'});
-    });
+    test(
+      'derived siblings of a kept row file are kept; everything else goes; relative paths use /',
+      () async {
+        write('req/1.jpg');
+        write('req/1.compressed.jpg');
+        write('req/2.jpg');
+        write('cache/x.jpg');
+        final store = PhotoStore(() async => dir);
+        expect((await store.listAll()).toSet(), <String>{
+          'req/1.jpg',
+          'req/1.compressed.jpg',
+          'req/2.jpg',
+          'cache/x.jpg',
+        });
+        final sweep = await store.sweep(keep: <String>{'req/1.jpg'});
+        expect(sweep.clean, isTrue);
+        expect((await store.listAll()).toSet(), <String>{
+          'req/1.jpg',
+          'req/1.compressed.jpg',
+        });
+      },
+    );
 
-    test('failure logs carry the failure kind only — never the path (CLAUDE.md §7)', () async {
-      final store = PhotoStore(() async => throw FileSystemException('store unavailable', dir.path));
-      await store.sweep();
-      await store.delete('cache/private.jpg');
-      await store.clearCache(now: DateTime.now());
-      expect(logs, isNotEmpty);
-      for (final e in logs) {
-        expect(e.error, isNull, reason: 'the exception object (with its path) is not attached');
-        expect('${e.message}', isNot(contains(dir.path)));
-        expect('${e.message}', isNot(contains('private.jpg')));
-        expect('${e.message}', contains('FileSystemException'));
-      }
-    });
+    test(
+      'failure logs carry the failure kind only — never the path (CLAUDE.md §7)',
+      () async {
+        final store = PhotoStore(
+          () async => throw FileSystemException('store unavailable', dir.path),
+        );
+        await store.sweep();
+        await store.delete('cache/private.jpg');
+        await store.clearCache(now: DateTime.now());
+        expect(logs, isNotEmpty);
+        for (final e in logs) {
+          expect(
+            e.error,
+            isNull,
+            reason: 'the exception object (with its path) is not attached',
+          );
+          expect('${e.message}', isNot(contains(dir.path)));
+          expect('${e.message}', isNot(contains('private.jpg')));
+          expect('${e.message}', contains('FileSystemException'));
+        }
+      },
+    );
   });
 }
 
@@ -146,8 +271,8 @@ class _StuckStore extends PhotoStore {
   final String stuck;
 
   @override
-  Future<bool> delete(String relativePath) async {
+  Future<bool> delete(String relativePath, {bool Function()? proceed}) async {
     if (relativePath == stuck) return false;
-    return super.delete(relativePath);
+    return super.delete(relativePath, proceed: proceed);
   }
 }

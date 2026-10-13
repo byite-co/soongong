@@ -35,6 +35,9 @@ Future<void> shareExportFile(
     } else {
       throw StateError('owned export scope required');
     }
+    // Every export is another expiry/retry opportunity; active task is leased.
+    final cleanup = await task.store.sweep();
+    if (cleanup.unknown) throw const TempStoreUnavailable();
     await guard.check();
     task.check();
     final extension = switch (file.mimeType) {

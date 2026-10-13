@@ -331,7 +331,7 @@ final class ShareExportProvider
   }
 }
 
-String _$shareExportHash() => r'3edf7d72b251b647bcfeb1b125febcae019ea39f';
+String _$shareExportHash() => r'a78ae6a439d90b4c43bbf234339549fe28f767d3';
 
 /// Rebuilt when the account (write context) changes; the old instance is
 /// disposed so its in-flight work stops.
@@ -380,4 +380,4 @@ final class PrivacyActionsProvider
   }
 }
 
-String _$privacyActionsHash() => r'e5c6926e83cc46eb3fb19d2e4921610ad57b0c9e';
+String _$privacyActionsHash() => r'5e9a6c8dfeb6e8349fb77d8932dab48f5c642b2a';

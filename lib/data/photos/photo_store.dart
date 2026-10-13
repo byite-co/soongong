@@ -77,12 +77,41 @@ class PhotoStore {
   /// Camera / picker scratch files (not rows).
   static const String cacheDir = 'cache';
 
-  Future<Directory> root() => _root();
+  Future<Directory> root() async {
+    final directory = await _root();
+    final type = FileSystemEntity.typeSync(directory.path, followLinks: false);
+    if (type == FileSystemEntityType.notFound) return directory;
+    if (type != FileSystemEntityType.directory)
+      throw const PhotoStoreUnavailable('unsafe-root');
+    return Directory(directory.resolveSymbolicLinksSync());
+  }
+
+  static void _safePath(Directory root, String path) {
+    if (!p.isWithin(root.path, path))
+      throw const PhotoStoreUnavailable('outside-root');
+    var current = root.path;
+    for (final component in p.split(p.relative(path, from: root.path))) {
+      current = p.join(current, component);
+      final type = FileSystemEntity.typeSync(current, followLinks: false);
+      if (type == FileSystemEntityType.link)
+        throw const PhotoStoreUnavailable('unsafe-link');
+      if (type == FileSystemEntityType.notFound) return;
+      final canonical = type == FileSystemEntityType.directory
+          ? Directory(current).resolveSymbolicLinksSync()
+          : File(current).resolveSymbolicLinksSync();
+      if (!p.isWithin(root.path, canonical))
+        throw const PhotoStoreUnavailable('outside-root');
+    }
+  }
 
   /// The store-relative path ('/'-separated) of [fullPath] under
   /// [rootPath], or null when it is not inside the root. [context] is the
   /// platform's path style (tests pass `p.windows` / `p.posix`).
-  static String? relativeOf(String rootPath, String fullPath, {p.Context? context}) {
+  static String? relativeOf(
+    String rootPath,
+    String fullPath, {
+    p.Context? context,
+  }) {
     final c = context ?? p.context;
     final root = c.normalize(c.absolute(rootPath));
     final full = c.normalize(c.absolute(fullPath));
@@ -93,21 +122,25 @@ class PhotoStore {
   /// Resolves [relativePath] inside the store; null when it would escape it.
   Future<File?> fileFor(String relativePath) async {
     final normalized = relativePath.replaceAll('\\', '/');
-    if (normalized.isEmpty || normalized.startsWith('/') || normalized.split('/').contains('..')) {
+    if (normalized.isEmpty ||
+        normalized.startsWith('/') ||
+        normalized.split('/').contains('..')) {
       return null;
     }
-    final dir = await _root();
+    final dir = await root();
     final file = File(p.join(dir.path, p.joinAll(normalized.split('/'))));
     if (relativeOf(dir.path, file.path) == null) return null;
+    _safePath(dir, file.path);
     return file;
   }
 
   /// Deletes the file and its derived siblings (same stem, extra suffix).
   /// true when they are gone afterwards (absent counts as gone); false when
   /// a deletion failed — the caller keeps the row and shows "실패 · 다시 시도".
-  Future<bool> delete(String relativePath) async {
+  Future<bool> delete(String relativePath, {bool Function()? proceed}) async {
     try {
       final file = await fileFor(relativePath);
+      if (proceed != null && !proceed()) return false;
       if (file == null) return true;
       var ok = _deleteFile(file);
       for (final d in _derivedOf(file)) {
@@ -131,7 +164,7 @@ class PhotoStore {
   Future<List<String>> listAll() async {
     final Directory dir;
     try {
-      dir = await _root();
+      dir = await root();
       if (!dir.existsSync()) return const <String>[];
     } on Object catch (e) {
       appLog.w('photo store unavailable (${e.runtimeType})');
@@ -139,7 +172,8 @@ class PhotoStore {
     }
     try {
       final out = <String>[];
-      for (final e in dir.listSync(recursive: true)) {
+      for (final e in dir.listSync(recursive: true, followLinks: false)) {
+        _safePath(dir, e.path);
         if (e is! File) continue;
         final rel = relativeOf(dir.path, e.path);
         if (rel != null) out.add(rel);
@@ -157,12 +191,16 @@ class PhotoStore {
   /// result says what is still there and whether the whole store was seen;
   /// a store that cannot be opened or listed gives `complete == false`
   /// (nothing deleted, nothing assumed).
-  Future<SweepResult> sweep({Set<String> keep = const <String>{}, bool Function()? proceed}) async {
+  Future<SweepResult> sweep({
+    Set<String> keep = const <String>{},
+    bool Function()? proceed,
+  }) async {
     final List<String> files;
     final Directory dir;
     try {
-      dir = await _root();
-      if (!dir.existsSync()) return const SweepResult(left: <String>[], complete: true);
+      dir = await root();
+      if (!dir.existsSync())
+        return const SweepResult(left: <String>[], complete: true);
       files = await listAll();
     } on PhotoStoreUnavailable {
       return const SweepResult(left: <String>[], complete: false);
@@ -193,36 +231,49 @@ class PhotoStore {
       if (f == null || !f.existsSync()) continue; // went with a sibling
       // Through [delete] (siblings included) so a subclass that scripts
       // failures sees every file the sweep touches.
-      if (!await delete(rel)) left.add(rel);
+      if (!await delete(rel, proceed: proceed)) left.add(rel);
     }
     _removeEmptyDirs(dir, keepRoot: true);
     return SweepResult(left: left, complete: complete);
   }
 
   /// Removes cache files older than [olderThan] relative to [now].
-  Future<int> clearCache({required DateTime now, Duration olderThan = const Duration(hours: 24)}) async {
+  Future<int> clearCache({
+    required DateTime now,
+    Duration olderThan = const Duration(hours: 24),
+  }) async {
     var n = 0;
     try {
-      final dir = Directory(p.join((await _root()).path, cacheDir));
+      final base = await root();
+      final dir = Directory(p.join(base.path, cacheDir));
+      _safePath(base, dir.path);
       if (!dir.existsSync()) return 0;
-      for (final e in dir.listSync(recursive: true)) {
+      for (final e in dir.listSync(recursive: true, followLinks: false)) {
+        _safePath(base, e.path);
         if (e is! File) continue;
-        if (now.difference(e.statSync().modified) >= olderThan && _deleteFile(e)) n++;
+        if (now.difference(e.statSync().modified) >= olderThan &&
+            _deleteFile(e))
+          n++;
       }
     } on Object catch (e) {
       appLog.w('photo cache clear failed (${e.runtimeType})');
+      throw PhotoStoreUnavailable('${e.runtimeType}');
     }
     return n;
   }
 
   static bool _deleteFile(File f) {
+    if (FileSystemEntity.typeSync(f.path, followLinks: false) ==
+        FileSystemEntityType.link) {
+      throw const PhotoStoreUnavailable('unsafe-link');
+    }
     if (f.existsSync()) f.deleteSync();
     return !f.existsSync();
   }
 
   static void _removeEmptyDirs(Directory dir, {required bool keepRoot}) {
     try {
-      for (final e in dir.listSync()) {
+      for (final e in dir.listSync(followLinks: false)) {
         if (e is Directory) _removeEmptyDirs(e, keepRoot: false);
       }
       if (!keepRoot && dir.listSync().isEmpty) dir.deleteSync();
@@ -239,16 +290,19 @@ class PhotoStore {
     final dot = name.lastIndexOf('.');
     final stem = dot <= 0 ? name : name.substring(0, dot);
     return <File>[
-      for (final e in dir.listSync())
-        if (e is File && e.path != original.path && p.basename(e.path).startsWith('$stem.')) e,
+      for (final e in dir.listSync(followLinks: false))
+        if (e is File &&
+            e.path != original.path &&
+            p.basename(e.path).startsWith('$stem.'))
+          e,
     ];
   }
 }
 
 @Riverpod(keepAlive: true)
 PhotoStore photoStore(Ref ref) => PhotoStore(() async {
-      final base = await getApplicationSupportDirectory();
-      final dir = Directory(p.join(base.path, 'photos'));
-      if (!dir.existsSync()) dir.createSync(recursive: true);
-      return dir;
-    });
+  final base = await getApplicationSupportDirectory();
+  final dir = Directory(p.join(base.path, 'photos'));
+  if (!dir.existsSync()) dir.createSync(recursive: true);
+  return dir;
+});

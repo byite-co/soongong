@@ -53,6 +53,7 @@ class OwnedTempStore {
 
   /// Native producers must report quiescence before their task is removed.
   Future<bool> Function(String scope, String task, bool revoke)? beforeDelete;
+  bool Function()? recoveryReady;
   final void Function(File file)? removeFile;
   final List<FileSystemEntity> Function(Directory directory)? listDirectory;
   final Map<String, Stopwatch> _leases = {};
@@ -185,6 +186,9 @@ class OwnedTempStore {
       _serial(() async {
         var result = const TempCleanupResult();
         try {
+          if (recoveryReady != null && !recoveryReady!()) {
+            return const TempCleanupResult(unknown: true);
+          }
           if (!validId(scope) || !{'picker', 'export'}.contains(kind)) {
             throw const TempStoreUnavailable();
           }

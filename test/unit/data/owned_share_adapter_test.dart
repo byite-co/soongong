@@ -61,8 +61,9 @@ void main() {
             .setMockMethodCallHandler(_channel, (call) async {
               calls++;
               expect(call.method, 'share');
-              expect(call.arguments['relativeName'], 'attachment.json');
-              expect(call.arguments['scope'], _scopeA);
+              final arguments = call.arguments as Map<Object?, Object?>;
+              expect(arguments['relativeName'], 'attachment.json');
+              expect(arguments['scope'], _scopeA);
               expect(
                 File('${task.directory.path}/.shared').existsSync(),
                 isTrue,

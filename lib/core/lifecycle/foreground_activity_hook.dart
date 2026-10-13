@@ -47,15 +47,16 @@ class _ForegroundActivityHookState extends ConsumerState<ForegroundActivityHook>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
     // Runs before the auth gate check: revoked scopes survive logout/DB wipe.
+    final temporaryStore = ref.read(ownedTempStoreProvider);
     if (Platform.isAndroid || Platform.isIOS) {
       unawaited(
-        ref
-            .read(ownedPickerCoordinatorProvider)
-            .recover()
-            .then((_) => ref.read(ownedTempStoreProvider).sweep()),
+        ref.read(ownedPickerCoordinatorProvider).recover().then((state) async {
+          if (state != PickerRecoveryState.unavailable)
+            await temporaryStore.sweep();
+        }),
       );
     } else {
-      unawaited(ref.read(ownedTempStoreProvider).sweep());
+      unawaited(temporaryStore.sweep());
     }
     final gate = ref.read(authGateProvider);
     if (!gate.hasUser) return;

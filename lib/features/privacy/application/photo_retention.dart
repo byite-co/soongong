@@ -102,10 +102,11 @@ class PhotoRetention {
     }
     final cache = await store.clearCache(now: now());
     final left = await retryPendingSweep();
-    if (n > 0 || cache > 0 || left != 0)
+    if (n > 0 || cache > 0 || left != 0) {
       appLog.i(
         'photos · expired deleted=$n cache=$cache sweepLeft=${left ?? 'unknown'}',
       );
+    }
     return n;
   }
 
@@ -114,8 +115,9 @@ class PhotoRetention {
   Future<File?> fileFor(Photo photo) async {
     if (photo.isDeleted) return null;
     if (!photo.expiresAt.isAfter(now())) {
-      if (await store.delete(photo.localPath))
+      if (await store.delete(photo.localPath)) {
         await reading.markPhotoDeleted(photo.id);
+      }
       return null;
     }
     final f = await store.fileFor(photo.localPath);
@@ -164,7 +166,7 @@ class PhotoRetention {
         failed.add(p);
         continue;
       }
-      if (p.deletedAt != null || await store.delete(p.localPath)) {
+      if (p.deletedAt != null || await store.delete(p.localPath, proceed: go)) {
         ok.add(p.id);
       } else {
         failed.add(p);
@@ -175,8 +177,9 @@ class PhotoRetention {
       keep: <String>{for (final p in failed) p.localPath},
       proceed: go,
     );
-    if (failed.isEmpty && sweep.clean && go())
+    if (failed.isEmpty && sweep.clean && go()) {
       await reading.clearPhotoSweepPending();
+    }
     return PhotoDeleteResult(
       deleted: ok,
       failed: <String>[for (final p in failed) p.id],
@@ -191,8 +194,9 @@ class PhotoRetention {
   /// stays, nothing is known).
   Future<int?> retryPendingSweep() async {
     final temp = await temporary?.store.sweep() ?? const TempCleanupResult();
-    if (!await reading.photoSweepPending())
+    if (!await reading.photoSweepPending()) {
       return temp.unknown ? null : temp.remaining;
+    }
     final live = await reading.getAllPhotos();
     final sweep = await store.sweep(
       keep: <String>{for (final p in live) p.localPath},

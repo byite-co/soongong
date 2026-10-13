@@ -6,15 +6,16 @@ import 'dart:async';
 import 'package:soongong/data/photos/photo_store.dart';
 
 class FailingPhotoStore extends PhotoStore {
-  FailingPhotoStore(super.root, {Set<String> failing = const <String>{}}) : failing = <String>{...failing};
+  FailingPhotoStore(super.root, {Set<String> failing = const <String>{}})
+    : failing = <String>{...failing};
 
   /// Relative paths whose deletion reports failure (file untouched).
   final Set<String> failing;
 
   @override
-  Future<bool> delete(String relativePath) async {
+  Future<bool> delete(String relativePath, {bool Function()? proceed}) async {
     if (failing.contains(relativePath)) return false;
-    return super.delete(relativePath);
+    return super.delete(relativePath, proceed: proceed);
   }
 }
 
@@ -30,13 +31,13 @@ class GatedPhotoStore extends PhotoStore {
   PhotoGate hold(String relativePath) => _gates[relativePath] = PhotoGate();
 
   @override
-  Future<bool> delete(String relativePath) async {
+  Future<bool> delete(String relativePath, {bool Function()? proceed}) async {
     final g = _gates.remove(relativePath);
     if (g != null) {
       g._entered.complete();
       await g._release.future;
     }
-    return super.delete(relativePath);
+    return super.delete(relativePath, proceed: proceed);
   }
 }
 

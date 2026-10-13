@@ -19,14 +19,17 @@ class OwnedPickerCoordinator {
     bool? android,
   }) : picker = picker ?? ImagePicker(),
        android = android ?? Platform.isAndroid {
+    store.recoveryReady = () => _recovered;
     store.beforeDelete = (scope, task, revoke) async {
-      final state = await channel.invokeMapMethod<String, dynamic>(
-        revoke ? 'cancel' : 'status',
-        {'scope': scope, 'task': task},
-      );
-      return state != null &&
-          state['active'] == false &&
-          state['unknown'] == false;
+      final state = await channel
+          .invokeMapMethod<String, dynamic>(revoke ? 'cancel' : 'status', {
+            'scope': scope,
+            'task': task,
+          })
+          .timeout(const Duration(seconds: 5));
+      if (state == null || state['unknown'] != false)
+        throw const TempStoreUnavailable();
+      return state['active'] == false;
     };
   }
   final OwnedTempStore store;
@@ -35,6 +38,7 @@ class OwnedPickerCoordinator {
   final bool android;
   Future<PickerRecoveryState>? _recovery;
   bool _picking = false;
+  bool _recovered = false;
   PickerRecoveryState state = PickerRecoveryState.none;
 
   Future<PickerRecoveryState> recover() =>
@@ -49,13 +53,19 @@ class OwnedPickerCoordinator {
       // Single consumer. Never read/restore/send/save recovered bytes. The
       // owned-root scan also covers creation before lost-data registration.
       var found = false;
-      if (android) found = !(await picker.retrieveLostData()).isEmpty;
-      final native = await channel.invokeMapMethod<String, dynamic>('recover');
+      if (android)
+        found = !(await picker.retrieveLostData().timeout(
+          const Duration(seconds: 5),
+        )).isEmpty;
+      final native = await channel
+          .invokeMapMethod<String, dynamic>('recover')
+          .timeout(const Duration(seconds: 5));
       if (native == null ||
           native['unknown'] != false ||
           native['active'] != false) {
         return PickerRecoveryState.unavailable;
       }
+      _recovered = true;
       if (!(await store.sweep()).complete) {
         return PickerRecoveryState.unavailable;
       }
