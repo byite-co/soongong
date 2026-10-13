@@ -26,9 +26,10 @@ import 'package:soongong/features/reading/presentation/transcription_screen.dart
 import 'package:soongong/features/settings/presentation/account_screen.dart';
 
 import '../helpers/app_harness.dart';
+import '../helpers/bounded_widget_future.dart';
 import '../helpers/fake_auth_backend.dart';
 import '../helpers/study_race_harness.dart'
-    show completeStudy, pressStudy, pumpStudy, raceTranscription;
+    show pressStudy, pumpStudy, raceTranscription;
 
 class _OwnedImage implements StudyPickedImage {
   _OwnedImage(this.task);
@@ -83,6 +84,13 @@ void main() {
       final transcriber = _WaitingTranscriber();
       final writeEntered = Completer<void>();
       final resumeWrite = Completer<void>();
+      void releaseWork() {
+        if (!resumeWrite.isCompleted) resumeWrite.complete();
+        if (!transcriber.result.isCompleted) {
+          transcriber.result.complete(raceTranscription);
+        }
+      }
+
       var shares = 0;
       late OwnedTempTask exportTask;
       late final AppHarness h;
@@ -118,6 +126,7 @@ void main() {
       );
       addTearDown(() async {
         fixtureOpen = false;
+        releaseWork();
         await h.dispose();
         directory.deleteSync(recursive: true);
       });
@@ -176,66 +185,90 @@ void main() {
         exporting,
         throwsA(anyOf(isA<StateError>(), isA<FileSystemException>())),
       );
-      await pumpStudy(tester);
-      expect(writeEntered.isCompleted, isTrue);
-      final partial = File('${exportTask.payloadPath}/attachment.json');
-      expect(partial.lengthSync(), 1);
-      unawaited(
-        navigator.currentState!.push<void>(
-          MaterialPageRoute(builder: (_) => const AccountScreen()),
-        ),
-      );
-      await tester.pumpAndSettle();
-      unavailable = true;
-      await tester.ensureVisible(find.byKey(AccountKeys.logout));
-      await tester.tap(find.byKey(AccountKeys.logout));
-      await pumpStudy(tester);
-      await tester.tap(find.text(SettingsStrings.logoutConfirm).last);
-      await pumpStudy(tester);
-      expect(find.byType(AppModal), findsOneWidget);
-      expect(find.text(SettingsStrings.logoutCleanupPending), findsOneWidget);
-      expect(find.text(CommonStrings.actionFailedRetry), findsNothing);
-      expect(backend.currentSession?.userId, 'u-1');
-      expect(backend.callNames, isNot(contains('signOut')));
-      expect(partial.existsSync(), isTrue);
-      expect(image.bytes, everyElement(0));
+      try {
+        await pumpStudy(tester);
+        expect(writeEntered.isCompleted, isTrue);
+        final partial = File('${exportTask.payloadPath}/attachment.json');
+        expect(partial.lengthSync(), 1);
+        unawaited(
+          navigator.currentState!.push<void>(
+            MaterialPageRoute(builder: (_) => const AccountScreen()),
+          ),
+        );
+        await tester.pumpAndSettle(
+          const Duration(milliseconds: 20),
+          EnginePhase.sendSemanticsUpdate,
+          const Duration(seconds: 5),
+        );
+        unavailable = true;
+        await tester.ensureVisible(find.byKey(AccountKeys.logout));
+        await tester.tap(find.byKey(AccountKeys.logout));
+        await pumpStudy(tester);
+        await tester.tap(find.text(SettingsStrings.logoutConfirm).last);
+        await pumpStudy(tester);
+        expect(find.byType(AppModal), findsOneWidget);
+        expect(find.text(SettingsStrings.logoutCleanupPending), findsOneWidget);
+        expect(find.text(CommonStrings.actionFailedRetry), findsNothing);
+        expect(backend.currentSession?.userId, 'u-1');
+        expect(backend.callNames, isNot(contains('signOut')));
+        expect(partial.existsSync(), isTrue);
+        expect(image.bytes, everyElement(0));
 
-      unavailable = false;
-      await tester.tap(find.text(SettingsStrings.logoutConfirm).last);
-      await tester.pumpAndSettle(
-        const Duration(milliseconds: 20),
-        EnginePhase.sendSemanticsUpdate,
-        const Duration(seconds: 5),
-      );
-      expect(find.byType(AppModal), findsNothing);
-      expect(backend.currentSession, isNull);
-      expect(
-        backend.callNames.where((call) => call == 'signOut'),
-        hasLength(1),
-      );
-      expect(exportTask.directory.existsSync(), isFalse);
+        unavailable = false;
+        await tester.tap(find.text(SettingsStrings.logoutConfirm).last);
+        await tester.pumpAndSettle(
+          const Duration(milliseconds: 20),
+          EnginePhase.sendSemanticsUpdate,
+          const Duration(seconds: 5),
+        );
+        expect(find.byType(AppModal), findsNothing);
+        expect(backend.currentSession, isNull);
+        expect(
+          backend.callNames.where((call) => call == 'signOut'),
+          hasLength(1),
+        );
+        expect(exportTask.directory.existsSync(), isFalse);
 
-      resumeWrite.complete();
-      transcriber.result.complete(raceTranscription);
-      await completeStudy(tester, rejected);
-      navigator.currentState!.pop();
-      await tester.pumpAndSettle();
-      expect(find.byType(Image), findsNothing);
-      expect(find.text(raceTranscription.text), findsNothing);
-      expect(find.text(StudyStrings.confirm), findsNothing);
-      expect(find.text(StudyStrings.saved), findsNothing);
-      expect(
-        await completeStudy(
+        releaseWork();
+        await completeWidgetFuture(
           tester,
-          h.db.customSelect('SELECT id FROM study_documents').get(),
-        ),
-        isEmpty,
-      );
-      expect(transcriber.inputs, hasLength(1));
-      expect(shares, 0);
-      expect(exportTask.directory.existsSync(), isFalse);
-      expect(tester.takeException(), isNull);
-      await h.unmount(tester);
+          rejected,
+          'revoked export rejection',
+        );
+        navigator.currentState!.pop();
+        await tester.pumpAndSettle(
+          const Duration(milliseconds: 20),
+          EnginePhase.sendSemanticsUpdate,
+          const Duration(seconds: 5),
+        );
+        expect(find.byType(Image), findsNothing);
+        expect(find.text(raceTranscription.text), findsNothing);
+        expect(find.text(StudyStrings.confirm), findsNothing);
+        expect(find.text(StudyStrings.saved), findsNothing);
+        expect(
+          await completeWidgetFuture(
+            tester,
+            h.db.customSelect('SELECT id FROM study_documents').get(),
+            'study rows after late OCR response',
+          ),
+          isEmpty,
+        );
+        expect(transcriber.inputs, hasLength(1));
+        expect(shares, 0);
+        expect(exportTask.directory.existsSync(), isFalse);
+        expect(tester.takeException(), isNull);
+      } finally {
+        // A failed expectation must not leave expectLater(exporting) waiting
+        // on a gate forever before the test framework can report the failure.
+        releaseWork();
+        await completeWidgetFuture(
+          tester,
+          rejected,
+          'export cleanup after body',
+        );
+        await h.unmount(tester);
+      }
     },
+    timeout: const Timeout(Duration(seconds: 60)),
   );
 }
