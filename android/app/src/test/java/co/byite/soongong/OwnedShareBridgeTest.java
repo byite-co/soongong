@@ -23,7 +23,10 @@ import org.robolectric.annotation.Config;
 
 /** Real bridge Intent and FileProvider, without a receiver app or personal data. */
 @RunWith(RobolectricTestRunner.class)
-@Config(sdk = 28, application = Application.class)
+// Use the compiled APK resources and real provider below without starting
+// unrelated SDK receivers from the merged application manifest. In particular,
+// Amazon IAP's obfuscated receiver fails JVM verification before @Before runs.
+@Config(sdk = 28, application = Application.class, manifest = "OwnedShareTestManifest.xml")
 public class OwnedShareBridgeTest {
   Activity activity;
   OwnedShareBridge bridge;
