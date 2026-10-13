@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:soongong/data/auth/account_binding.dart';
 import 'package:soongong/data/db/app_database.dart';
 import 'package:soongong/data/db/database_protection.dart';
 import 'package:soongong/data/db/encrypted_database.dart';
@@ -47,6 +49,7 @@ void main() {
     ownership = TempOwnership(db, store);
   });
   tearDown(() async {
+    ownership.dispose();
     await db.close();
     await sandbox.delete(recursive: true);
   });
@@ -190,6 +193,45 @@ void main() {
       Directory(revokedPath).deleteSync();
       expect((await ownership.revoke(ownerA)).complete, isTrue);
       expect(file.existsSync(), isFalse);
+    },
+  );
+
+  test(
+    'DEL-04 delayed old A revoke cannot collect the fresh A scope after A to B to A',
+    () async {
+      final old = await create(await bind(ownerA), 'export');
+      old.file('payload.bin').writeAsStringSync('old-a');
+      final entered = Completer<void>();
+      final continueSwitch = Completer<void>();
+      late OwnedTempTask fresh;
+      final binding = AccountBinding(db, temporary: ownership);
+      // The transaction is a real Drift executor lock. The old revoke below
+      // starts outside its zone, so its mapping query cannot finish until this
+      // transaction commits the new account's mapping and task.
+      final switching = db.transaction(() async {
+        entered.complete();
+        await continueSwitch.future;
+        await binding.bind(ownerB);
+        await binding.bind(ownerA);
+        ownership.endBoundary(ownerA);
+        fresh = await create(await bind(ownerA), 'export');
+        fresh.file('payload.bin').writeAsStringSync('fresh-a');
+      });
+      await entered.future;
+      ownership.beginBoundary(ownerA);
+      var oldCompleted = false;
+      final delayedRevoke = ownership.revoke(ownerA).then((result) {
+        oldCompleted = true;
+        return result;
+      });
+      expect(oldCompleted, isFalse);
+      continueSwitch.complete();
+      await switching;
+      expect((await delayedRevoke).complete, isTrue);
+      expect(old.directory.existsSync(), isFalse);
+      expect(fresh.scope, isNot(old.scope));
+      expect(await store.isRevoked(fresh.scope), isFalse);
+      expect(fresh.file('payload.bin').readAsStringSync(), 'fresh-a');
     },
   );
 
