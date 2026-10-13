@@ -77,6 +77,29 @@ class ControlledTranscriber implements TranscriptionEngine {
   }
 }
 
+class ObservedTranscriber implements TranscriptionEngine {
+  ObservedTranscriber(this.delegate, this.finished, this.onFailure);
+  final TranscriptionEngine delegate;
+  final Completer<void> finished;
+  final void Function(Object) onFailure;
+  @override
+  Future<DocumentTranscription> transcribe(
+    Uint8List image,
+    TranscriptionKind kind, {
+    required int epoch,
+  }) async {
+    try {
+      return await delegate.transcribe(image, kind, epoch: epoch);
+    } on Object catch (error) {
+      onFailure(error);
+      rethrow;
+    } finally {
+      // A cancelled quote is followed by a separately observed approved call.
+      if (!finished.isCompleted) finished.complete();
+    }
+  }
+}
+
 // Only the scheduling boundary is controlled; writes still call the actual
 // repository, owner/purge transaction checks and in-memory SQL database.
 class ControlledStudyRepository extends StudyRepository {
@@ -205,7 +228,11 @@ class StudyRaceHarness {
                 };
               },
             );
-            return RemoteTranscriptionEngine.withJobs(jobs);
+            return ObservedTranscriber(
+              RemoteTranscriptionEngine.withJobs(jobs),
+              approvedFinished,
+              (error) => approvedFailure = error,
+            );
           }),
       ],
     );
@@ -214,6 +241,8 @@ class StudyRaceHarness {
   final solver = ControlledSolver();
   final transcriber = ControlledTranscriber();
   int approvedDispatches = 0;
+  Completer<void> approvedFinished = Completer<void>();
+  Object? approvedFailure;
   ControlledStudyRepository get repo =>
       h.container.read(studyRepositoryProvider) as ControlledStudyRepository;
 

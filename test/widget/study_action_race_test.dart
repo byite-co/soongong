@@ -64,6 +64,10 @@ void main() {
       await tester.tap(find.widgetWithText(TextButton, '취소'));
       await pumpStudy(tester);
       expect(rig.approvedDispatches, 0);
+      expect(rig.approvedFinished.isCompleted, isTrue);
+      rig.approvedFinished = Completer<void>();
+      rig.approvedFailure = null;
+      rig.h.container.invalidate(transcriptionEngineProvider);
       final button = tester.widget<AppButton>(
         find.widgetWithText(AppButton, StudyStrings.recognize),
       );
@@ -71,6 +75,11 @@ void main() {
       button.onPressed?.call();
       await pumpStudy(tester);
       await tester.tap(find.widgetWithText(TextButton, '포인트 확인 · 실행'));
+      for (var i = 0; i < 100 && !rig.approvedFinished.isCompleted; i++) {
+        await pumpStudy(tester);
+      }
+      expect(rig.approvedFinished.isCompleted, isTrue);
+      expect(rig.approvedFailure, isNull);
       await pumpStudy(tester);
       expect(rig.approvedDispatches, 1);
       expect(await completeStudy(tester, rig.repo.list()), isEmpty);
