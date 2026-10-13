@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -34,6 +35,56 @@ Future<String> requireDatabaseKey(DatabaseKeyStore store, {required bool encrypt
   } on DatabaseProtectionException { rethrow; }
   catch (_) { throw const DatabaseProtectionException('key_unavailable'); }
 }
+
+/// SQLite coordinates separate connections in the same process as well as
+/// other processes. dart:io advisory locks alone do not exclude Unix isolates.
+/// This existing lock file contains no tables, keys, or application data.
+Database _acquirePreparationLock(File file) {
+  file.parent.createSync(recursive: true);
+  final lock = sqlite3.open('${file.path}.encryption.lock');
+  try {
+    lock.execute('PRAGMA busy_timeout = 0');
+    lock.execute('BEGIN EXCLUSIVE');
+    return lock;
+  } catch (_) {
+    lock.close();
+    throw const DatabaseProtectionException('database_busy');
+  }
+}
+
+void _rejectExistingEmptyDatabase(File file) {
+  if (file.existsSync() && file.lengthSync() == 0) {
+    throw const DatabaseProtectionException('empty_existing_database');
+  }
+}
+
+/// Holds the same lock from protected-data inspection through key durability
+/// and file preparation. Contention fails closed before touching key storage.
+Future<String> prepareProtectedDatabase(File file, DatabaseKeyStore store) async {
+  Database? lock;
+  try {
+    // Preserve an already damaged database without creating a new lock file.
+    _rejectExistingEmptyDatabase(file);
+    lock = _acquirePreparationLock(file);
+    _rejectExistingEmptyDatabase(file);
+    final path = file.path;
+    final protectedData =
+        (file.existsSync() && !isPlainDatabase(file)) ||
+        File('$path.encrypting').existsSync() ||
+        File('$path.plaintext').existsSync() ||
+        File('$path.encryption.json').existsSync() ||
+        File('$path.encryption.json.tmp').existsSync();
+    final key = await requireDatabaseKey(store, encryptedDataExists: protectedData);
+    await _prepareWhileLocked(path, key);
+    return key;
+  } on DatabaseProtectionException { rethrow; }
+  catch (_) { throw const DatabaseProtectionException('migration_failed'); }
+  finally { lock?.close(); } // Closing rolls back and releases the empty lock DB.
+}
+
+// Keep the isolate closure free of the platform key store and the lock handle.
+Future<void> _prepareWhileLocked(String path, String key) =>
+    Isolate.run(() => DatabaseProtection(File(path), key)._prepare());
 
 /// Checks a real codec function: SQLite silently ignores unknown PRAGMAs.
 void configureDatabaseCipher(Database db, String key, {bool rekey = false}) {
@@ -114,14 +165,13 @@ class DatabaseProtection {
   File get marker => File('${file.path}.encryption.json');
 
   void prepare() {
-    file.parent.createSync(recursive: true);
-    final lock = File('${file.path}.encryption.lock').openSync(mode: FileMode.append);
+    Database? lock;
     try {
-      lock.lockSync(FileLock.exclusive);
+      lock = _acquirePreparationLock(file);
       _prepare();
     } on DatabaseProtectionException { rethrow; }
     catch (_) { throw const DatabaseProtectionException('migration_failed'); }
-    finally { lock.closeSync(); }
+    finally { lock?.close(); }
   }
 
   void _prepare() {
@@ -165,13 +215,7 @@ class DatabaseProtection {
     final source = sqlite3.open(file.path, mode: OpenMode.readWrite);
     late String digest;
     try {
-      // Recover WAL first, then keep an exclusive SQLite lock during the copy.
-      source.execute('PRAGMA busy_timeout = 3000');
-      final wal = source.select('PRAGMA wal_checkpoint(TRUNCATE)').single;
-      if (wal.values.first != 0) throw const DatabaseProtectionException('database_busy');
-      if (source.select('PRAGMA journal_mode = DELETE').single.values.single != 'delete') throw const DatabaseProtectionException('database_busy');
-      source.execute('PRAGMA locking_mode = EXCLUSIVE');
-      source.execute('BEGIN EXCLUSIVE'); source.execute('COMMIT');
+      _lockPlaintext(source);
       source.execute('PRAGMA temp_store = MEMORY');
       _integrity(source);
       digest = databaseFingerprint(source);
@@ -185,10 +229,21 @@ class DatabaseProtection {
       if (_verify(candidate) != digest || databaseFingerprint(source) != digest) throw const DatabaseProtectionException('copy_mismatch');
       final durable = candidate.openSync(mode: FileMode.append);
       try { durable.flushSync(); } finally { durable.closeSync(); }
+      _writeMarker({'version': 1, 'stage': 'verified', 'digest': digest});
+      checkpoint?.call('verified');
+      // Retain the original SQLite lock until replacement and backup cleanup.
+      // A plaintext writer must not commit into the verified-copy/rename gap.
+      _promote(digest, source: source);
     } finally { source.close(); }
-    _writeMarker({'version': 1, 'stage': 'verified', 'digest': digest});
-    checkpoint?.call('verified');
-    _promote(digest);
+  }
+
+  void _lockPlaintext(Database source) {
+    source.execute('PRAGMA busy_timeout = 3000');
+    final wal = source.select('PRAGMA wal_checkpoint(TRUNCATE)').single;
+    if (wal.values.first != 0) throw const DatabaseProtectionException('database_busy');
+    if (source.select('PRAGMA journal_mode = DELETE').single.values.single != 'delete') throw const DatabaseProtectionException('database_busy');
+    source.execute('PRAGMA locking_mode = EXCLUSIVE');
+    source.execute('BEGIN EXCLUSIVE'); source.execute('COMMIT');
   }
 
   String _verify(File target, {bool full = true}) {
@@ -204,8 +259,32 @@ class DatabaseProtection {
     finally { db.close(); }
   }
 
-  void _promote(String digest) {
-    if (file.existsSync() && !isPlainDatabase(file)) {
+  void _promote(String digest, {Database? source}) {
+    Database? recoverySource;
+    try {
+      // Inspect the header before taking the SQLite source lock. On Unix,
+      // closing a separate dart:io descriptor for the same inode drops process
+      // advisory locks; never call isPlainDatabase on the locked original.
+      final mainIsPlain = source != null || isPlainDatabase(file);
+      if (source == null) {
+        final original = backup.existsSync() ? backup : mainIsPlain ? file : null;
+        if (original != null) {
+          recoverySource = sqlite3.open(original.path, mode: OpenMode.readWrite);
+          _lockPlaintext(recoverySource);
+        }
+      }
+      final authoritative = source ?? recoverySource;
+      // A verified marker is not proof the old plaintext file stayed frozen
+      // while this process was absent. Preserve both files if it changed.
+      if (authoritative != null && databaseFingerprint(authoritative) != digest) {
+        throw const DatabaseProtectionException('recovery_mismatch');
+      }
+      _promoteLocked(digest, mainIsPlain: mainIsPlain);
+    } finally { recoverySource?.close(); }
+  }
+
+  void _promoteLocked(String digest, {required bool mainIsPlain}) {
+    if (file.existsSync() && !mainIsPlain) {
       if (_verify(file) != digest) throw const DatabaseProtectionException('recovery_mismatch');
     } else {
       if (_verify(candidate) != digest) throw const DatabaseProtectionException('recovery_mismatch');

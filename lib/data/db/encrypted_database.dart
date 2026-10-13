@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -87,22 +86,8 @@ Future<PreparedDatabase> prepareDatabaseFile(
   File file,
   DatabaseKeyStore store,
 ) async {
-  if (file.existsSync() && file.lengthSync() == 0) {
-    throw const DatabaseProtectionException('empty_existing_database');
-  }
-  final path = file.path;
-  final protectedData =
-      (file.existsSync() && !isPlainDatabase(file)) ||
-      File('$path.encrypting').existsSync() ||
-      File('$path.plaintext').existsSync() ||
-      File('$path.encryption.json').existsSync() ||
-      File('$path.encryption.json.tmp').existsSync();
-  final key = await requireDatabaseKey(
-    store,
-    encryptedDataExists: protectedData,
-  );
-  await Isolate.run(() => DatabaseProtection(File(path), key).prepare());
-  return PreparedDatabase(path, key);
+  final key = await prepareProtectedDatabase(file, store);
+  return PreparedDatabase(file.path, key);
 }
 
 QueryExecutor encryptedDatabase(String name) => LazyDatabase(() async {

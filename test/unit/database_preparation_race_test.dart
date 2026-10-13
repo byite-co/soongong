@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/data/db/app_database.dart';
@@ -27,10 +28,64 @@ class _OverlappingKeys implements DatabaseKeyStore {
   }
 }
 
-Future<Object> _outcome(Future<PreparedDatabase> operation) => operation.then(
-  (value) => value,
-  onError: (Object error, StackTrace _) => error,
-);
+class _HeldKeys implements DatabaseKeyStore {
+  final entered = Completer<void>();
+  final release = Completer<void>();
+  String? value;
+  int writes = 0;
+
+  @override
+  Future<String?> read() async {
+    if (!entered.isCompleted) {
+      entered.complete();
+      await release.future;
+    }
+    return value;
+  }
+
+  @override
+  Future<void> write(String key) async {
+    writes++;
+    value = key;
+  }
+}
+
+class _ProbeKeys implements DatabaseKeyStore {
+  _ProbeKeys(this.value);
+  final String value;
+  int reads = 0;
+  int writes = 0;
+
+  @override
+  Future<String?> read() async {
+    reads++;
+    return value;
+  }
+
+  @override
+  Future<void> write(String key) async {
+    writes++;
+  }
+}
+
+Future<List<Object?>> _competingOpener(String path, String key) async {
+  final store = _ProbeKeys(key);
+  try {
+    await prepareDatabaseFile(File(path), store);
+    return ['opened', store.reads, store.writes];
+  } on DatabaseProtectionException catch (error) {
+    return [error.code, store.reads, store.writes];
+  }
+}
+
+Future<List<Object?>> _spawnCompetingOpener(String path, String key) =>
+    Isolate.run(() => _competingOpener(path, key));
+
+Future<Object> _outcome(Future<PreparedDatabase> operation) =>
+    operation.then<Object>(
+      (value) => value,
+      onError: (Object error, StackTrace _) => error,
+    );
 
 void main() {
   final key = List.filled(32, '6f').join();
@@ -41,6 +96,41 @@ void main() {
     file = File('${directory.path}/soongong_dev.sqlite');
   });
   tearDown(() => directory.delete(recursive: true));
+
+  test(
+    'RC05 another isolate is rejected before key access while preparation holds the lock',
+    () async {
+      final store = _HeldKeys();
+      final first = _outcome(prepareDatabaseFile(file, store));
+      await store.entered.future.timeout(const Duration(seconds: 10));
+      late Object firstResult;
+      try {
+        final contender = await _spawnCompetingOpener(
+          file.path,
+          key,
+        ).timeout(const Duration(seconds: 10));
+        expect(contender, ['database_busy', 0, 0]);
+        expect(file.existsSync(), isFalse);
+      } finally {
+        store.release.complete();
+        firstResult = await first.timeout(const Duration(seconds: 10));
+      }
+      expect(firstResult, isA<PreparedDatabase>());
+      expect(store.writes, 1);
+      final prepared = firstResult as PreparedDatabase;
+      final app = await requireReadyDatabase(
+        AppDatabase(encryptedDatabaseFromPrepared(prepared)),
+      );
+      await app.close();
+      final afterRelease = await _spawnCompetingOpener(file.path, prepared.key);
+      expect(afterRelease, ['opened', 1, 0]);
+      expect(
+        File('${file.path}.encryption.lock').lengthSync(),
+        0,
+        reason: 'coordination stores no schema, keys, or application records',
+      );
+    },
+  );
 
   test(
     'RC05 two independent openers never replace the first usable durable key',
@@ -68,8 +158,8 @@ void main() {
         store.releaseSecondWrite.complete();
         final secondResult = await second.timeout(const Duration(seconds: 10));
         expect(
-          store.value,
-          prepared.key,
+          store.value == prepared.key,
+          isTrue,
           reason: 'a second opener must not overwrite a key already in use',
         );
         expect(store.writes, 1);
@@ -133,6 +223,11 @@ void main() {
             }
           },
         ).prepare();
+        expect(
+          () => writer.execute('INSERT INTO synthetic_race VALUES(3)'),
+          throwsA(isA<SqliteException>()),
+          reason: 'the stale plaintext handle cannot write after replacement',
+        );
       } finally {
         writer.close();
       }
