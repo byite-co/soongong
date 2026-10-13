@@ -24,7 +24,7 @@ Future<void> shareExportFile(
     final dir = await (temporaryDirectory ?? getTemporaryDirectory)();
     await guard.check();
     // The directory belongs only to this request, even for identical names.
-    owned = await Directory('${dir.path}/soongong-export-').createTemp();
+    owned = await dir.createTemp('soongong-export-');
     await guard.check();
     final out = File('${owned.path}/${file.name}');
     if (writeFile == null) {
