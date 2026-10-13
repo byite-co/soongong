@@ -242,6 +242,9 @@ class OwnedTempStore {
       _serial(() async {
         var result = const TempCleanupResult();
         try {
+          if (recoveryReady != null && !recoveryReady!()) {
+            return const TempCleanupResult(unknown: true);
+          }
           final base = await _root();
           final clock = File(p.join(base.path, '.clock'));
           _safe(base, clock.path, missing: true);
@@ -359,7 +362,13 @@ class OwnedTempStore {
     Directory dir,
   ) async {
     try {
-      if (!dir.existsSync()) return const TempCleanupResult();
+      final type = FileSystemEntity.typeSync(dir.path, followLinks: false);
+      if (type == FileSystemEntityType.notFound) {
+        return const TempCleanupResult();
+      }
+      if (type != FileSystemEntityType.directory) {
+        throw const TempStoreUnavailable();
+      }
       _mark(base, p.join(dir.path, '.delete'));
       if (beforeDelete != null && !await beforeDelete!(scope, id, true)) {
         return const TempCleanupResult(remaining: 1);
