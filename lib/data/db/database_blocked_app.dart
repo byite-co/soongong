@@ -39,9 +39,9 @@ class _DatabaseBlockedAppState extends State<DatabaseBlockedApp> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Semantics(
+                    Semantics(
                       header: true,
-                      child: Text(DatabaseStrings.title),
+                      child: const Text(DatabaseStrings.title),
                     ),
                     const SizedBox(height: 16),
                     const Text(DatabaseStrings.description),
@@ -82,9 +82,9 @@ class DatabasePreparingApp extends StatelessWidget {
                   else
                     const CircularProgressIndicator(),
                   const SizedBox(height: 24),
-                  const Semantics(
+                  Semantics(
                     liveRegion: true,
-                    child: Text(DatabaseStrings.preparing),
+                    child: const Text(DatabaseStrings.preparing),
                   ),
                 ],
               ),
