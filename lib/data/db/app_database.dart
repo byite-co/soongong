@@ -127,7 +127,7 @@ class AppDatabase extends _$AppDatabase {
   /// accept a different table. Extra indexes/triggers are deliberately refused.
   Future<void> _ensureStudyDocuments() async {
     final objects = await customSelect(
-      "SELECT type,name,sql FROM sqlite_master "
+      'SELECT type,name,sql FROM sqlite_master '
       "WHERE name='study_documents' OR tbl_name='study_documents'",
     ).get();
     if (objects.isEmpty) {

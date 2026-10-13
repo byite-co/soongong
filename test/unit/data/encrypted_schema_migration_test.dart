@@ -1,7 +1,6 @@
 // Real Drift + sqlite3mc regression tests. Faults are deterministic exceptions
 // (including a real SQLite query_only write failure), not process/power kills.
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:drift/drift.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -45,16 +44,18 @@ class _FaultDatabase extends AppDatabase {
   @override
   Future<void> customStatement(String statement, [List<Object?>? args]) async {
     if (statement == 'PRAGMA user_version = 3') {
-      if (fault == _Fault.beforeVersion)
+      if (fault == _Fault.beforeVersion) {
         throw StateError('injected_before_version');
+      }
       if (fault == _Fault.versionWrite) {
         // Real SQLite rejects the version write; the product transaction must
         // roll back the DDL, dedupe, outbox and version on the actual executor.
         await super.customStatement('PRAGMA query_only = ON');
       }
       await super.customStatement(statement, args);
-      if (fault == _Fault.afterVersion)
+      if (fault == _Fault.afterVersion) {
         throw StateError('injected_after_version');
+      }
       return;
     }
     await super.customStatement(statement, args);
@@ -70,11 +71,13 @@ class _FaultDatabase extends AppDatabase {
       onCreate: strategy.onCreate,
       onUpgrade: strategy.onUpgrade,
       beforeOpen: (details) async {
-        if (fault == _Fault.afterCommit)
+        if (fault == _Fault.afterCommit) {
           throw StateError('injected_after_commit');
+        }
         await strategy.beforeOpen?.call(details);
-        if (fault == _Fault.afterPolicy)
+        if (fault == _Fault.afterPolicy) {
           throw StateError('injected_after_policy');
+        }
       },
     );
   }

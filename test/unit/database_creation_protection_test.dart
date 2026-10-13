@@ -136,8 +136,9 @@ void main() {
             file,
             key,
             checkpoint: (current) {
-              if (stage == current)
+              if (stage == current) {
                 throw StateError('injected_creation_interruption');
+              }
             },
           ).prepare(),
           throwsA(isA<DatabaseProtectionException>()),
