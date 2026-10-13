@@ -39,6 +39,7 @@ class ControlledImage implements StudyPickedImage {
   Completer<Uint8List>? readWait;
   Completer<void>? cleanupWait;
   Object? cleanupError;
+  Object? readError;
   final Uint8List bytes = png();
   int size = 64;
   int cleaned = 0;
@@ -46,8 +47,11 @@ class ControlledImage implements StudyPickedImage {
   Future<int> length() async =>
       lengthWait == null ? size : await lengthWait!.future;
   @override
-  Future<Uint8List> readAsBytes() async =>
-      readWait == null ? bytes : await readWait!.future;
+  Future<Uint8List> readAsBytes() async {
+    if (readError != null) throw readError!;
+    return readWait == null ? bytes : await readWait!.future;
+  }
+
   @override
   Future<void> cleanup() async {
     cleaned++;
@@ -207,7 +211,12 @@ void main() {
     );
   }
 
-  for (final outcome in ['success', 'oversize', 'cleanup error']) {
+  for (final outcome in [
+    'success',
+    'oversize',
+    'read error',
+    'cleanup error',
+  ]) {
     testWidgets('PICK-05 current selection $outcome retains normal behavior', (
       tester,
     ) async {
@@ -215,6 +224,9 @@ void main() {
       addTearDown(h.dispose);
       final selection = ControlledImage();
       if (outcome == 'oversize') selection.size = 4 * 1024 * 1024 + 1;
+      if (outcome == 'read error') {
+        selection.readError = StateError('synthetic read');
+      }
       if (outcome == 'cleanup error') {
         selection.cleanupError = StateError('synthetic');
       }
@@ -237,6 +249,16 @@ void main() {
       }
       if (outcome == 'cleanup error') {
         expect(find.text(StudyStrings.cacheCleanupFailed), findsOneWidget);
+      }
+      if (outcome == 'read error') {
+        expect(find.text(StudyStrings.error), findsOneWidget);
+        expect(find.byType(Image), findsNothing);
+        expect(
+          tester
+              .widgetList<AppButton>(find.byType(AppButton))
+              .every((button) => !button.busy),
+          isTrue,
+        );
       }
       expect(tester.takeException(), isNull);
       await h.unmount(tester);
