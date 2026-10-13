@@ -32,8 +32,9 @@ class WaitingExport extends ExportService {
   }
 }
 
-/// Places cancellation in the caller's await gap after the real validation
-/// has completed. The adapter must still check synchronously before handoff.
+/// Completes cancellation after the real validation has passed and before the
+/// adapter resumes. Await the injected microtask: a fire-and-forget microtask
+/// can run after an optimized async continuation has already handed off.
 class CancelAfterValidation extends ExportGuard {
   CancelAfterValidation({
     required super.validate,
@@ -47,7 +48,7 @@ class CancelAfterValidation extends ExportGuard {
   @override
   Future<void> check() async {
     await super.check();
-    if (afterWrite()) scheduleMicrotask(cancel);
+    if (afterWrite()) await Future<void>.microtask(cancel);
   }
 }
 
@@ -308,7 +309,7 @@ void main() {
   }
 
   test(
-    'EXP-05 cancellation in the final await gap prevents OS invocation',
+    'EXP-05 cancellation after final validation prevents OS invocation',
     () async {
       final directory = Directory.systemTemp.createTempSync(
         'export-await-gap-',
