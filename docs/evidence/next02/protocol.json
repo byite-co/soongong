@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "declared_before_quality_execution": true,
+  "korean": {
+    "target_regions": 60,
+    "target_writers": 5,
+    "cer_max": 0.1,
+    "normalization": "NFC; separate whitespace included/excluded"
+  },
+  "math": {
+    "target_regions": 60,
+    "handwritten_writers": 3,
+    "exact_match_min": 0.9,
+    "normalization": "NFC and whitespace only; no algebraic equivalence"
+  },
+  "grading": {
+    "target_cases": 100,
+    "per_mark": 20,
+    "macro_f1_min": 0.95,
+    "correct_precision_min": 0.98,
+    "link_accuracy_min": 0.95
+  },
+  "valid_response_min": 0.98,
+  "latency_p95_seconds_max": 20,
+  "worker_deadline_seconds": 50,
+  "edge_deadline_seconds": 55,
+  "split": "source-level exclusive holdout; no training/tuning; unknown writer/document IDs stay null, so writer/document independence cannot be asserted",
+  "selection": "lexicographically first 60 published CPE file rows, before inference; all errors/empty/timeouts remain denominator",
+  "external_upload": false
+}

@@ -285,4 +285,28 @@ void main() {
       expect((await h.outbox()).length, before);
     },
   );
+  test(
+    'A14 active_exists snapshot rebuilds request without resurrecting deleted local row',
+    () async {
+      final row = serverRow(
+        id,
+        userId: h.ctx.userId,
+        content: {
+          'request_id': id,
+          'status': 'done_unsaved',
+          'subject_id': 'math',
+          'range_text': 'range',
+          'origin': 'home',
+          'quota_charged': true,
+          'result_json': output(),
+        },
+      );
+      final e = engine((name, body) async => Map<String, dynamic>.from(row));
+      expect(await e.watch(id).last, isA<Done>());
+      expect((await h.reading.get(id))!.rangeText, 'range');
+      await h.reading.applyDeleted(id);
+      await expectLater(e.watch(id).toList(), throwsStateError);
+      expect(await h.reading.get(id), isNull);
+    },
+  );
 }

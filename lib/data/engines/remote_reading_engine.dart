@@ -103,7 +103,11 @@ class RemoteReadingEngine implements ReadingEngine {
 
   Future<T> _owned<T>(String id, Future<T> Function() action) async =>
       reading.writer.runOwnedTransaction(
-        action,
+        () async {
+          final result = await action();
+          _guard();
+          return result;
+        },
         generation: await _generation(id),
         alive: () => alive() && owner() == reading.ctx.userId,
       );
@@ -252,6 +256,25 @@ class RemoteReadingEngine implements ReadingEngine {
       }
       final status = out['status'];
       if (status is! String) throw const FormatException('invalid_status');
+      await _owned(requestId, () async {
+        if (await reading.get(requestId) != null || out['id'] == null) return;
+        if (out['id'] != requestId ||
+            out['user_id'] != reading.ctx.userId ||
+            out['request_id'] != requestId ||
+            out['purge_epoch'] != await reading.writer.purgeEpoch() ||
+            out['deleted_at'] != null)
+          throw StateError('stale_request_snapshot');
+        final existing = await reading.db
+            .customSelect(
+              'SELECT id FROM reading_requests WHERE id=?',
+              variables: [Variable(requestId)],
+            )
+            .getSingleOrNull();
+        if (existing != null) throw StateError('request_deleted');
+        await reading.writer.applyServer(reading.db.readingRequests, [
+          Map<String, Object?>.from(out),
+        ]);
+      });
       await _owned(
         requestId,
         () => reading.applyStatus(

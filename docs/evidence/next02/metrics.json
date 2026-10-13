@@ -1,0 +1,295 @@
+{
+  "korean-v3-report": {
+    "summary": {
+      "attempts": 9,
+      "valid": 0,
+      "failures": 9,
+      "empty": 0,
+      "labeled": 0,
+      "p50_seconds": 0.21139430599998832,
+      "p95_seconds": 0.2836542379999969,
+      "max_child_rss_kib": 33296,
+      "external_api_calls": 0,
+      "external_api_cost_krw": 0,
+      "infrastructure_cost_krw": null,
+      "confirmed_documents": null,
+      "human_correction_time": null,
+      "valid_rate": 0.0,
+      "cer_with_spaces": null,
+      "cer_without_spaces": null,
+      "sequential_attempts_per_hour": 16435.136653695463
+    },
+    "model": "paddle-v3-next02",
+    "manifest_sha256": "30b17d5cbf7b433cd282cd22f8475fe401c8d1977d57f0a33513a1cc5d5ad953",
+    "protocol_sha256": "a32fca0a9b613e56be68bbdcdf6083bec31e8fb4b9da23fcd22b795567cf9dfe",
+    "raw_report_sha256": "bbd77f42bb3a4d8fb147a8a5bea270f30364c80e63182ff4f22116c8c2d133db"
+  },
+  "korean-v5-report": {
+    "summary": {
+      "attempts": 9,
+      "valid": 0,
+      "failures": 9,
+      "empty": 0,
+      "labeled": 0,
+      "p50_seconds": 0.18627347299999997,
+      "p95_seconds": 0.19348507900002687,
+      "max_child_rss_kib": 33188,
+      "external_api_calls": 0,
+      "external_api_cost_krw": 0,
+      "infrastructure_cost_krw": null,
+      "confirmed_documents": null,
+      "human_correction_time": null,
+      "valid_rate": 0.0,
+      "cer_with_spaces": null,
+      "cer_without_spaces": null,
+      "sequential_attempts_per_hour": 19704.387505054463
+    },
+    "model": "paddle-v5-next02",
+    "manifest_sha256": "30b17d5cbf7b433cd282cd22f8475fe401c8d1977d57f0a33513a1cc5d5ad953",
+    "protocol_sha256": "a32fca0a9b613e56be68bbdcdf6083bec31e8fb4b9da23fcd22b795567cf9dfe",
+    "raw_report_sha256": "b3ed449db8abc7415be58f33de3d74eb0900b3e5c28837bc0c8af256bcafe405"
+  },
+  "korean-v3-derived-report": {
+    "summary": {
+      "attempts": 9,
+      "valid": 7,
+      "failures": 2,
+      "empty": 0,
+      "labeled": 0,
+      "p50_seconds": 8.96848869400003,
+      "p95_seconds": 12.823317142999997,
+      "max_child_rss_kib": 1421564,
+      "external_api_calls": 0,
+      "external_api_cost_krw": 0,
+      "infrastructure_cost_krw": null,
+      "confirmed_documents": null,
+      "human_correction_time": null,
+      "valid_rate": 0.7777777777777778,
+      "cer_with_spaces": null,
+      "cer_without_spaces": null,
+      "sequential_attempts_per_hour": 450.719320159236
+    },
+    "model": "paddle-v3-next02",
+    "manifest_sha256": "40131df8f68f9ea00f36cac54c4a09befaafebedf5b5fa18acadba837847b1cd",
+    "protocol_sha256": "a32fca0a9b613e56be68bbdcdf6083bec31e8fb4b9da23fcd22b795567cf9dfe",
+    "raw_report_sha256": "83485fa99dd4cf6a722240ae3ac2a2ac73039cc3b1476ace3bb89fca370b5f23"
+  },
+  "korean-v5-derived-report": {
+    "summary": {
+      "attempts": 9,
+      "valid": 4,
+      "failures": 5,
+      "empty": 0,
+      "labeled": 0,
+      "p50_seconds": 9.94024663700003,
+      "p95_seconds": 15.110114662,
+      "max_child_rss_kib": 1504920,
+      "external_api_calls": 0,
+      "external_api_cost_krw": 0,
+      "infrastructure_cost_krw": null,
+      "confirmed_documents": null,
+      "human_correction_time": null,
+      "valid_rate": 0.4444444444444444,
+      "cer_with_spaces": null,
+      "cer_without_spaces": null,
+      "sequential_attempts_per_hour": 400.55071171417785
+    },
+    "model": "paddle-v5-next02",
+    "manifest_sha256": "40131df8f68f9ea00f36cac54c4a09befaafebedf5b5fa18acadba837847b1cd",
+    "protocol_sha256": "a32fca0a9b613e56be68bbdcdf6083bec31e8fb4b9da23fcd22b795567cf9dfe",
+    "raw_report_sha256": "7f50b1ba7eb11bd44e5d13cd66b74a928d8a092660010c342f34268ec7e75e8b"
+  },
+  "math-cpe-report": {
+    "summary": {
+      "attempts": 60,
+      "valid": 60,
+      "failures": 0,
+      "empty": 0,
+      "labeled": 60,
+      "p50_seconds": 15.861794431000021,
+      "p95_seconds": 19.88304936600001,
+      "max_child_rss_kib": 2140660,
+      "external_api_calls": 0,
+      "external_api_cost_krw": 0,
+      "infrastructure_cost_krw": null,
+      "confirmed_documents": null,
+      "human_correction_time": null,
+      "valid_rate": 1.0,
+      "normalized_exact_match": 0.2,
+      "sequential_attempts_per_hour": 218.0004108489214
+    },
+    "model": "unimernet-tiny-next02",
+    "manifest_sha256": "b29150735ece44a5ea35bd8333425feb0a9a508fdeb7a1b6465d26c9d65fe68c",
+    "protocol_sha256": "a32fca0a9b613e56be68bbdcdf6083bec31e8fb4b9da23fcd22b795567cf9dfe",
+    "raw_report_sha256": "97b205d0b682e3ca9147846640ccb902b434d520b21762248a00637656e65541"
+  },
+  "paddle-smoke": [
+    {
+      "profile": "paddle-v3",
+      "input_sha256": "1bbc390d5b972a37e006f8f3021c16dca291dccbfbe1d17cce4327abb4f4e882",
+      "kind": "synthetic_printed",
+      "cold_seconds": 5.858655700999996,
+      "warm_seconds": [
+        0.3877815620000007,
+        0.29590399699999637,
+        0.29101230300000225
+      ]
+    },
+    {
+      "profile": "paddle-v5",
+      "input_sha256": "1bbc390d5b972a37e006f8f3021c16dca291dccbfbe1d17cce4327abb4f4e882",
+      "kind": "synthetic_printed",
+      "cold_seconds": 4.261035626999998,
+      "warm_seconds": [
+        0.4156350660000001,
+        0.34215471400000297,
+        0.3745924150000022
+      ]
+    }
+  ],
+  "grading-smoke": {
+    "model": "paddle-v5-next02",
+    "kind": "grading",
+    "input_sha256": "2f821307e934536b7a35a88e353d96236a9aaf56ce9574fa6f83fea83196f89a",
+    "cold_seconds": 5.507496378999999,
+    "warm_seconds": [
+      0.9644652710000017,
+      0.8262041740000008,
+      0.7931182650000004,
+      0.801467014,
+      0.7615064409999999
+    ],
+    "parent_max_rss_kib": 727264,
+    "child_max_rss_kib": 693764,
+    "external_api_calls": 0
+  },
+  "math-smoke": {
+    "model": "unimernet-tiny-next02",
+    "kind": "math",
+    "input_sha256": "a5b1be7313b4fdb23ba745ec89fadb66d8c11a941f9685c6cc746db20012f957",
+    "cold_seconds": null,
+    "warm_seconds": [
+      5.747048153999913,
+      4.136310270999957,
+      4.1581902679999985,
+      4.224518187000058,
+      4.2605436219998865
+    ],
+    "parent_max_rss_kib": 1990240,
+    "child_max_rss_kib": 765648,
+    "external_api_calls": 0
+  },
+  "storage-report": {
+    "environment": "disposable local Supabase Auth/Storage/Edge PostgreSQL17",
+    "checks": [
+      {
+        "check": "Auth admin fixture creation",
+        "pass": true
+      },
+      {
+        "check": "Auth password session",
+        "pass": true
+      },
+      {
+        "check": "Auth admin fixture creation",
+        "pass": true
+      },
+      {
+        "check": "Auth password session",
+        "pass": true
+      },
+      {
+        "check": "Registration retry does not extend retention",
+        "pass": true
+      },
+      {
+        "check": "Actual synthetic object upload",
+        "pass": true
+      },
+      {
+        "check": "B direct object denied",
+        "pass": true
+      },
+      {
+        "check": "B Edge asset access denied",
+        "pass": true
+      },
+      {
+        "check": "A real Edge URL grant",
+        "pass": true
+      },
+      {
+        "check": "Signed exp within asset and 60s",
+        "pass": true
+      },
+      {
+        "check": "Signed GET before expiry returns exact bytes",
+        "pass": true
+      },
+      {
+        "check": "Read and retry keep first_stored_at/expires_at",
+        "pass": true
+      },
+      {
+        "check": "Actual signed GET after expiry rejected",
+        "pass": true
+      },
+      {
+        "check": "Late new URL after document delete denied",
+        "pass": true
+      },
+      {
+        "check": "Deletion failure leaves bytes present",
+        "pass": true
+      },
+      {
+        "check": "Pending obligation has backoff",
+        "pass": true
+      },
+      {
+        "check": "Immediate retry cannot claim backoff",
+        "pass": true
+      },
+      {
+        "check": "Due retry claimed",
+        "pass": true
+      },
+      {
+        "check": "Service retry removes actual bytes",
+        "pass": true
+      },
+      {
+        "check": "Completion after Storage acknowledgement",
+        "pass": true
+      },
+      {
+        "check": "Storage metadata absent",
+        "pass": true
+      },
+      {
+        "check": "Account deletion fixture actual upload",
+        "pass": true
+      },
+      {
+        "check": "Deleted account late URL denied",
+        "pass": true
+      },
+      {
+        "check": "Account deletion obligation survives",
+        "pass": true
+      },
+      {
+        "check": "Account deletion actual bytes removed",
+        "pass": true
+      }
+    ]
+  },
+  "math-render-report": {
+    "renderer": "KaTeX 0.16.22",
+    "report_sha256": "97b205d0b682e3ca9147846640ccb902b434d520b21762248a00637656e65541",
+    "denominator": 60,
+    "prediction_failures": 3,
+    "reference_failures": 2,
+    "note": "Post-hoc renderer compatibility only; does not change predeclared exact match normalization or establish mathematical correctness."
+  }
+}

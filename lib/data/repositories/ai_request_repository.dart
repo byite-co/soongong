@@ -33,13 +33,17 @@ class AiRequestRepository {
   AiRequestRepository(this.documents, {this.accessAllowed});
   final StudyRepository documents;
   final bool Function()? accessAllowed;
+  bool _accessible() =>
+      (documents.alive?.call() ?? true) && (accessAllowed?.call() ?? true);
   Future<T> _owned<T>(int? generation, Future<T> Function() action) =>
       documents.writer.runOwnedTransaction(
-        action,
+        () async {
+          final result = await action();
+          if (!_accessible()) throw StateError('request_access_revoked');
+          return result;
+        },
         generation: generation,
-        alive: () =>
-            (documents.alive?.call() ?? true) &&
-            (accessAllowed?.call() ?? true),
+        alive: _accessible,
       );
 
   Future<void> prepare(
