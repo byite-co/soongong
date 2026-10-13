@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logger/logger.dart';
+import 'package:soongong/core/contracts/seat_engine.dart';
 import 'package:soongong/core/dev/seat_lab/seat_lab_recorder.dart';
 import 'package:soongong/core/dev/seat_lab/seat_lab_screen.dart';
 import 'package:soongong/core/domain/clock.dart';
@@ -15,12 +18,12 @@ import '../helpers/pump_app.dart';
 
 /// Screen + doubles sharing one fake monotonic clock.
 class LabRig {
-  LabRig({this.openError});
+  LabRig({this.openError, this.startError, this.batteryError});
 
-  final SeatFrameSourceException? openError;
-  late final FakeSeatFrameSource source = FakeSeatFrameSource(
-    openError: openError,
-  );
+  final Object? openError;
+  final Object? startError;
+  final Object? batteryError;
+  late final _LabSource source = _LabSource(openError);
   final FakePresenceDetector detector = FakePresenceDetector();
   final FakeCameraPermissionGateway gateway = FakeCameraPermissionGateway();
   final FakeLifecycleSource lifecycle = FakeLifecycleSource();
@@ -36,6 +39,7 @@ class LabRig {
   int _batteryReads = 0;
 
   Future<int?> _readBattery() async {
+    if (batteryError != null) throw batteryError!;
     final i = _batteryReads < _batteries.length
         ? _batteryReads
         : _batteries.length - 1;
@@ -53,6 +57,9 @@ class LabRig {
           ({required double minFaceSize, required MonotonicClock monotonic}) {
             minFaceSizeUsed = minFaceSize;
             monotonicUsed = monotonic;
+            if (startError != null) {
+              return engine = _ThrowingStart(this, startError!);
+            }
             return engine = SeatEngineImpl(
               source: source,
               detectorFactory: () => detector,
@@ -74,6 +81,76 @@ class LabRig {
   }
 
   String get csv => utf8.decode(shared.last.bytes);
+}
+
+class _LabSource extends FakeSeatFrameSource {
+  _LabSource(this.failure);
+  final Object? failure;
+  Object? probeError;
+  Future<SeatCameraHandle>? delayedOpen;
+  @override
+  Future<CameraProbeResult> probe() async {
+    if (probeError != null) throw probeError!;
+    return super.probe();
+  }
+
+  @override
+  Future<SeatCameraHandle> open(
+    SeatFrameSourceConfig config, {
+    required SeatFrameCallback onFrame,
+    required SeatFaultCallback onFault,
+  }) async {
+    if (delayedOpen != null) return delayedOpen!;
+    if (failure != null) throw failure!;
+    return super.open(config, onFrame: onFrame, onFault: onFault);
+  }
+}
+
+// Exercises the existing screen engineBuilder boundary, without a new contract.
+class _ThrowingStart extends SeatEngineImpl {
+  _ThrowingStart(LabRig rig, this.failure)
+    : super(
+        source: rig.source,
+        detectorFactory: () => rig.detector,
+        permission: rig.gateway,
+        monotonic: rig.mono,
+      );
+  final Object failure;
+  @override
+  Future<void> start(SeatEngineConfig config) async => throw failure;
+}
+
+const _sensitiveParts = [
+  '/private/REG04-photo.jpg',
+  'REG04-original-text',
+  'REG04-secret-key',
+  'REG04-access-token',
+  'synthetic-reg04@example.invalid',
+];
+final _sensitive = _sensitiveParts.join(' ');
+
+List<LogEvent> _captureLogs() {
+  final logs = <LogEvent>[];
+  void record(LogEvent event) => logs.add(event);
+  Logger.addLogListener(record);
+  addTearDown(() => Logger.removeLogListener(record));
+  return logs;
+}
+
+void _expectRedacted(WidgetTester tester, LabRig rig, List<LogEvent> logs) {
+  expect(logs, isNotEmpty);
+  for (final event in logs) {
+    expect(event.error, isNull);
+    expect(event.stackTrace, isNull);
+    for (final part in _sensitiveParts) {
+      expect('${event.message}', isNot(contains(part)));
+    }
+  }
+  for (final part in _sensitiveParts) {
+    expect(rig.csv, isNot(contains(part)));
+    expect(find.textContaining(part), findsNothing);
+  }
+  expect(tester.takeException(), isNull);
 }
 
 Future<void> _tapStart(WidgetTester tester) async {
@@ -374,8 +451,9 @@ void main() {
   testWidgets(
     'seat lab: a start failure stays idle, logs the error and excludes the segment',
     (tester) async {
+      final logs = _captureLogs();
       final r = LabRig(
-        openError: const SeatFrameSourceException('camera_busy'),
+        openError: SeatFrameSourceException('camera_busy', _sensitive),
       );
       await pumpThemed(
         tester,
@@ -394,6 +472,133 @@ void main() {
         find.textContaining('${SeatLabStrings.availabilityLabel}: ok'),
         findsOneWidget,
       );
+      await tester.tap(find.byTooltip(SeatLabStrings.exportCsv));
+      await tester.pump();
+      _expectRedacted(tester, r, logs);
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  for (final kind in ['untrusted code', 'source exception', 'engine start']) {
+    testWidgets('REG-04 seat lab $kind redacts logs screen and CSV', (
+      tester,
+    ) async {
+      final logs = _captureLogs();
+      final r = LabRig(
+        openError: switch (kind) {
+          'untrusted code' => SeatFrameSourceException(_sensitive),
+          'source exception' => StateError(_sensitive),
+          _ => null,
+        },
+        startError: kind == 'engine start' ? StateError(_sensitive) : null,
+        batteryError: kind == 'engine start' ? StateError(_sensitive) : null,
+      );
+      await pumpThemed(tester, r.screen(), surfaceSize: const Size(390, 2800));
+      await _tapStart(tester);
+      expect(find.text(SeatLabStrings.stateIdle), findsOneWidget);
+      expect(find.text('1 (1)'), findsOneWidget);
+      if (kind != 'engine start') {
+        expect(
+          find.textContaining('error: camera_init_failed'),
+          findsOneWidget,
+        );
+      } else {
+        expect(
+          logs.where((e) => '${e.message}'.contains('seat lab: start failed')),
+          hasLength(1),
+        );
+        expect(
+          logs.any((e) => '${e.message}'.contains('battery unavailable')),
+          isTrue,
+        );
+      }
+      await tester.tap(find.byTooltip(SeatLabStrings.exportCsv));
+      await tester.pump();
+      _expectRedacted(tester, r, logs);
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  for (final kind in ['probe', 'late open']) {
+    testWidgets(
+      'REG-04 seat lab $kind failure redacts asynchronous diagnostics',
+      (tester) async {
+        final logs = _captureLogs();
+        final r = LabRig(
+          openError: kind == 'probe'
+              ? const SeatFrameSourceException('camera_busy')
+              : null,
+        );
+        final lateOpen = Completer<SeatCameraHandle>();
+        if (kind == 'late open') r.source.delayedOpen = lateOpen.future;
+        await pumpThemed(
+          tester,
+          r.screen(),
+          surfaceSize: const Size(390, 2800),
+        );
+        await _tapStart(tester);
+        if (kind == 'probe') {
+          r.source.probeError = StateError(_sensitive);
+          await tester.tap(find.text(SeatLabStrings.checkAvailability));
+        } else {
+          await tester.pump(SeatEngineImpl.defaultOpenTimeout);
+          await tester.pump();
+          lateOpen.completeError(StateError(_sensitive));
+        }
+        await tester.pump();
+        await tester.pump();
+        expect(
+          logs.any(
+            (e) => '${e.message}'.contains(
+              kind == 'probe'
+                  ? 'camera probe failed'
+                  : 'late camera open failed',
+            ),
+          ),
+          isTrue,
+        );
+        await tester.tap(find.byTooltip(SeatLabStrings.exportCsv));
+        await tester.pump();
+        _expectRedacted(tester, r, logs);
+        await tester.pump(const Duration(seconds: 4));
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
+
+  testWidgets(
+    'REG-04 seat lab fault detector and release failures omit payloads',
+    (tester) async {
+      final logs = _captureLogs();
+      final r = LabRig();
+      await pumpThemed(tester, r.screen(), surfaceSize: const Size(390, 2800));
+      await _tapStart(tester);
+      r.detector.error = StateError(_sensitive);
+      r.mono.advance(const Duration(seconds: 1));
+      r.source.emit(present: true);
+      await tester.pump();
+      r.source.fault(CameraFault.inUse, _sensitive);
+      await tester.pump();
+      expect(r.engine!.lastFault, CameraFault.inUse.name);
+      r.source.closeError = StateError(_sensitive);
+      await _tapStop(tester);
+      expect(
+        r.engine!.lastStopReport!.closeResult.outcome,
+        CloseOutcome.failed,
+      );
+      await tester.tap(find.byTooltip(SeatLabStrings.exportCsv));
+      await tester.pump();
+      for (final event in [
+        'detector failed',
+        'camera fault',
+        'camera release ended',
+      ]) {
+        expect(logs.any((e) => '${e.message}'.contains(event)), isTrue);
+      }
+      _expectRedacted(tester, r, logs);
+      await tester.pump(const Duration(seconds: 4));
       await tester.pumpWidget(const SizedBox());
     },
   );
