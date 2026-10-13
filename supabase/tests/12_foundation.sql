@@ -77,6 +77,14 @@ select throws_ok($$select public.ai_reconcile((select id from fd_jobs where name
 select is(public.study_photo_register_v1(0,'10000000-0000-4000-8000-000000000101','50000000-0000-4000-8000-000000000101')->>'available','true','FD-21 first server asset available');
 select throws_ok($$select public.study_photo_access('bbbbbbbb-0000-4000-8000-000000000101',0,'50000000-0000-4000-8000-000000000101')$$,'P0001','asset_unavailable','FD-03 B cannot obtain A photo grant');
 select throws_ok($$select public.study_photo_access('aaaaaaaa-0000-4000-8000-000000000101',1,'50000000-0000-4000-8000-000000000101')$$,'P0001','no_profile','FD-03 photo epoch mismatch rejected');
+-- D14's hourly safety net must never consume the new restore bucket.
+insert into storage.objects(bucket_id,name,created_at) values
+ ('reading-photos','aaaaaaaa-0000-4000-8000-000000000101/77777777-7777-4777-8777-777777777777/0.jpg',public.app_now()-interval '25 hours'),
+ ('study-restore','aaaaaaaa-0000-4000-8000-000000000101/77777777-7777-4777-8777-777777777778/0.jpg',public.app_now()-interval '25 hours');
+select public.photo_residue_run();
+select is((select count(*) from public.photo_delete_queue where bucket_path like '%77777777-7777-4777-8777-777777777777%'),1::bigint,'FD-23 inference residue retains its separate short cleanup');
+select is((select count(*) from public.photo_delete_queue where bucket_path like '%77777777-7777-4777-8777-777777777778%'),0::bigint,'FD-23 restore bucket not governed by inference residue lifetime');
+select is((select expires_at-first_stored_at from public.study_photo_assets),interval '30 days','FD-23 independent maintenance does not change restore expiry');
 create temp table fd_photo as select * from public.study_photo_assets;
 create or replace function public.study_now() returns timestamptz language sql volatile set search_path='' as $$ select '2026-11-30T15:00:00Z'::timestamptz $$;
 select is(public.study_photo_register_v1(0,'10000000-0000-4000-8000-000000000101','50000000-0000-4000-8000-000000000101')->>'available','true','FD-21 one second before expiry');

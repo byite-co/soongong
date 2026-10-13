@@ -323,6 +323,31 @@ void main() {
   );
 
   test(
+    'FD-23 longer share grace does not extend picker lease; restore asset outside owned temp is untouched',
+    () async {
+      final ledger = store(
+        policy: const TempRetentionPolicy(shareGrace: Duration(days: 2)),
+      );
+      final share = await ledger.create(_scopeA, 'export');
+      final shared = payload(share, 'share');
+      share.markShared();
+      share.release();
+      final picker = await ledger.create(_scopeA, 'picker');
+      final picked = payload(picker, 'picker');
+      final restored = File(p.join(sandbox.path, 'restore-asset.bin'))
+        ..writeAsStringSync('separate photo');
+      now = now.add(const Duration(minutes: 11));
+      await ledger.sweep();
+      expect(picked.existsSync(), isFalse);
+      expect(shared.existsSync(), isTrue);
+      expect(restored.existsSync(), isTrue);
+      now = now.add(const Duration(days: 2));
+      await ledger.sweep();
+      expect(shared.existsSync(), isFalse);
+      expect(restored.existsSync(), isTrue);
+    },
+  );
+  test(
     'EXP-07 restart recovers shared path and keeps creation-based expiry',
     () async {
       final task = await store().create(_scopeA, 'export');
