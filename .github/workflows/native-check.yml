@@ -1,7 +1,7 @@
 name: native-check
 on:
   pull_request:
-    paths: ['android/**', 'ios/**', 'lib/data/engines/gaze/**', 'lib/data/db/**', 'pubspec.*', 'tool/fetch_gaze_model.py', '.github/workflows/native-check.yml']
+    paths: ['third_party/**', 'android/**', 'ios/**', 'lib/data/engines/gaze/**', 'lib/data/db/**', 'pubspec.*', 'tool/fetch_gaze_model.py', '.github/workflows/native-check.yml']
   workflow_dispatch:
 concurrency:
   group: native-check-${{ github.ref }}
@@ -24,6 +24,16 @@ jobs:
       - run: python3 tool/fetch_gaze_model.py
       - run: flutter pub get
       - run: flutter build apk --debug --flavor dev --dart-define-from-file=env/app.dev.example.json
+      - name: Exercise owned picker and direct share native contracts
+        working-directory: android
+        run: ./gradlew :image_picker_android:testDebugUnitTest --tests io.flutter.plugins.imagepicker.OwnedImageStoreTest :app:testDevDebugUnitTest --tests co.byite.soongong.OwnedShareBridgeTest --no-daemon
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owned-native-android-tests
+          path: |
+            build/image_picker_android/test-results/
+            build/app/test-results/
   ios-device:
     runs-on: macos-latest
     timeout-minutes: 45
@@ -36,6 +46,11 @@ jobs:
           cache: true
       - run: python3 tool/fetch_gaze_model.py
       - run: flutter pub get
+      - name: Exercise iOS ownership writer and real pre-callback process exit
+        run: |
+          src=third_party/image_picker_ios/ios/image_picker_ios/Sources/image_picker_ios
+          clang -fobjc-arc -fblocks -framework Foundation -I "$src/include/image_picker_ios" "$src/FIPOwnedImageStore.m" third_party/owned_native_tests/OwnedImageStoreTests.m -o /tmp/soongong-owned-native-tests
+          /tmp/soongong-owned-native-tests
       # ML Kit excludes arm64 simulators; MediaPipe 1.1.0 ships ARM64 binaries.
       # Device ARM64 is their common target. No signing or deployment occurs.
       - name: Build iPhone release without signing

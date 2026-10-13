@@ -16,6 +16,11 @@
         android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <provider android:name=".OwnedShareFileProvider"
+            android:authorities="${applicationId}.soongong.owned_share"
+            android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/owned_share_paths" />
+        </provider>
         <activity
             android:name=".MainActivity"
             android:exported="true"

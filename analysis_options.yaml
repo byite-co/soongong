@@ -14,6 +14,10 @@ analyzer:
     - '**/*.g.dart'
     - '**/*.freezed.dart'
     - docs/**
+    # Upstream package Dart code remains dependency code; native patch tests
+    # run in native-check, like the package's formerly hosted native sources.
+    - third_party/image_picker_android/**
+    - third_party/image_picker_ios/**
   errors:
     # CLAUDE.md §7: `print` 금지, logger 사용.
     avoid_print: error

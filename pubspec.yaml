@@ -88,6 +88,14 @@ dependencies:
   url_launcher: ^6.3.2
   path: ^1.9.1
 
+# RC-02: exact locked platform sources, patched only for owned temporary files.
+# Public image_picker API/codecs retained. Provenance: third_party/owned_picker.md.
+dependency_overrides:
+  image_picker_android:
+    path: third_party/image_picker_android
+  image_picker_ios:
+    path: third_party/image_picker_ios
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        A31500000000000000000002 /* OwnedShareBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31500000000000000000001 /* OwnedShareBridge.swift */; };
         A31400000000000000000002 /* GazeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31400000000000000000001 /* GazeBridge.swift */; };
         A31400000000000000000004 /* MediaPipeTasksVision in Frameworks */ = {isa = PBXBuildFile; productRef = A31400000000000000000003 /* MediaPipeTasksVision */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
@@ -44,6 +45,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        A31500000000000000000001 /* OwnedShareBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnedShareBridge.swift; sourceTree = "<group>"; };
         A31400000000000000000001 /* GazeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GazeBridge.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
@@ -143,6 +145,7 @@
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
                 A31400000000000000000001 /* GazeBridge.swift */,
+                A31500000000000000000001 /* OwnedShareBridge.swift */,
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
@@ -306,6 +309,7 @@
 			files = (
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
                 A31400000000000000000002 /* GazeBridge.swift in Sources */,
+                A31500000000000000000002 /* OwnedShareBridge.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
 			);

@@ -7,13 +7,16 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private var gazeBridge: GazeBridge? = null
+    private var ownedShareBridge: OwnedShareBridge? = null
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        ownedShareBridge?.dispose(); ownedShareBridge = null
         gazeBridge?.dispose(); gazeBridge = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        ownedShareBridge = OwnedShareBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         gazeBridge = GazeBridge(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
         // [S06c] Sleep-aware monotonic clock for the measurement session clock
         // (lib/core/platform/sleep_aware_clock.dart). elapsedRealtime() keeps

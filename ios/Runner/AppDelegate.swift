@@ -4,6 +4,7 @@ import UIKit
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var gazeBridge: GazeBridge?
+  private var ownedShareBridge: OwnedShareBridge?
 
   override func application(
     _ application: UIApplication,
@@ -25,6 +26,7 @@ import UIKit
         result(nil)
       } catch { result(FlutterError(code: "backup_policy_failed", message: nil, details: nil)) }
     }
+    ownedShareBridge = OwnedShareBridge(messenger: engineBridge.applicationRegistrar.messenger())
     gazeBridge = GazeBridge(messenger: engineBridge.applicationRegistrar.messenger())
     registerSleepAwareClock(messenger: engineBridge.applicationRegistrar.messenger())
   }

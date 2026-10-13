@@ -1,0 +1,214 @@
+{
+  "image_picker_android": {
+    "version": "0.8.13+23",
+    "archive_url": "https://pub.dev/api/archives/image_picker_android-0.8.13+23.tar.gz",
+    "archive_sha256": "0a55d645a670d6ae11efa948f955ae904afa472f1344fc15a7ddacc20c1e7219",
+    "included_files": {
+      "android/build.gradle.kts": {
+        "upstream_sha256": "9dedb6c825ab006cfee6fcf1b34653b06fd4e11d8c14524c578bbe25a4d44018"
+      },
+      "android/gradle.properties": {
+        "upstream_sha256": "622a3c6053f7d1429ef926700e2859ddcf2da8e58581de4621b5b601074508ba"
+      },
+      "android/settings.gradle.kts": {
+        "upstream_sha256": "66438c10cc93f35ab471d6bb88c4c3889f12b2cb8eef8c8a7f2e4c5a8b638aee"
+      },
+      "android/src/main/AndroidManifest.xml": {
+        "upstream_sha256": "61349e6a391f437624fbbda8c3a1d97d206295d3f3a54edf364393af14b677c6"
+      },
+      "android/src/main/java/io/flutter/plugins/imagepicker/ExifDataCopier.java": {
+        "upstream_sha256": "070a37b3b97f7345d1150b896d5efb24c6966eb2b14e4f70bf0f9c6f36107978"
+      },
+      "android/src/main/java/io/flutter/plugins/imagepicker/FileUtils.java": {
+        "upstream_sha256": "4ab08463ff5987f91801dc73b267c331b1b2e328168c20a3bfeda08ab8bfd9dc"
+      },
+      "android/src/main/java/io/flutter/plugins/imagepicker/ImagePickerCache.java": {
+        "upstream_sha256": "404e2c1bd21a65bd1d55d2ca4c7952074d50ca608e4f9cf9d296888af2ad2326"
+      },
+      "android/src/main/java/io/flutter/plugins/imagepicker/ImagePickerDelegate.java": {
+        "upstream_sha256": "2848f76f45edac248ec2d7ef2676c339f1f8811122f526bfe293d7c80f5d81cc"
+      },
+      "android/src/main/java/io/flutter/plugins/imagepicker/ImagePickerFileProvider.java": {
+        "upstream_sha256": "09ee51148dd1fbda018bbaff226e2fdd91575e2c74910c2b971825a89acac8b3"
+      },
+      "android/src/main/java/io/flutter/plugins/imagepicker/ImagePickerPlugin.java": {
+        "upstream_sha256": "09426d0ccc857fcca44611bf4b055952fd5873a7db43299302d9870ce2bb3f63"
+      },
+      "android/src/main/java/io/flutter/plugins/imagepicker/ImagePickerUtils.java": {
+        "upstream_sha256": "a9eaffdc91ba5fa9b0434196faf65497dd73dc2353b6af92c952931389f5dfab"
+      },
+      "android/src/main/java/io/flutter/plugins/imagepicker/ImageResizer.java": {
+        "upstream_sha256": "0260ec5b78364084c3bed64a75a9e56a526aed2e4585db2f41954fd47cf70d5e"
+      },
+      "android/src/main/java/io/flutter/plugins/imagepicker/OwnedImageStore.java": {
+        "upstream_sha256": null
+      },
+      "android/src/main/kotlin/io/flutter/plugins/imagepicker/Messages.kt": {
+        "upstream_sha256": "a650c90a790a8cc1b7892763bd648ffc1f5b895569104e25e1e51251b66b6e72"
+      },
+      "android/src/main/kotlin/io/flutter/plugins/imagepicker/ResultUtils.kt": {
+        "upstream_sha256": "01328ed31588e53ea49a1d6c1f00f9d286083f2dd40262db7929924add2fdacd"
+      },
+      "android/src/main/res/xml/flutter_image_picker_file_paths.xml": {
+        "upstream_sha256": "2306c13b644f2b0c95b78de7e91f738569451ffa811e361c9bee86042959b2c0"
+      },
+      "android/src/test/java/io/flutter/plugins/imagepicker/ExifDataCopierTest.java": {
+        "upstream_sha256": "30094d2646736701ec198eb54364f737f2dcfa6830ebc2f6a8dfeb3ef949016c"
+      },
+      "android/src/test/java/io/flutter/plugins/imagepicker/FileUtilTest.java": {
+        "upstream_sha256": "18ab779052c11bdb577c672b0f1976c24215abbe1b26c5551b25d034fd6a8ec7"
+      },
+      "android/src/test/java/io/flutter/plugins/imagepicker/ImagePickerCacheTest.java": {
+        "upstream_sha256": "7917c5888fc307a64ca21c80a9dcc33e3d9593d08b8b3aace4d719048f9f7c73"
+      },
+      "android/src/test/java/io/flutter/plugins/imagepicker/ImagePickerDelegateTest.java": {
+        "upstream_sha256": "cf2d26863fac3c2bb94b8f567dab17391dbad40846d773147f983dc05d0e14dc"
+      },
+      "android/src/test/java/io/flutter/plugins/imagepicker/ImagePickerPluginTest.java": {
+        "upstream_sha256": "f0ed2f61134256816ea495c3d34cb606a63660c973bb35714b549a11d0b3d5d3"
+      },
+      "android/src/test/java/io/flutter/plugins/imagepicker/ImagePickerUtilsTest.java": {
+        "upstream_sha256": "dd728688800caa49d38d15bee4332622259a2ed9001761a124b993354574e59f"
+      },
+      "android/src/test/java/io/flutter/plugins/imagepicker/ImageResizerTest.java": {
+        "upstream_sha256": "6d3d274a1a3d2675f967d4e6f19ce9b44ceb5fcf3342155a1d6c97127f87cef7"
+      },
+      "android/src/test/java/io/flutter/plugins/imagepicker/OwnedImageStoreTest.java": {
+        "upstream_sha256": null
+      },
+      "android/src/test/kotlin/io/flutter/plugins/imagepicker/TestResultUtils.kt": {
+        "upstream_sha256": "93d95fd463c809ef857cf8b31118289358efb63900ae9f89caa9c0bfe67f6cc3"
+      },
+      "android/src/test/resources/flutter_image.svg": {
+        "upstream_sha256": "55effcbd51457e9f2bfc25194e7be6fec83368634b339131e578bd95643362de"
+      },
+      "android/src/test/resources/jpgImageTall.jpg": {
+        "upstream_sha256": "f14f59b8162c5511a5a15005adb5a08137a61da6dcf79d7a2290c653a4f367e5"
+      },
+      "android/src/test/resources/jpgImageWide.jpg": {
+        "upstream_sha256": "242206e6ecb0fc340dd86f4d32e50e4d2ae21dbaf7389e099133a916f1d0c4b8"
+      },
+      "android/src/test/resources/mockito-extensions/org.mockito.plugins.MockMaker": {
+        "upstream_sha256": "ad854cde62cc375ac4d837bcd1769fb17feb26bd4096ce837ca9164903514e93"
+      },
+      "android/src/test/resources/pngImage.png": {
+        "upstream_sha256": "40054377e1e084f44f4410ce8f44c210aba945dfc55ed0ef23bdf9469e32f8d3"
+      },
+      "CHANGELOG.md": {
+        "upstream_sha256": "7404502683d9607aa574823e9b5c7cb987959b877a1ad0702491260d937ef6d0"
+      },
+      "lib/image_picker_android.dart": {
+        "upstream_sha256": "3209659d99d0e6335cb96eff52ca98348c9bf5f44f1752736db1cc6a50529b70"
+      },
+      "lib/src/messages.g.dart": {
+        "upstream_sha256": "6e0d5acba1efec293ca65872750634667ffd59ab8f331a32f3036e471cda4501"
+      },
+      "LICENSE": {
+        "upstream_sha256": "8e22fae63e4e8ac897f0cb3018ed94ed730b3e5da5d42c6856a26ba524f0fd88"
+      },
+      "pubspec.yaml": {
+        "upstream_sha256": "ad8aa01ed25bf356461e1a1e94352fa8c0d21cf2c7be85e605ef1c2276bf4c9a"
+      },
+      "README.md": {
+        "upstream_sha256": "6eb462505f8dcf2b35a3a3b3c2a67b1dd0ba575a8eb0950cffbf573d25e8b725"
+      }
+    }
+  },
+  "image_picker_ios": {
+    "version": "0.8.13+9",
+    "archive_url": "https://pub.dev/api/archives/image_picker_ios-0.8.13+9.tar.gz",
+    "archive_sha256": "815921d05ef87d64dc64e9f7f855967614a9a67086d0c60fa27d47a1cd9a8896",
+    "included_files": {
+      "CHANGELOG.md": {
+        "upstream_sha256": "b0f6e85342d5166450b270e2e0acc8005dcd03fd0587f88b2cae92fbe53dadd3"
+      },
+      "ios/image_picker_ios/Package.swift": {
+        "upstream_sha256": "5fbe6de1fb566aaf11079ab2b50cd052153ae45e47f7fed67ebb02d85b2c5765"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/FIPOwnedImageStore.m": {
+        "upstream_sha256": null
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/FIPPickerSeams.m": {
+        "upstream_sha256": "9bd8305ce10ac5e22f562187726ae0518fc687a759d420777a0f04c740eb349a"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/FIPViewProvider.m": {
+        "upstream_sha256": "e2a66b6e7f0b9e8656da953504ccc53fbccfc4dc237f1bc21f36ff5ea24d90a6"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/FLTImagePickerImageUtil.m": {
+        "upstream_sha256": "96493bb8c45015cf1987b69ceef0d6b5cca119591e100ac1ca4d3a3f585ba481"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/FLTImagePickerMetaDataUtil.m": {
+        "upstream_sha256": "fe367a23737c73627e691c678a23b14c480f29e44ed63f39e4927843b05cb379"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/FLTImagePickerPhotoAssetUtil.m": {
+        "upstream_sha256": "8e60047b4f365ac0b1a4e5748241b7356a50159da8024592710e5f052ad2bbec"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/FLTImagePickerPlugin.m": {
+        "upstream_sha256": "d0b6b3f59a29ed0642960be1baf57505f72388afff7f90675d2b0693097f32e7"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/FLTPHPickerSaveImageToPathOperation.m": {
+        "upstream_sha256": "85f5072d1abbdf1c1690b412d369bd144728fb0ead4630ffc5dbc6121950c950"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/include/image_picker_ios/FIPOwnedImageStore.h": {
+        "upstream_sha256": null
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/include/image_picker_ios/FIPPickerSeams.h": {
+        "upstream_sha256": "c7edda42d9d06d730e9b828d0a8297ccb0fc6dca5a2933cf25586e9c5352d9a9"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/include/image_picker_ios/FIPViewProvider.h": {
+        "upstream_sha256": "c51f3233e9d76037fabdd4035face7f7ba45a2580058b8eba919a74d9aded343"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/include/image_picker_ios/FLTImagePickerImageUtil.h": {
+        "upstream_sha256": "d86a3f2b2628c5e77803c0259b441e28ad0dfca2dd318d6de5dfe68aae52e2e1"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/include/image_picker_ios/FLTImagePickerMetaDataUtil.h": {
+        "upstream_sha256": "f1e34c0b8cc5dfbabf7b5c3b0150c156be501624e15731a2fedf9d02583708e0"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/include/image_picker_ios/FLTImagePickerPhotoAssetUtil.h": {
+        "upstream_sha256": "747374f7ad54102ab9cf572aa0f3449c5ea851faf6f2d3e8f04f7fd67dbbaae0"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/include/image_picker_ios/FLTImagePickerPlugin.h": {
+        "upstream_sha256": "d7b3e43c3ab4c9cb332abe8e8723d384dc7771a1d448d0cc43233d783d2a10ba"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/include/image_picker_ios/FLTImagePickerPlugin_Test.h": {
+        "upstream_sha256": "08669e27f780fd2a9913ed9dd7f5a0e1fbc2f93e9fff6fd8b54799c7e01221d8"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/include/image_picker_ios/FLTPHPickerSaveImageToPathOperation.h": {
+        "upstream_sha256": "ef8618c9fbe23b687ceaa901fda7c241859220271a1475ff8c0bc306a6fe166c"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/include/image_picker_ios/messages.g.h": {
+        "upstream_sha256": "e8981fbf411c0bb7438a6a9c4b2c988749d7218f43701ba8af12ebe0a49a9111"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/include/image_picker_ios-umbrella.h": {
+        "upstream_sha256": "2a17b405b86d1f3879590d02c70debb59bed24879b956f6ca6f8070a859c7d8b"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/include/ImagePickerPlugin.modulemap": {
+        "upstream_sha256": "89823166adbb98270ee0312b4e7acc91e8ed31cad602b52e03a39611ce7e07bc"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/messages.g.m": {
+        "upstream_sha256": "704559ddbad66b9875c63eb207ecd0eddeef105bd4d3798c26de3749db2835a6"
+      },
+      "ios/image_picker_ios/Sources/image_picker_ios/Resources/PrivacyInfo.xcprivacy": {
+        "upstream_sha256": "6d2da0d8d930227d428c1d9363b0ad6e3a12e2c9b68c5ce297158a7412fc8c31"
+      },
+      "ios/image_picker_ios.podspec": {
+        "upstream_sha256": "bde2b6015c7f452c8ccfe19ba6bd5674d233439f17b1875333acf41709fb4880"
+      },
+      "lib/image_picker_ios.dart": {
+        "upstream_sha256": "0b068dae61d20e522fad38ac07e9bb6e56a6d551acc3f4fbf8dcd11e55316a74"
+      },
+      "lib/src/messages.g.dart": {
+        "upstream_sha256": "fb0dd8c181a66674d408087f7c5d46d3a5c798089707de6a98784dfb32aff6be"
+      },
+      "LICENSE": {
+        "upstream_sha256": "8e22fae63e4e8ac897f0cb3018ed94ed730b3e5da5d42c6856a26ba524f0fd88"
+      },
+      "pubspec.yaml": {
+        "upstream_sha256": "8937fd3d2c2a44e0ec97f033e033458658da43416f65afb13ace349310410656"
+      },
+      "README.md": {
+        "upstream_sha256": "09ed80401e64abd8040ec31a3884f060fd76f6c46d4ff4a274fa47ef026c5a47"
+      }
+    }
+  }
+}
