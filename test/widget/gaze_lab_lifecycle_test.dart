@@ -503,8 +503,9 @@ void main() {
     final opening = Completer<void>();
     final camera = _Controller();
     // Match the real bridge's serialized open/close ordering.
-    final native = _Native()
-      ..onOpen = (_) => opening.future..onClose = (_) => opening.future;
+    final native = _Native();
+    native.onOpen = (_) => opening.future;
+    native.onClose = (_) => opening.future;
     await _mount(tester, container, _cameraSource(camera), native);
     await _consentAndStart(tester);
     expect(native.opened, hasLength(1));

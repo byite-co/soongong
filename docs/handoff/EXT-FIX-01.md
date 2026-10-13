@@ -24,7 +24,7 @@ PrivacyActions는 삭제 세대를 transaction에서 초기화하고 계정 소�
 
 `database_creation_protection_test.dart` 18건은 실제 codec으로 잘못된 키/키 없음/절단/marker/4개 생성 중단/준비 후 실패·재시도·파일 소실/동시 준비를 검사한다. 파일 bytes와 키 write 횟수를 비교한다. 기존10건 암호화 이전/WAL/복구 검사는 유지한다. 앱 밖 프로세스의 모든 파일 경합을 원자적으로 잠갔다고 주장하지 않는다.
 
-## 4. F-CAS / F-DEADLINE
+## 4. F-CAS / F-TIMEOUT
 
 계산 성공 값과 실패를 `CasResult`로 구분하고 하나라도 실패하면 남은 도구/추가 모델/정답 대조를 중단한다. 기준답을 모델에 보내지 않는다. 기존 외부 응답 계약의 비성공 경로를 사용한다. CAS CPU4초/주소공간768MiB/벽6초 및 환경 비밀 제거를 유지한다.
 
