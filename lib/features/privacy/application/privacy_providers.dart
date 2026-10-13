@@ -54,6 +54,9 @@ import '../../../data/repositories/repository_providers.dart';
 import '../../../data/repositories/session_repository.dart';
 import '../../../data/repositories/subject_repository.dart';
 import '../../../data/repositories/sync_writer.dart';
+import '../../../data/temp/owned_temp_store.dart';
+import '../../../data/temp/temp_ownership.dart';
+import '../../../data/temp/temp_providers.dart';
 import '../../measure/domain/sensitivity_policy.dart';
 import 'photo_retention.dart';
 
@@ -141,7 +144,25 @@ typedef ShareExport =
     Future<void> Function(ExportFile file, {required ExportGuard guard});
 
 @Riverpod(keepAlive: true)
-ShareExport shareExport(Ref ref) => shareExportFile;
+ShareExport shareExport(Ref ref) {
+  final writer = ref.watch(syncWriterProvider);
+  final temporary = ref.watch(tempOwnershipProvider);
+  return (file, {required guard}) async {
+    await guard.check();
+    final generation = writer.purgeGeneration;
+    if (generation == null) throw StateError('export cancelled');
+    await shareExportFile(
+      file,
+      guard: guard,
+      createTask: () => temporary.create(
+        writer,
+        'export',
+        generation: generation,
+        alive: guard.isCurrent,
+      ),
+    );
+  };
+}
 
 sealed class DeleteAllOutcome {
   const DeleteAllOutcome();
@@ -162,6 +183,13 @@ class DeleteAllFailed extends DeleteAllOutcome {
   const DeleteAllFailed(this.error);
 
   final Object error;
+}
+
+/// The server verdict is settled; local cleanup could not persist its retry
+/// marker. Keep the pending purge and account mapping; resume only local work.
+class DeleteAllLocalPending extends DeleteAllOutcome {
+  const DeleteAllLocalPending({required this.serverConfirmed});
+  final bool serverConfirmed;
 }
 
 /// Records are gone (server + local) but photo files could not all be
@@ -257,6 +285,7 @@ class PrivacyActions {
     required this.share,
     required this.backend,
     required this.serverPurge,
+    this.temporary,
     String Function()? newRequestId,
   }) : _newRequestId = newRequestId ?? newUuid {
     if (serverPurge) {
@@ -278,6 +307,7 @@ class PrivacyActions {
 
   /// true when `purge-all` must be called first (backend mode, signed in).
   final bool serverPurge;
+  final TempOwnership? temporary;
 
   /// Process-wide `purge-all` calls by request id (see [PurgeCall]).
   static final Map<String, PurgeCall> _calls = <String, PurgeCall>{};
@@ -313,18 +343,21 @@ class PrivacyActions {
   /// Builds the file and opens the share sheet. Throws on failure so the
   /// screen can offer "다시 시도" with the same format.
   Future<void> export(ExportFormat format) async {
+    final tempEpoch = temporary?.epoch(writer.ctx.userId);
+    bool exportAlive() =>
+        _alive() && temporary?.epoch(writer.ctx.userId) == tempEpoch;
     final generation = await writer.runOwnedTransaction(
       writer.refreshPurgeGeneration,
-      alive: _alive,
+      alive: exportAlive,
     );
     final guard = ExportGuard(
       isCurrent: () =>
-          !_disposed &&
+          exportAlive() &&
           writer.purgeGeneration == generation &&
           (!serverPurge || backend.currentSession?.userId == writer.ctx.userId),
       validate: () => writer.runOwnedTransaction(
         () async {},
-        alive: _alive,
+        alive: exportAlive,
         generation: generation,
       ),
     );
@@ -360,6 +393,7 @@ class PrivacyActions {
       if (joined != null) return joined;
       return deleteAll();
     }
+    temporary?.invalidate(writer.ctx.userId);
     final f = _deleteAll().whenComplete(() => _inFlight = null);
     _inFlight = f;
     return await f;
@@ -609,28 +643,34 @@ class PrivacyActions {
   }
 
   Future<DeleteAllOutcome> _completeLocal(int epoch) async {
-    final photoResult = await writer.runOwnedTransaction(
-      () async {
-        if ((await purge.state()).pendingEpoch != epoch) {
-          return null; // finished by another caller
-        }
-        if (await sessions.readSnapshot() != null) throw const _MeasuringNow();
-        final r = await photos.wipeAll(alive: _alive);
-        if (_disposed) throw StateError('account changed');
-        await purge.run(epoch: epoch);
-        await subjects.ensureDefault();
-        await purge.clearPending();
-        return r;
-      },
-      alive: _alive,
-      purgeWork: true,
-    );
-    if (photoResult == null) return const DeleteAllDone();
-    if (photoResult.allDone) return const DeleteAllDone();
-    return DeleteAllPartial(
-      failedPhotos: photoResult.failedCount,
-      storeUnavailable: photoResult.storeUnavailable,
-    );
+    try {
+      final photoResult = await writer.runOwnedTransaction(
+        () async {
+          if ((await purge.state()).pendingEpoch != epoch) {
+            return null; // finished by another caller
+          }
+          if (await sessions.readSnapshot() != null)
+            throw const _MeasuringNow();
+          final r = await photos.wipeAll(alive: _alive);
+          if (_disposed) throw StateError('account changed');
+          await purge.run(epoch: epoch);
+          await subjects.ensureDefault();
+          await purge.clearPending();
+          return r;
+        },
+        alive: _alive,
+        purgeWork: true,
+      );
+      if (photoResult == null) return const DeleteAllDone();
+      if (photoResult.allDone) return const DeleteAllDone();
+      return DeleteAllPartial(
+        failedPhotos: photoResult.failedCount,
+        storeUnavailable: photoResult.storeUnavailable,
+      );
+    } on TempStoreUnavailable {
+      if (_disposed) return DeleteAllFailed(StateError('account changed'));
+      return DeleteAllLocalPending(serverConfirmed: serverPurge);
+    }
   }
 }
 
@@ -651,6 +691,7 @@ PrivacyActions privacyActions(Ref ref) {
     share: ref.watch(shareExportProvider),
     backend: ref.watch(authBackendProvider),
     serverPurge: signedIn,
+    temporary: ref.watch(tempOwnershipProvider),
   );
   ref.onDispose(a.dispose);
   // Invalidate immediately on a gate transition, even before a lazy

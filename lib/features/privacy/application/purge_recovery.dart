@@ -112,6 +112,7 @@ class PurgeRecovery {
         DeleteAllBlocked() => const PurgeRecoveryBlocked(),
         DeleteAllUnconfirmed() => const PurgeRecoveryChecking(),
         DeleteAllFailed(:final error) => PurgeRecoveryFailed(error),
+        final DeleteAllLocalPending outcome => PurgeRecoveryFailed(outcome),
       });
       if (outcome != null) appLog.i('purge recovery → ${outcome.runtimeType}');
       // [S09d] "unconfirmed" because a delete / a server call is still

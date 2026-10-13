@@ -28,6 +28,9 @@ import '../../../core/logging/app_logger.dart';
 import '../../../data/photos/photo_store.dart';
 import '../../../data/repositories/reading_repository.dart';
 import '../../../data/repositories/repository_providers.dart';
+import '../../../data/temp/owned_temp_store.dart';
+import '../../../data/temp/temp_ownership.dart';
+import '../../../data/temp/temp_providers.dart';
 
 part 'photo_retention.g.dart';
 
@@ -45,11 +48,17 @@ class PhotoWipeFailed implements Exception {
   final bool storeUnavailable;
 
   @override
-  String toString() => 'PhotoWipeFailed($failed${storeUnavailable ? ' · store unavailable' : ''})';
+  String toString() =>
+      'PhotoWipeFailed($failed${storeUnavailable ? ' · store unavailable' : ''})';
 }
 
 class PhotoDeleteResult {
-  const PhotoDeleteResult({required this.deleted, required this.failed, this.failedFiles = 0, this.storeUnavailable = false});
+  const PhotoDeleteResult({
+    required this.deleted,
+    required this.failed,
+    this.failedFiles = 0,
+    this.storeUnavailable = false,
+  });
 
   final List<String> deleted;
   final List<String> failed;
@@ -68,11 +77,17 @@ class PhotoDeleteResult {
 }
 
 class PhotoRetention {
-  PhotoRetention({required this.reading, required this.store, required this.now});
+  PhotoRetention({
+    required this.reading,
+    required this.store,
+    required this.now,
+    this.temporary,
+  });
 
   final ReadingRepository reading;
   final PhotoStore store;
   final DateTime Function() now;
+  final TempOwnership? temporary;
 
   /// Deletes files past `expires_at` (rows marked), the stale camera cache,
   /// and retries a sweep a previous wipe left behind. Returns the number of
@@ -87,7 +102,10 @@ class PhotoRetention {
     }
     final cache = await store.clearCache(now: now());
     final left = await retryPendingSweep();
-    if (n > 0 || cache > 0 || left != 0) appLog.i('photos · expired deleted=$n cache=$cache sweepLeft=${left ?? 'unknown'}');
+    if (n > 0 || cache > 0 || left != 0)
+      appLog.i(
+        'photos · expired deleted=$n cache=$cache sweepLeft=${left ?? 'unknown'}',
+      );
     return n;
   }
 
@@ -96,7 +114,8 @@ class PhotoRetention {
   Future<File?> fileFor(Photo photo) async {
     if (photo.isDeleted) return null;
     if (!photo.expiresAt.isAfter(now())) {
-      if (await store.delete(photo.localPath)) await reading.markPhotoDeleted(photo.id);
+      if (await store.delete(photo.localPath))
+        await reading.markPhotoDeleted(photo.id);
       return null;
     }
     final f = await store.fileFor(photo.localPath);
@@ -127,6 +146,15 @@ class PhotoRetention {
   /// account changed): what was not reached counts as failed.
   Future<PhotoDeleteResult> wipeAll({bool Function()? alive}) async {
     bool go() => alive == null || alive();
+    // Persist revocation outside the DB before any caller may wipe its account
+    // mapping. Failure to persist must throw, retaining the database for retry.
+    var temp = const TempCleanupResult();
+    if (go() && temporary != null) {
+      await temporary!.revoke(reading.ctx.userId);
+      // An empty account mapping does not prove the owned root is empty.
+      // Count the final sweep once, including orphan/unknown obligations.
+      temp = await temporary!.store.sweep();
+    }
     await reading.markPhotoSweepPending();
     final all = await reading.getAllPhotos(includeDeleted: true);
     final ok = <String>[];
@@ -143,13 +171,17 @@ class PhotoRetention {
       }
     }
     if (ok.isNotEmpty && go()) await reading.purgePhotoRows(ok);
-    final sweep = await store.sweep(keep: <String>{for (final p in failed) p.localPath}, proceed: go);
-    if (failed.isEmpty && sweep.clean && go()) await reading.clearPhotoSweepPending();
+    final sweep = await store.sweep(
+      keep: <String>{for (final p in failed) p.localPath},
+      proceed: go,
+    );
+    if (failed.isEmpty && sweep.clean && go())
+      await reading.clearPhotoSweepPending();
     return PhotoDeleteResult(
       deleted: ok,
       failed: <String>[for (final p in failed) p.id],
-      failedFiles: sweep.left.length,
-      storeUnavailable: !sweep.complete && go(),
+      failedFiles: sweep.left.length + temp.remaining,
+      storeUnavailable: (!sweep.complete && go()) || temp.unknown,
     );
   }
 
@@ -158,23 +190,36 @@ class PhotoRetention {
   /// marker; null when the store could not be opened or listed (the marker
   /// stays, nothing is known).
   Future<int?> retryPendingSweep() async {
-    if (!await reading.photoSweepPending()) return 0;
+    final temp = await temporary?.store.sweep() ?? const TempCleanupResult();
+    if (!await reading.photoSweepPending())
+      return temp.unknown ? null : temp.remaining;
     final live = await reading.getAllPhotos();
-    final sweep = await store.sweep(keep: <String>{for (final p in live) p.localPath});
-    if (!sweep.complete) return null;
+    final sweep = await store.sweep(
+      keep: <String>{for (final p in live) p.localPath},
+    );
+    if (!sweep.complete || temp.unknown) return null;
     if (sweep.left.isEmpty) await reading.clearPhotoSweepPending();
-    return sweep.left.length;
+    return sweep.left.length + temp.remaining;
   }
 
   /// Row-less files a previous wipe could not delete (0 when no wipe is
   /// pending; null when the store cannot be listed) — shown on the privacy
   /// screen with a retry.
   Future<int?> pendingSweepCount() async {
-    if (!await reading.photoSweepPending()) return 0;
-    final live = <String>{for (final p in await reading.getAllPhotos()) p.localPath};
+    final temp = await temporary?.store.sweep() ?? const TempCleanupResult();
+    if (temp.unknown) return null;
+    if (!await reading.photoSweepPending()) return temp.remaining;
+    final live = <String>{
+      for (final p in await reading.getAllPhotos()) p.localPath,
+    };
     try {
       final files = await store.listAll();
-      return files.where((f) => !live.contains(f) && !live.any((k) => _derivedOf(k, f))).length;
+      return temp.remaining +
+          files
+              .where(
+                (f) => !live.contains(f) && !live.any((k) => _derivedOf(k, f)),
+              )
+              .length;
     } on PhotoStoreUnavailable {
       return null;
     }
@@ -199,5 +244,6 @@ PhotoRetention photoRetention(Ref ref) {
     reading: ref.watch(readingRepositoryProvider),
     store: ref.watch(photoStoreProvider),
     now: clock.now,
+    temporary: ref.watch(tempOwnershipProvider),
   );
 }

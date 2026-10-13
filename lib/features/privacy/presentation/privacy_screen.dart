@@ -165,6 +165,8 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
         showAppToast(context, message: PrivacyStrings.recoveryBlocked);
       case DeleteAllUnconfirmed():
         showAppToast(context, message: PrivacyStrings.deleteAllUnconfirmed);
+      case DeleteAllLocalPending(:final serverConfirmed):
+        showAppToast(context, message: PrivacyStrings.deleteAllLocalPending(serverConfirmed));
       case DeleteAllFailed():
         showAppToast(context, message: PrivacyStrings.deleteAllFailed);
     }
@@ -235,6 +237,8 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
         showAppToast(context, message: PrivacyStrings.deleteAllBlocked);
       case DeleteAllUnconfirmed():
         showAppToast(context, message: PrivacyStrings.deleteAllUnconfirmed);
+      case DeleteAllLocalPending(:final serverConfirmed):
+        showAppToast(context, message: PrivacyStrings.deleteAllLocalPending(serverConfirmed));
       case DeleteAllFailed():
       case null:
         break;
@@ -267,7 +271,9 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
                   text: switch (recovery) {
                     PurgeRecoveryChecking() => PrivacyStrings.recoveryChecking,
                     PurgeRecoveryBlocked() => PrivacyStrings.recoveryBlocked,
-                    PurgeRecoveryFailed() => PrivacyStrings.recoveryFailed,
+                    PurgeRecoveryFailed(:final error) => error is DeleteAllLocalPending
+                        ? PrivacyStrings.deleteAllLocalPending(error.serverConfirmed)
+                        : PrivacyStrings.recoveryFailed,
                     PurgeRecoveryIdle() => '',
                   },
                   error: recovery is PurgeRecoveryFailed,
@@ -381,6 +387,7 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
               ),
               const SizedBox(height: AppSpacing.s12),
               const AppNotice(PrivacyStrings.deviceBackup),
+              const AppNotice(PrivacyStrings.temporaryPolicy),
               Text(PrivacyStrings.footer, style: AppTypography.caption.copyWith(color: c.tx3, height: 1.6)),
             ],
           ),

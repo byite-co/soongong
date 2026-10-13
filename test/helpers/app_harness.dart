@@ -23,6 +23,8 @@ import 'package:soongong/data/db/app_database.dart';
 import 'package:soongong/data/export/export_service.dart';
 import 'package:soongong/data/photos/photo_store.dart';
 import 'package:soongong/data/repositories/repositories.dart';
+import 'package:soongong/data/temp/owned_temp_store.dart';
+import 'package:soongong/data/temp/temp_providers.dart';
 import 'package:soongong/features/onboarding/application/camera_permission.dart';
 import 'package:soongong/features/privacy/application/privacy_providers.dart';
 
@@ -44,6 +46,7 @@ class AppHarness {
     FakeNotificationGateway? notifications,
     FakeNetworkStatus? network,
     this.photoStore,
+    this.temporaryStore,
     this.exportFactory,
     this.shareExportCallback,
     AppDatabase? db,
@@ -79,6 +82,10 @@ class AppHarness {
 
   /// S09b: an injected store (e.g. `FailingPhotoStore`), else a plain one on [photoDir].
   final PhotoStore? photoStore;
+  final OwnedTempStore? temporaryStore;
+  late final Directory temporaryDir = Directory.systemTemp.createTempSync(
+    'soongong-owned-tests-',
+  );
 
   /// Inject export boundaries without overriding one provider twice. The
   /// factory still follows the real current-user provider on account changes.
@@ -127,6 +134,10 @@ class AppHarness {
       networkStatusProvider.overrideWithValue(network),
       photoStoreProvider.overrideWithValue(
         photoStore ?? PhotoStore(() async => photoDir),
+      ),
+      ownedTempStoreProvider.overrideWithValue(
+        temporaryStore ??
+            OwnedTempStore(() async => temporaryDir, now: clock.now),
       ),
       shareExportProvider.overrideWithValue(
         shareExportCallback ??
@@ -220,6 +231,7 @@ class AppHarness {
     container.dispose();
     if (_ownsDb) await db.close();
     if (photoDir.existsSync()) photoDir.deleteSync(recursive: true);
+    if (temporaryDir.existsSync()) temporaryDir.deleteSync(recursive: true);
   }
 
   /// Dispose **inside a widget test body** (before pumping a second app).
@@ -237,5 +249,6 @@ class AppHarness {
     await tester.pump(const Duration(seconds: 1));
     await closing;
     if (photoDir.existsSync()) photoDir.deleteSync(recursive: true);
+    if (temporaryDir.existsSync()) temporaryDir.deleteSync(recursive: true);
   }
 }

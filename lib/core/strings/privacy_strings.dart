@@ -90,7 +90,10 @@ abstract final class PrivacyStrings {
   static const String export = '내 기록 내보내기';
   static const String exportCsv = 'CSV로 내보내기';
   static const String exportJson = 'JSON으로 내보내기';
-  static const String exportHint = '세션 · 플래너 · 오답 · 과목 · 설정을 파일로 저장합니다. 사진은 포함되지 않습니다.';
+  static const String exportHint =
+      '세션 · 플래너 · 오답 · 과목 · 설정을 파일로 저장합니다. 사진은 포함되지 않습니다.\n앱이 만든 공유 파일은 24시간 유예 후 정리합니다. 받는 앱이 보관한 사본은 이 앱에서 삭제할 수 없습니다.';
+  static const String temporaryPolicy =
+      '선택·촬영 과정에서 앱이 만든 임시 사진은 처리·취소 후 정리하고, 중단된 정리는 다음 실행·복귀 때 다시 시도합니다. 갤러리 원본은 지우지 않습니다. 공유용 임시 파일은 24시간 유예 후 정리하며, 로그아웃·계정 전환·전체 삭제 때는 즉시 정리를 시도합니다. 받는 앱의 사본은 삭제할 수 없습니다.';
   static const String exportFailed = '내보내지 못했습니다';
   static const String exportRetry = '다시 시도';
   static const String exporting = '파일 만드는 중…';
@@ -104,6 +107,7 @@ abstract final class PrivacyStrings {
     '· 플래너 할 일 · 반복 일정 · 기간 일정',
     '· 오답 · 복습 큐 · 재풀이 기록',
     '· 기기에 보관된 판독 사진',
+    '· 앱이 만든 선택·촬영 임시 사진과 공유 임시 파일 (갤러리 원본과 받는 앱의 사본 제외)',
     '· 직접 추가한 과목 · 앱 설정',
   ];
   static const String deleteAllKeeps = '이 기기의 기록과 서버에 남은 관련 기록을 지웁니다 · 구독과 로그인은 유지';
@@ -112,7 +116,11 @@ abstract final class PrivacyStrings {
   static const String deleteAllFinalBody = '서버와 이 기기의 기록이 지금 지워지며 되돌릴 수 없습니다.\n로그인과 구독 상태는 유지됩니다.';
   static const String deleteAllConfirm = '삭제';
   static const String deleteAllDone = '모든 기록을 삭제했습니다';
-  static String deleteAllPartial(int failed) => '기록은 삭제했습니다 · 사진 파일 $failed개는 삭제하지 못했습니다 · 다음 실행 때 다시 시도합니다';
+  static String deleteAllPartial(int failed) =>
+      '기록은 삭제했습니다 · 사진·임시파일 정리 $failed건이 남았습니다 · 다음 실행 때 다시 시도합니다';
+  static String deleteAllLocalPending(bool serverConfirmed) => serverConfirmed
+      ? '서버의 기록 삭제는 확인했습니다. 이 기기의 정리는 아직 끝나지 않았습니다. 다시 시도하면 남은 정리만 이어갑니다.'
+      : '이 기기의 삭제를 마무리하지 못했습니다. 삭제 요청을 보관했으며 다시 시도하면 남은 정리를 이어갑니다.';
   static const String deleteAllBlocked = '측정 중에는 삭제할 수 없습니다 · 집중을 끝낸 뒤 다시 시도';
   static const String deleteAllFailed = '삭제하지 못했습니다 · 연결을 확인한 뒤 다시 시도';
   static const String deleteAllUnconfirmed = '서버의 삭제 결과를 아직 확인하지 못했습니다 · 연결되면 자동으로 확인합니다';
@@ -123,11 +131,13 @@ abstract final class PrivacyStrings {
   static const String recoveryFailed = '모든 기록 삭제를 마무리하지 못했습니다';
   static const String recoveryRetry = '다시 시도';
   static const String recoveryDone = '모든 기록 삭제를 마무리했습니다';
-  static String sweepPending(int n) => '삭제하지 못한 사진 파일 $n개';
-  static const String sweepUnavailable = '사진 저장소를 열지 못해 남은 사진 파일을 확인하지 못했습니다';
+  static String sweepPending(int n) => '사진·임시파일 정리 $n건이 남았습니다';
+  static const String sweepUnavailable =
+      '사진·임시파일 정리를 확인하지 못했습니다. 남은 개수는 알 수 없으며 다시 시도가 필요합니다.';
   static const String sweepRetry = '다시 시도';
-  static const String sweepDone = '사진 파일을 모두 삭제했습니다';
-  static const String deleteAllStoreUnavailable = '기록은 삭제했습니다 · 사진 저장소를 열지 못해 사진 파일은 다음 실행 때 다시 시도합니다';
+  static const String sweepDone = '삭제 대상으로 확인한 사진·임시파일 정리를 마쳤습니다';
+  static const String deleteAllStoreUnavailable =
+      '기록은 삭제했습니다 · 사진·임시파일의 남은 개수는 확인하지 못했습니다 · 다음 실행 때 다시 시도합니다';
   static const String writeBlocked = '모든 기록 삭제가 진행 중입니다 · 마무리된 뒤 다시 시도';
 
   // Footer
