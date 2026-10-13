@@ -20,8 +20,8 @@ import '../../helpers/app_harness.dart';
 import '../../helpers/fake_auth_backend.dart';
 
 class WaitingExport extends ExportService {
-  WaitingExport(AppDatabase db, {String userId = 'local'})
-    : super(db: db, userId: userId, encodeInBackground: false);
+  WaitingExport(AppDatabase db, {super.userId = 'local'})
+    : super(db: db, encodeInBackground: false);
   final entered = Completer<void>();
   final result = Completer<ExportFile>();
   @override
@@ -154,7 +154,7 @@ void main() {
       await actions.export(ExportFormat.json);
       expect(h.exports, hasLength(1));
       expect(
-        jsonDecode(utf8.decode(h.exports.single.bytes))['user_id'],
+        (jsonDecode(utf8.decode(h.exports.single.bytes)) as Map<String, dynamic>)['user_id'],
         'local',
       );
     },
@@ -223,7 +223,7 @@ void main() {
       await fresh.export(ExportFormat.json);
       expect(h.exports, hasLength(1));
       final json = utf8.decode(h.exports.single.bytes);
-      expect(jsonDecode(json)['user_id'], 'account-a');
+      expect((jsonDecode(json) as Map<String, dynamic>)['user_id'], 'account-a');
       expect(json, contains('new-account-a-request'));
       expect(json, isNot(contains('belongs-only-to-b')));
     },
@@ -309,7 +309,7 @@ void main() {
         expect(sharedPaths[1], isNot(originalPath));
         expect(File(originalPath).readAsBytesSync(), originalBytes);
         expect(
-          jsonDecode(File(sharedPaths[1]).readAsStringSync())['user_id'],
+          (jsonDecode(File(sharedPaths[1]).readAsStringSync()) as Map<String, dynamic>)['user_id'],
           'local',
         );
         expect(directory.listSync(), hasLength(2));
