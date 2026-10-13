@@ -41,4 +41,26 @@ void main() {
     await (await picker.pick(ImageSource.gallery))!.cleanup();
     expect(file.readAsBytesSync(), [1]);
   });
+
+  test('PICK-04 claims survive disposal and a new picker instance', () async {
+    final dir = Directory.systemTemp.createTempSync('picker-accounts-');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/same.png')..writeAsBytesSync([1]);
+    final oldResult = Completer<XFile?>();
+    final oldPicker = StudyImagePicker(
+      temporaryDirectory: () async => dir,
+      pickFile: (_) => oldResult.future,
+    );
+    final newPicker = StudyImagePicker(
+      temporaryDirectory: () async => dir,
+      pickFile: (_) async => XFile(file.path),
+    );
+    final pending = oldPicker.pick(ImageSource.gallery);
+    final fresh = (await newPicker.pick(ImageSource.camera))!;
+    oldResult.complete(XFile(file.path));
+    await (await pending)!.cleanup();
+    expect(file.existsSync(), isTrue);
+    await fresh.cleanup();
+    expect(file.existsSync(), isFalse);
+  });
 }

@@ -11,9 +11,24 @@ import 'package:soongong/core/widgets/app_button.dart';
 import 'package:soongong/data/auth/auth_mode.dart';
 import 'package:soongong/data/photos/study_image_picker.dart';
 import 'package:soongong/data/repositories/local_purge.dart';
+import 'package:soongong/data/repositories/repository_providers.dart';
+import 'package:soongong/data/repositories/sync_writer.dart';
 import 'package:soongong/features/reading/presentation/transcription_screen.dart';
 
 import '../helpers/app_harness.dart';
+
+class InitialGenerationWriter extends SyncWriter {
+  InitialGenerationWriter(super.db, super.ctx);
+  final entered = Completer<void>();
+  final resume = Completer<void>();
+  @override
+  Future<int> refreshPurgeGeneration() async {
+    final generation = await super.refreshPurgeGeneration();
+    entered.complete();
+    await resume.future;
+    return generation;
+  }
+}
 
 Uint8List png() => base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
@@ -46,6 +61,54 @@ void main() {
       await tester.pump(const Duration(milliseconds: 10));
     }
   }
+
+  testWidgets(
+    'PICK-03 purge during initial generation read leaves retry enabled',
+    (tester) async {
+      late InitialGenerationWriter writer;
+      final h = AppHarness(
+        mode: AuthMode.localOnly,
+        extraOverrides: [syncWriterProvider.overrideWith((ref) => writer)],
+      );
+      writer = InitialGenerationWriter(
+        h.db,
+        h.container.read(writeContextProvider),
+      );
+      addTearDown(h.dispose);
+      var picks = 0;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: h.container,
+          child: MaterialApp(
+            theme: buildAppTheme(Brightness.light),
+            home: TranscriptionScreen(
+              pickImage: (_) async {
+                picks++;
+                return null;
+              },
+            ),
+          ),
+        ),
+      );
+      await pumpSteps(tester);
+      await tester.tap(find.text(StudyStrings.select));
+      await pumpSteps(tester);
+      expect(writer.entered.isCompleted, isTrue);
+      final purge = h.container.read(localPurgeProvider);
+      final deleting = purge.markPending(1).then((_) => purge.clearPending());
+      await pumpSteps(tester);
+      await deleting;
+      writer.resume.complete();
+      await pumpSteps(tester);
+      expect(picks, 0);
+      final select = tester.widget<AppButton>(
+        find.widgetWithText(AppButton, StudyStrings.select),
+      );
+      expect(select.onPressed, isNotNull);
+      expect(tester.takeException(), isNull);
+      await h.unmount(tester);
+    },
+  );
 
   for (final failure in ['oversize', 'length', 'read', 'cleanup']) {
     testWidgets(

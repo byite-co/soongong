@@ -55,10 +55,12 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
     final owner = ref.read(currentUserIdProvider);
     final writer = ref.read(syncWriterProvider);
     int? generation;
-    bool current() =>
+    bool ownsOperation() =>
         mounted &&
         operation == _operation &&
-        ref.read(currentUserIdProvider) == owner &&
+        ref.read(currentUserIdProvider) == owner;
+    bool current() =>
+        ownsOperation() &&
         (generation == null || writer.purgeGeneration == generation);
     setState(() {
       _busy = true;
@@ -112,7 +114,10 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
           }
         }
       }
-      if (current()) setState(() => _busy = false);
+      // A purge can interrupt initial generation loading, before the stream
+      // listener has an assigned generation to invalidate. Unlock only our
+      // own operation even then; never unlock a newer request.
+      if (ownsOperation()) setState(() => _busy = false);
     }
   }
 
