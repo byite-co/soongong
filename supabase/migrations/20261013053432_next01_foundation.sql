@@ -181,9 +181,10 @@ end $$;
 -- Service boundary only: Edge derives p_user from verified JWT, never request JSON.
 create function public.study_photo_access(p_user uuid,p_epoch integer,p_asset uuid)
 returns jsonb language plpgsql security definer set search_path='' as $$
-declare a public.study_photo_assets; t timestamptz:=public.study_now(); ttl integer;
+declare a public.study_photo_assets; t timestamptz; ttl integer;
 begin
  perform public.user_lock(p_user);
+ t:=public.study_now(); -- after waiting for the owner lock, never stale pre-lock time
  if not exists(select from public.profiles where user_id=p_user and purge_epoch=p_epoch) then raise exception 'no_profile'; end if;
  select * into a from public.study_photo_assets where id=p_asset and user_id=p_user and not delete_requested;
  if not found or a.expires_at<=t then raise exception 'asset_unavailable'; end if;
@@ -517,6 +518,22 @@ begin
  return new;
 end $$;
 create trigger study_account_boundary before update of purge_epoch or delete on public.profiles for each row execute function public.study_account_boundary();
+
+-- Editing/deleting a source immediately invalidates its old AI results too.
+-- The metadata RPC already holds this owner's lock, then finish takes AI lock.
+create function public.study_document_boundary() returns trigger language plpgsql security definer set search_path='' as $$
+declare j record;
+begin
+ if new.revision=old.revision and new.deleted_at is not distinct from old.deleted_at then return new; end if;
+ perform public.user_lock(new.user_id);
+ for j in select id from public.ai_jobs where user_id=new.user_id and document_id=new.id order by id loop
+  perform public.ai_finish(j.id,'cancelled');
+ end loop;
+ update public.ai_jobs set result=null,result_expires_at=null,input_digest=null,document_id=null,revision=null,state='cancelled'
+ where user_id=new.user_id and document_id=new.id;
+ return new;
+end $$;
+create trigger study_document_boundary after update of revision,deleted_at on public.study_documents for each row execute function public.study_document_boundary();
 
 -- API roles have no direct access, including service routines through PUBLIC.
 do $$ declare t text; f record; begin

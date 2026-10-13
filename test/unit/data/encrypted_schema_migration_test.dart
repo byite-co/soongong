@@ -348,14 +348,14 @@ void main() {
         await seed(3);
         final raw = sqlite.sqlite3.open(file.path);
         configureDatabaseCipher(raw, key);
-        raw.execute("INSERT INTO study_documents VALUES(?,?,?,?,?,?,?,?,?,?)", [
+        raw.execute('INSERT INTO study_documents VALUES(?,?,?,?,?,?,?,?,?,?)', [
           'doc',
           'synthetic-owner',
           2,
           9,
           'math',
           '  title\nrest  ',
-          '{"schema_version":1}',
+          '{"schema_version":1,"kind":"math","engine":"fixture","blocks":[]}',
           '{"answer":"x"}',
           'planner-link',
           '2026-10-13',

@@ -9,7 +9,7 @@ const A="aaaaaaaa-1111-4111-8111-111111111111",B="bbbbbbbb-1111-4111-8111-111111
 const Q="22222222-2222-4222-8222-222222222222", QS="22222222-2222-4222-8222-222222222223";
 const D="dddddddd-1111-4111-8111-111111111111";
 const tr={schema_version:1,kind:"text",engine:"synthetic",blocks:[]};
-const literal=(v:unknown):string=>v===null ? "null" : typeof v==="number" ? String(v) : "'"+(typeof v==="string"?v:JSON.stringify(v)).replaceAll("'","''")+"'"+(typeof v==="object"?"::jsonb":"");
+const literal=(v:unknown):string=>Array.isArray(v) ? `ARRAY[${v.map(literal).join(",")}]::uuid[]` : v===null ? "null" : typeof v==="number" ? String(v) : "'"+(typeof v==="string"?v:JSON.stringify(v)).replaceAll("'","''")+"'"+(typeof v==="object"?"::jsonb":"");
 async function sql(source:string,signal?:AbortSignal,label="fd_query"):Promise<string> {
   const child=new Deno.Command("psql",{args:["-XAtq","-v","ON_ERROR_STOP=1"],env:{PGAPPNAME:label},stdin:"piped",stdout:"piped",stderr:"piped",signal}).spawn();
   const writer=child.stdin.getWriter();await writer.write(new TextEncoder().encode("SET statement_timeout='12s'; SET lock_timeout='10s';\n"+source));await writer.close();
@@ -25,7 +25,9 @@ function statement(name:string,args:Record<string,unknown>) {
   if(!/^(ai_|study_)[a-z0-9_]+$/.test(name) || Object.keys(args).some(k=>!/^p_[a-z_]+$/.test(k))) throw new Error("invalid_test_rpc");
   return `public.${name}(${Object.entries(args).map(([k,v])=>`${k}=>${literal(v)}`).join(",")})`;
 }
-const transport:JobRpc=async<T>(name:string,args:Record<string,unknown>,signal:AbortSignal)=>JSON.parse(await sql(`select coalesce(to_jsonb(${statement(name,args)}),'null'::jsonb);`,signal)) as T;
+const transport:JobRpc=async<T>(name:string,args:Record<string,unknown>,signal:AbortSignal)=>JSON.parse(await sql(name === "study_object_claim"
+  ? `select coalesce(jsonb_agg(to_jsonb(r)),'[]'::jsonb) from ${statement(name,args)} r;`
+  : `select coalesce(to_jsonb(${statement(name,args)}),'null'::jsonb);`,signal)) as T;
 const jobs=new AiJobs(transport), signal=()=>new AbortController().signal;
 const reserve=(user=A,request=crypto.randomUUID())=>({p_user:user,p_epoch:0,p_request:request,p_quote:Q,p_operation:"ocr_text",p_digest:"a".repeat(64),p_document:null,p_revision:null});
 async function setup(points=10,limit=300000,infra=100000) {
@@ -60,7 +62,7 @@ Deno.test("FD-01/02/12 actual DB Edge pipeline, replay, input conflict and close
   const first=await (await handle(request(id),f.io)).json();const second=await (await handle(request(id),f.io)).json();
   assertEquals(first.job_id,second.job_id);assertEquals(first.state,"succeeded");assertEquals(f.calls(),1);assertEquals(await stats(),{remaining:7,reserved:0});
   await assertRejects(()=>handle(request(id,{schema_version:1,operation:"ocr",kind:"text",image:"Yg==",purge_epoch:0,consent_version:"study-2026-10-13"}),f.io),HttpError,"request_conflict");assertEquals(f.calls(),1);
-  assertEquals(await value("select count(*) from public.reading_quotas"),0);
+  assertEquals(await value("select count(*) from public.reading_quota"),0);
   const other=await jobs.reserve({...reserve(B,id)},signal());assert(other.job_id!==first.job_id);assertEquals(other.state,"reserved");
 });
 async function waitFor(label:string,type:string) {
@@ -93,6 +95,9 @@ Deno.test("FD-16 injected settlement failure rolls back result and point charge"
   await sql(`CREATE FUNCTION public.fd_fail_settle() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.kind='settle' THEN RAISE EXCEPTION 'injected_settle'; END IF; RETURN NEW; END $$;CREATE TRIGGER fd_fail BEFORE INSERT ON public.ai_point_ledger FOR EACH ROW EXECUTE FUNCTION public.fd_fail_settle();`);
   try {await assertRejects(()=>jobs.finish(job.job_id,"succeeded",tr,signal()),HttpError,"injected_settle");assertEquals(await stats(),{remaining:10,reserved:3});assertEquals(await value(`select result from public.ai_jobs where id='${job.job_id}'`),null);}
   finally {await sql("DROP TRIGGER fd_fail ON public.ai_point_ledger;DROP FUNCTION public.fd_fail_settle();");}
+  await sql(`CREATE FUNCTION public.fd_fail_result() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.result IS NOT NULL THEN RAISE EXCEPTION 'injected_result'; END IF; RETURN NEW; END $$;CREATE TRIGGER fd_fail_result BEFORE UPDATE ON public.ai_jobs FOR EACH ROW EXECUTE FUNCTION public.fd_fail_result();`);
+  try {await assertRejects(()=>jobs.finish(job.job_id,"succeeded",tr,signal()),HttpError,"injected_result");assertEquals(await stats(),{remaining:10,reserved:3});assertEquals(await value("select count(*) from public.ai_point_ledger where kind='settle'"),0);}
+  finally {await sql("DROP TRIGGER fd_fail_result ON public.ai_jobs;DROP FUNCTION public.fd_fail_result();");}
   await jobs.finish(job.job_id,"succeeded",tr,signal());await jobs.finish(job.job_id,"succeeded",tr,signal());assertEquals(await stats(),{remaining:7,reserved:0});
 });
 Deno.test("FD-17/18 dispatch interruption retains unknown cost, lease recovery never recalls provider",async()=>{
@@ -139,4 +144,33 @@ Deno.test("FD-22 real deletion obligations survive document removal; Storage fai
   let removed=0;const first=await runMaintenance(jobs,async()=>false);assertEquals(first.pending,1);assertEquals(first.done,0);assertEquals(await value("select status from public.study_object_deletions"),"pending");
   await sql("UPDATE public.study_object_deletions SET next_at=public.study_now();");
   const second=await runMaintenance(jobs,async paths=>{removed+=paths.length;return true;});assertEquals(second.done,1);assertEquals(removed,1);assertEquals(await value("select status from public.study_object_deletions"),"done");
+});
+
+Deno.test("FD-06/15 actual solve points and source revision change invalidate pending result",async()=>{
+  await setup();await sql(`SET request.jwt.claim.sub='${A}';SELECT ${saveSql()};`);
+  const args={...reserve(),p_quote:QS,p_operation:"solve",p_document:D,p_revision:1};
+  const job=await jobs.reserve(args,signal());assertEquals(await stats(),{remaining:10,reserved:7});
+  await jobs.dispatch(A,0,job.job_id,signal());
+  await sql(`SET request.jwt.claim.sub='${A}';SELECT public.study_save_v1(0,'${D}',1,'text','new title','new confirmed text',${literal(tr)});`);
+  const solution={schema_version:1,document_id:D,revision:1,answer:"2",explanation:"synthetic",model:"fixture",verification:"inconclusive",reference_provided:false};
+  assertEquals((await jobs.finish(job.job_id,"succeeded",solution,signal())).state,"cancelled");assertEquals(await stats(),{remaining:10,reserved:0});
+  assertEquals(await value(`select result from public.ai_jobs where id='${job.job_id}'`),null);assertEquals(await value("select status from public.ai_costs"),"unknown");
+  await assertRejects(()=>jobs.reserve(args,signal()),HttpError,"request_conflict");
+});
+
+Deno.test("FD-01 no key, allowlist mismatch, revoked consent and missing budget reserve nothing",async()=>{
+  await setup();const f=edge();
+  const savedSecret=Deno.env.get("STUDY_WORKER_SECRET")!;
+  Deno.env.set("STUDY_WORKER_SECRET","short");await assertRejects(()=>handle(request(crypto.randomUUID()),f.io),HttpError,"engine_unavailable");Deno.env.set("STUDY_WORKER_SECRET",savedSecret);
+  Deno.env.set("STUDY_AI_USER_IDS",B);await assertRejects(()=>handle(request(crypto.randomUUID()),f.io),HttpError,"engine_unavailable");Deno.env.set("STUDY_AI_USER_IDS",A);
+  await sql(`UPDATE public.profiles SET consent_reading_revoked_at=now() WHERE user_id='${A}';`);await assertRejects(()=>handle(request(crypto.randomUUID()),f.io),HttpError,"consent_required");
+  await sql(`UPDATE public.profiles SET consent_reading_revoked_at=null WHERE user_id='${A}';DELETE FROM public.ai_budgets;`);
+  await assertRejects(()=>handle(request(crypto.randomUUID()),f.io),HttpError,"budget_unavailable");assertEquals(f.calls(),0);assertEquals(await value("select count(*) from public.ai_jobs"),0);assertEquals(await stats(),{remaining:10,reserved:0});
+});
+Deno.test("FD-12 two concurrent Edge requests share one actual DB dispatch and one synthetic execution",async()=>{
+  await setup();const f=edge(),id=crypto.randomUUID();let enter!:()=>void,finish!:()=>void;
+  const entered=new Promise<void>(r=>enter=r),release=new Promise<void>(r=>finish=r);const original=f.io.fetch;
+  f.io.fetch=(async(url,init)=>{enter();await release;return await original(url,init);}) as typeof fetch;
+  const first=handle(request(id),f.io);await entered;const second=await(await handle(request(id),f.io)).json();finish();const done=await(await first).json();
+  assertEquals(done.job_id,second.job_id);assertEquals(second.state,"dispatching");assertEquals(done.state,"succeeded");assertEquals(f.calls(),1);assertEquals(await stats(),{remaining:7,reserved:0});
 });
