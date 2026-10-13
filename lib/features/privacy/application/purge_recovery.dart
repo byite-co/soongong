@@ -73,8 +73,9 @@ class PurgeRecovery {
     if (_started) return;
     _started = true;
     _ref.listen<AsyncValue<SessionSnapshot?>>(_snapshotProvider, (prev, next) {
-      if (next.hasValue && next.value == null && prev?.value != null)
+      if (next.hasValue && next.value == null && prev?.value != null) {
         unawaited(resume());
+      }
     });
     _ref.listen<AsyncValue<bool>>(_onlineProvider, (_, next) {
       if (next.value == true) unawaited(resume());
@@ -82,8 +83,9 @@ class PurgeRecovery {
     _ref.listen<AuthGateState>(authGateProvider, (prev, next) {
       if (next is AuthGateSignedIn &&
           !next.fromCache &&
-          prev?.userId != next.userId)
+          prev?.userId != next.userId) {
         unawaited(resume());
+      }
     });
   }
 
@@ -125,8 +127,9 @@ class PurgeRecovery {
       // running: run again when it finishes so the state settles by itself.
       if (outcome is DeleteAllUnconfirmed) {
         final work = actions.pendingWork;
-        if (work != null)
+        if (work != null) {
           unawaited(work.then((_) => resume(), onError: (_) => resume()));
+        }
       }
       return outcome;
     } on Object catch (e) {
