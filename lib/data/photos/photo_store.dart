@@ -203,10 +203,16 @@ class PhotoStore {
     final Directory dir;
     try {
       dir = await root();
+      if (proceed != null && !proceed()) {
+        return const SweepResult(left: <String>[], complete: false);
+      }
       if (!dir.existsSync()) {
         return const SweepResult(left: <String>[], complete: true);
       }
       files = await listAll();
+      if (proceed != null && !proceed()) {
+        return SweepResult(left: files, complete: false);
+      }
     } on PhotoStoreUnavailable {
       return const SweepResult(left: <String>[], complete: false);
     } on Object catch (e) {
@@ -238,7 +244,11 @@ class PhotoStore {
       // failures sees every file the sweep touches.
       if (!await delete(rel, proceed: proceed)) left.add(rel);
     }
-    _removeEmptyDirs(dir, keepRoot: true);
+    if (proceed == null || proceed()) {
+      _removeEmptyDirs(dir, keepRoot: true);
+    } else {
+      complete = false;
+    }
     return SweepResult(left: left, complete: complete);
   }
 
@@ -246,16 +256,19 @@ class PhotoStore {
   Future<int> clearCache({
     required DateTime now,
     Duration olderThan = const Duration(hours: 24),
+    bool Function()? proceed,
   }) async {
     var n = 0;
     try {
       final base = await root();
+      if (proceed != null && !proceed()) return 0;
       final dir = Directory(p.join(base.path, cacheDir));
       _safePath(base, dir.path);
       if (!dir.existsSync()) return 0;
       for (final e in dir.listSync(recursive: true, followLinks: false)) {
         _safePath(base, e.path);
         if (e is! File) continue;
+        if (proceed != null && !proceed()) return n;
         if (now.difference(e.statSync().modified) >= olderThan &&
             _deleteFile(e)) {
           n++;

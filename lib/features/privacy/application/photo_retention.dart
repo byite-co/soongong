@@ -25,6 +25,9 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/domain/entities/entities.dart';
 import '../../../core/logging/app_logger.dart';
+import '../../../data/auth/auth_gate.dart';
+import '../../../data/auth/auth_mode.dart';
+import '../../../data/auth/auth_providers.dart';
 import '../../../data/photos/photo_store.dart';
 import '../../../data/repositories/reading_repository.dart';
 import '../../../data/repositories/repository_providers.dart';
@@ -82,60 +85,115 @@ class PhotoRetention {
     required this.store,
     required this.now,
     this.temporary,
+    this.ownerAlive,
   });
 
   final ReadingRepository reading;
   final PhotoStore store;
   final DateTime Function() now;
   final TempOwnership? temporary;
+  final bool Function()? ownerAlive;
+  bool _disposed = false;
+
+  void dispose() => _disposed = true;
+
+  _PhotoOperation _operation({bool Function()? alive}) =>
+      _PhotoOperation(this, alive);
+
+  // Acquire an account transaction for DB snapshots/markers, not for an entire
+  // filesystem operation. Existing callers may already own a transaction. The
+  // synchronous fence reaches the final file mutation after filesystem awaits.
+  Future<T> _owned<T>(_PhotoOperation op, Future<T> Function() action) =>
+      reading.writer.runOwnedTransaction(
+        () async {
+          op.generation ??= reading.writer.purgeGeneration;
+          op.check();
+          final value = await action();
+          op.check();
+          return value;
+        },
+        alive: op.current,
+        generation: op.generation,
+        purgeWork: true,
+      );
 
   /// Deletes files past `expires_at` (rows marked), the stale camera cache,
   /// and retries a sweep a previous wipe left behind. Returns the number of
   /// expired photos removed.
   Future<int> purgeExpired() async {
+    final op = _operation();
     var n = 0;
-    for (final p in await reading.expiredPhotos(now())) {
-      if (await store.delete(p.localPath)) {
-        await reading.markPhotoDeleted(p.id);
-        n++;
+    try {
+      final expired = await _owned(op, () => reading.expiredPhotos(now()));
+      for (final p in expired) {
+        if (await _deleteOne(p, op)) n++;
+        op.check();
       }
+      final cache = await store.clearCache(now: now(), proceed: op.current);
+      op.check();
+      final left = await _retryPendingSweep(op);
+      op.check();
+      if (n > 0 || cache > 0 || left != 0) {
+        appLog.i(
+          'photos · expired deleted=$n cache=$cache sweepLeft=${left ?? 'unknown'}',
+        );
+      }
+      return n;
+    } on StateError {
+      return 0; // A stale lifecycle action never reports the new owner's data.
     }
-    final cache = await store.clearCache(now: now());
-    final left = await retryPendingSweep();
-    if (n > 0 || cache > 0 || left != 0) {
-      appLog.i(
-        'photos · expired deleted=$n cache=$cache sweepLeft=${left ?? 'unknown'}',
-      );
-    }
-    return n;
   }
 
   /// The readable file of [photo], or null when the photo is deleted or
   /// expired (an expired file is removed right here, D14: access purges).
   Future<File?> fileFor(Photo photo) async {
-    if (photo.isDeleted) return null;
-    if (!photo.expiresAt.isAfter(now())) {
-      if (await store.delete(photo.localPath)) {
-        await reading.markPhotoDeleted(photo.id);
+    final op = _operation();
+    if (photo.userId != reading.ctx.userId || photo.isDeleted) return null;
+    try {
+      await _owned(op, () async {});
+      if (!photo.expiresAt.isAfter(now())) {
+        await _deleteOne(photo, op);
+        return null;
       }
+      final f = await store.fileFor(photo.localPath);
+      op.check();
+      return f != null && f.existsSync() ? f : null;
+    } on StateError {
       return null;
     }
-    final f = await store.fileFor(photo.localPath);
-    return f != null && f.existsSync() ? f : null;
   }
 
   /// true when the file is gone and the row marked; false = retry later.
   Future<bool> deleteOne(Photo photo) async {
-    if (!await store.delete(photo.localPath)) return false;
-    await reading.markPhotoDeleted(photo.id);
+    final op = _operation();
+    try {
+      await _owned(op, () async {});
+      return await _deleteOne(photo, op);
+    } on StateError {
+      return false;
+    }
+  }
+
+  Future<bool> _deleteOne(Photo photo, _PhotoOperation op) async {
+    op.check();
+    if (photo.userId != reading.ctx.userId) return false;
+    if (!await store.delete(photo.localPath, proceed: op.current)) return false;
+    op.check();
+    await _owned(op, () => reading.markPhotoDeleted(photo.id));
     return true;
   }
 
   Future<PhotoDeleteResult> deleteMany(Iterable<Photo> photos) async {
+    final op = _operation();
     final ok = <String>[];
     final failed = <String>[];
     for (final p in photos) {
-      (await deleteOne(p) ? ok : failed).add(p.id);
+      try {
+        await _owned(op, () async {});
+        (await _deleteOne(p, op) ? ok : failed).add(p.id);
+      } on StateError {
+        failed.add(p.id);
+      }
     }
     return PhotoDeleteResult(deleted: ok, failed: failed);
   }
@@ -145,46 +203,58 @@ class PhotoRetention {
   /// file under the store. A row whose file cannot be deleted keeps its
   /// row; a row-less file that stays is counted in `failedFiles` and the
   /// sweep marker stays for the retry. [alive] false stops the wipe (the
-  /// account changed): what was not reached counts as failed.
+  /// account changed): throws StateError without writing the next owner's
+  /// marker or reporting completion.
   Future<PhotoDeleteResult> wipeAll({bool Function()? alive}) async {
-    bool go() => alive == null || alive();
+    final op = _operation(alive: alive);
+    await _owned(op, () async {});
     // Persist revocation outside the DB before any caller may wipe its account
     // mapping. Failure to persist must throw, retaining the database for retry.
     var temp = const TempCleanupResult();
-    if (go() && temporary != null) {
-      await temporary!.revoke(reading.ctx.userId);
+    if (temporary != null) {
+      op.check();
+      final revoking = temporary!.revoke(reading.ctx.userId);
+      // revoke increments once synchronously. Accept only this operation's
+      // own increment; a later account/purge/consent boundary still cancels it.
+      op.followOwnRevocation();
+      await revoking;
+      op.check();
       // An empty account mapping does not prove the owned root is empty.
       // Count the final sweep once, including orphan/unknown obligations.
       temp = await temporary!.store.sweep();
+      op.check();
     }
-    await reading.markPhotoSweepPending();
-    final all = await reading.getAllPhotos(includeDeleted: true);
+    final all = await _owned(op, () async {
+      await reading.markPhotoSweepPending();
+      return reading.getAllPhotos(includeDeleted: true);
+    });
     final ok = <String>[];
     final failed = <Photo>[];
     for (final p in all) {
-      if (!go()) {
-        failed.add(p);
-        continue;
-      }
-      if (p.deletedAt != null || await store.delete(p.localPath, proceed: go)) {
+      op.check();
+      if (p.deletedAt != null ||
+          await store.delete(p.localPath, proceed: op.current)) {
+        op.check();
         ok.add(p.id);
       } else {
         failed.add(p);
       }
     }
-    if (ok.isNotEmpty && go()) await reading.purgePhotoRows(ok);
+    op.check();
+    if (ok.isNotEmpty) await _owned(op, () => reading.purgePhotoRows(ok));
     final sweep = await store.sweep(
       keep: <String>{for (final p in failed) p.localPath},
-      proceed: go,
+      proceed: op.current,
     );
-    if (failed.isEmpty && sweep.clean && go()) {
-      await reading.clearPhotoSweepPending();
+    op.check();
+    if (failed.isEmpty && sweep.clean) {
+      await _owned(op, reading.clearPhotoSweepPending);
     }
     return PhotoDeleteResult(
       deleted: ok,
       failed: <String>[for (final p in failed) p.id],
       failedFiles: sweep.left.length + temp.remaining,
-      storeUnavailable: (!sweep.complete && go()) || temp.unknown,
+      storeUnavailable: !sweep.complete || temp.unknown,
     );
   }
 
@@ -193,16 +263,31 @@ class PhotoRetention {
   /// marker; null when the store could not be opened or listed (the marker
   /// stays, nothing is known).
   Future<int?> retryPendingSweep() async {
+    final op = _operation();
+    try {
+      await _owned(op, () async {});
+      return await _retryPendingSweep(op);
+    } on StateError {
+      return null;
+    }
+  }
+
+  Future<int?> _retryPendingSweep(_PhotoOperation op) async {
+    op.check();
     final temp = await temporary?.store.sweep() ?? const TempCleanupResult();
-    if (!await reading.photoSweepPending()) {
+    op.check();
+    final pending = await _owned(op, reading.photoSweepPending);
+    if (!pending) {
       return temp.unknown ? null : temp.remaining;
     }
-    final live = await reading.getAllPhotos();
+    final live = await _owned(op, () => reading.getAllPhotos());
     final sweep = await store.sweep(
       keep: <String>{for (final p in live) p.localPath},
+      proceed: op.current,
     );
+    op.check();
     if (!sweep.complete || temp.unknown) return null;
-    if (sweep.left.isEmpty) await reading.clearPhotoSweepPending();
+    if (sweep.left.isEmpty) await _owned(op, reading.clearPhotoSweepPending);
     return sweep.left.length + temp.remaining;
   }
 
@@ -210,14 +295,19 @@ class PhotoRetention {
   /// pending; null when the store cannot be listed) — shown on the privacy
   /// screen with a retry.
   Future<int?> pendingSweepCount() async {
-    final temp = await temporary?.store.sweep() ?? const TempCleanupResult();
-    if (temp.unknown) return null;
-    if (!await reading.photoSweepPending()) return temp.remaining;
-    final live = <String>{
-      for (final p in await reading.getAllPhotos()) p.localPath,
-    };
+    final op = _operation();
     try {
+      await _owned(op, () async {});
+      final temp = await temporary?.store.sweep() ?? const TempCleanupResult();
+      op.check();
+      if (temp.unknown) return null;
+      if (!await _owned(op, reading.photoSweepPending)) return temp.remaining;
+      final live = <String>{
+        for (final p in await _owned(op, () => reading.getAllPhotos()))
+          p.localPath,
+      };
       final files = await store.listAll();
+      op.check();
       return temp.remaining +
           files
               .where(
@@ -225,6 +315,8 @@ class PhotoRetention {
               )
               .length;
     } on PhotoStoreUnavailable {
+      return null;
+    } on StateError {
       return null;
     }
   }
@@ -239,15 +331,57 @@ class PhotoRetention {
   }
 }
 
+/// A single snapshot is shared by the whole operation (including batch and
+/// foreground substeps). A-B-A and same-account purge cannot renew old work.
+class _PhotoOperation {
+  _PhotoOperation(this.owner, this.alive)
+    : generation = owner.reading.writer.purgeGeneration,
+      _epoch = owner.temporary?.epoch(owner.reading.ctx.userId);
+
+  final PhotoRetention owner;
+  final bool Function()? alive;
+  int? generation;
+  int? _epoch;
+
+  bool current() =>
+      !owner._disposed &&
+      (owner.ownerAlive?.call() ?? true) &&
+      (alive?.call() ?? true) &&
+      (generation == null ||
+          generation == owner.reading.writer.purgeGeneration) &&
+      _epoch == owner.temporary?.epoch(owner.reading.ctx.userId);
+
+  void check() {
+    if (!current()) throw StateError('photo operation cancelled');
+  }
+
+  void followOwnRevocation() {
+    if (_epoch != null) _epoch = _epoch! + 1;
+  }
+}
+
 /// Rebuilt on account switch (the repository changes); keepAlive so the
 /// lifecycle hook and the screens can use it across async gaps.
 @Riverpod(keepAlive: true)
 PhotoRetention photoRetention(Ref ref) {
   final clock = ref.watch(appClockProvider);
-  return PhotoRetention(
-    reading: ref.watch(readingRepositoryProvider),
+  final reading = ref.watch(readingRepositoryProvider);
+  final mode = ref.watch(authModeProvider);
+  final backend = ref.watch(authBackendProvider);
+  final retention = PhotoRetention(
+    reading: reading,
     store: ref.watch(photoStoreProvider),
     now: clock.now,
     temporary: ref.watch(tempOwnershipProvider),
+    ownerAlive: () =>
+        ref.mounted &&
+        ref.read(authGateProvider).userId == reading.ctx.userId &&
+        (mode != AuthMode.backend ||
+            backend.currentSession?.userId == reading.ctx.userId),
   );
+  ref.onDispose(retention.dispose);
+  ref.listen(authGateProvider, (before, after) {
+    if (before?.userId != after.userId) retention.dispose();
+  });
+  return retention;
 }
