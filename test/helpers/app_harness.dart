@@ -4,6 +4,7 @@
 // Pass `db:` to share a database between two harnesses (app restart).
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:flutter/material.dart';
@@ -45,14 +46,14 @@ class AppHarness {
     this.photoStore,
     AppDatabase? db,
     this.extraOverrides = const <Override>[],
-  })  : clock = FixedClock(now ?? kHarnessNow),
-        backend = backend ?? FakeAuthBackend(),
-        social = social ?? FakeSocialSignIn(),
-        camera = camera ?? FakeCameraPermission(),
-        notifications = notifications ?? FakeNotificationGateway(),
-        network = network ?? FakeNetworkStatus(),
-        db = db ?? AppDatabase.inMemory(),
-        _ownsDb = db == null {
+  }) : clock = FixedClock(now ?? kHarnessNow),
+       backend = backend ?? FakeAuthBackend(),
+       social = social ?? FakeSocialSignIn(),
+       camera = camera ?? FakeCameraPermission(),
+       notifications = notifications ?? FakeNotificationGateway(),
+       network = network ?? FakeNetworkStatus(),
+       db = db ?? AppDatabase.inMemory(),
+       _ownsDb = db == null {
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
     PrivacyActions.resetCallsForTest(); // S09d: process-wide purge-all call records
   }
@@ -70,7 +71,9 @@ class AppHarness {
   final FakeNetworkStatus network;
 
   /// S09: the on-device photo directory (a temp dir, removed on dispose).
-  late final Directory photoDir = Directory.systemTemp.createTempSync('soongong-photos-');
+  late final Directory photoDir = Directory.systemTemp.createTempSync(
+    'soongong-photos-',
+  );
 
   /// S09b: an injected store (e.g. `FailingPhotoStore`), else a plain one on [photoDir].
   final PhotoStore? photoStore;
@@ -93,22 +96,40 @@ class AppHarness {
       deviceIdProvider.overrideWithValue('test-device'),
       appDatabaseProvider.overrideWithValue(db),
       appClockProvider.overrideWithValue(clock),
-      exportServiceProvider.overrideWith((ref) => ExportService(
-        db: db, userId: ref.watch(currentUserIdProvider), clock: clock, encodeInBackground: false,
-      )),
+      exportServiceProvider.overrideWith(
+        (ref) => ExportService(
+          db: db,
+          userId: ref.watch(currentUserIdProvider),
+          clock: clock,
+          encodeInBackground: false,
+        ),
+      ),
       authModeProvider.overrideWithValue(mode),
       authBackendProvider.overrideWithValue(backend),
       socialSignInProvider.overrideWithValue(social),
       cameraPermissionProvider.overrideWithValue(camera),
-      syncEngineProvider.overrideWithValue(FakeSyncEngine(delay: Duration.zero)),
-      billingGatewayProvider.overrideWithValue(FakeBillingGateway(delay: Duration.zero)),
+      syncEngineProvider.overrideWithValue(
+        FakeSyncEngine(delay: Duration.zero),
+      ),
+      billingGatewayProvider.overrideWithValue(
+        FakeBillingGateway(delay: Duration.zero),
+      ),
       notificationGatewayProvider.overrideWithValue(notifications),
       networkStatusProvider.overrideWithValue(network),
-      photoStoreProvider.overrideWithValue(photoStore ?? PhotoStore(() async => photoDir)),
-      shareExportProvider.overrideWithValue((file) async {
+      photoStoreProvider.overrideWithValue(
+        photoStore ?? PhotoStore(() async => photoDir),
+      ),
+      shareExportProvider.overrideWithValue((file, {required guard}) async {
+        await guard.check();
         final err = shareError;
         if (err != null) throw err;
-        exports.add(file);
+        exports.add(
+          ExportFile(
+            name: file.name,
+            bytes: Uint8List.fromList(file.bytes),
+            mimeType: file.mimeType,
+          ),
+        );
       }),
       ...extraOverrides,
     ],
@@ -127,14 +148,20 @@ class AppHarness {
   /// Scripts the server answers of a successful signup.
   void scriptSignup({bool allowed = true}) {
     backend.responses['age-check'] = allowed
-        ? <String, dynamic>{'allowed': true, 'ticket': 't.t.t', 'expires_in': 600}
+        ? <String, dynamic>{
+            'allowed': true,
+            'ticket': 't.t.t',
+            'expires_in': 600,
+          }
         : <String, dynamic>{'allowed': false};
     backend.responses['issue-pass'] = <String, dynamic>{
       'issued': true,
       'provider': 'google',
       'expires_at': '2099-01-01T00:00:00.000Z',
     };
-    backend.responses['complete-signup'] = <String, dynamic>{'profile': kProfileRowOnboardingPending};
+    backend.responses['complete-signup'] = <String, dynamic>{
+      'profile': kProfileRowOnboardingPending,
+    };
     backend.responses['update-consent'] = <String, dynamic>{
       'profile': <String, dynamic>{
         ...kProfileRowOnboardingPending,
@@ -142,7 +169,8 @@ class AppHarness {
         'consent_reading_at': '2026-10-03T01:00:00+00:00',
       },
     };
-    backend.responses['rpc:profile_set_onboarding_done'] = kProfileRowOnboardingDone;
+    backend.responses['rpc:profile_set_onboarding_done'] =
+        kProfileRowOnboardingDone;
     backend.responses['check-email'] = <String, dynamic>{'exists': false};
   }
 

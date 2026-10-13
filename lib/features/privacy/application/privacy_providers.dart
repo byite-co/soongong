@@ -28,6 +28,8 @@
 // same id sent again — never by elapsed time, and the stored epoch only
 // moves forward. A new purge is never started on behalf of an old intent.
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -45,6 +47,7 @@ import '../../../data/auth/auth_mode.dart';
 import '../../../data/auth/auth_models.dart';
 import '../../../data/auth/auth_providers.dart';
 import '../../../data/export/export_service.dart';
+import '../../../data/export/export_guard.dart';
 import '../../../data/export/share_export.dart';
 import '../../../data/repositories/local_purge.dart';
 import '../../../data/repositories/repository_providers.dart';
@@ -57,13 +60,17 @@ import 'photo_retention.dart';
 part 'privacy_providers.g.dart';
 
 @riverpod
-Stream<Entitlement> privacyEntitlement(Ref ref) => ref.watch(billingGatewayProvider).entitlement;
+Stream<Entitlement> privacyEntitlement(Ref ref) =>
+    ref.watch(billingGatewayProvider).entitlement;
 
 /// Corrections inside the sensitivity window (S06 `SensitivityPolicy`).
 @riverpod
 Future<int> recentCorrections(Ref ref) async {
   final now = ref.watch(appClockProvider).now();
-  return (await ref.watch(sessionRepositoryProvider).correctionsSince(now.subtract(SensitivityPolicy.window))).length;
+  return (await ref
+          .watch(sessionRepositoryProvider)
+          .correctionsSince(now.subtract(SensitivityPolicy.window)))
+      .length;
 }
 
 /// A photo row with the facts of its reading request (subject · range).
@@ -75,25 +82,31 @@ class PhotoRow {
 }
 
 @riverpod
-Stream<List<Photo>> livePhotos(Ref ref) => ref.watch(readingRepositoryProvider).watchAllPhotos();
+Stream<List<Photo>> livePhotos(Ref ref) =>
+    ref.watch(readingRepositoryProvider).watchAllPhotos();
 
 @riverpod
-Stream<List<ReadingRequest>> privacyRequests(Ref ref) => ref.watch(readingRepositoryProvider).watchByStatus(
-      ReadingRequestStatus.values.toSet(),
-    );
+Stream<List<ReadingRequest>> privacyRequests(Ref ref) => ref
+    .watch(readingRepositoryProvider)
+    .watchByStatus(ReadingRequestStatus.values.toSet());
 
 @riverpod
-Stream<List<Subject>> privacySubjects(Ref ref) => ref.watch(subjectRepositoryProvider).watchAll();
+Stream<List<Subject>> privacySubjects(Ref ref) =>
+    ref.watch(subjectRepositoryProvider).watchAll();
 
 @riverpod
 List<PhotoRow>? photoRows(Ref ref) {
   final photos = ref.watch(livePhotosProvider).value;
   if (photos == null) return null;
   final requests = <String, ReadingRequest>{
-    for (final r in ref.watch(privacyRequestsProvider).value ?? const <ReadingRequest>[]) r.requestId: r,
+    for (final r
+        in ref.watch(privacyRequestsProvider).value ?? const <ReadingRequest>[])
+      r.requestId: r,
   };
   final subjects = <String, Subject>{
-    for (final s in ref.watch(privacySubjectsProvider).value ?? const <Subject>[]) s.id: s,
+    for (final s
+        in ref.watch(privacySubjectsProvider).value ?? const <Subject>[])
+      s.id: s,
   };
   return <PhotoRow>[
     for (final p in photos)
@@ -102,7 +115,10 @@ List<PhotoRow>? photoRows(Ref ref) {
         label: () {
           final r = p.requestId == null ? null : requests[p.requestId!];
           if (r == null) return PrivacyStrings.photoUnknownRequest;
-          return PrivacyStrings.photoName(subjects[r.subjectId]?.name ?? SubjectsStrings.defaultSubjectName, r.rangeText);
+          return PrivacyStrings.photoName(
+            subjects[r.subjectId]?.name ?? SubjectsStrings.defaultSubjectName,
+            r.rangeText,
+          );
         }(),
       ),
   ];
@@ -121,7 +137,8 @@ Future<int?> pendingPhotoFiles(Ref ref) {
 // Export · delete all
 
 /// Sharing is a platform call; tests override this provider.
-typedef ShareExport = Future<void> Function(ExportFile file);
+typedef ShareExport =
+    Future<void> Function(ExportFile file, {required ExportGuard guard});
 
 @Riverpod(keepAlive: true)
 ShareExport shareExport(Ref ref) => shareExportFile;
@@ -153,7 +170,10 @@ class DeleteAllFailed extends DeleteAllOutcome {
 /// foreground), or the store itself could not be opened
 /// ([storeUnavailable], count unknown — the retry marker stays).
 class DeleteAllPartial extends DeleteAllOutcome {
-  const DeleteAllPartial({required this.failedPhotos, this.storeUnavailable = false});
+  const DeleteAllPartial({
+    required this.failedPhotos,
+    this.storeUnavailable = false,
+  });
 
   final int failedPhotos;
   final bool storeUnavailable;
@@ -182,7 +202,11 @@ sealed class PurgeAnswer {
 /// more to delete for this intent). [epoch] is the account's CURRENT epoch
 /// in every case ([S09e]).
 class PurgeServed extends PurgeAnswer {
-  const PurgeServed(this.epoch, {required this.replayed, required this.superseded});
+  const PurgeServed(
+    this.epoch, {
+    required this.replayed,
+    required this.superseded,
+  });
 
   final int epoch;
   final bool replayed;
@@ -210,7 +234,10 @@ class PurgeUnknown extends PurgeAnswer {
 /// too early.
 class PurgeCall {
   PurgeCall(this.future) {
-    future.then((a) => answer = a, onError: (Object e) => answer = PurgeUnknown(e));
+    future.then(
+      (a) => answer = a,
+      onError: (Object e) => answer = PurgeUnknown(e),
+    );
   }
 
   final Future<PurgeAnswer> future;
@@ -231,7 +258,13 @@ class PrivacyActions {
     required this.backend,
     required this.serverPurge,
     String Function()? newRequestId,
-  }) : _newRequestId = newRequestId ?? newUuid;
+  }) : _newRequestId = newRequestId ?? newUuid {
+    if (serverPurge) {
+      _authSubscription = backend.sessions.listen((session) {
+        if (session?.userId != writer.ctx.userId) dispose();
+      });
+    }
+  }
 
   final SyncWriter writer;
   final SessionRepository sessions;
@@ -254,7 +287,13 @@ class PrivacyActions {
   static void resetCallsForTest() => _calls.clear();
 
   bool _disposed = false;
-  void dispose() => _disposed = true;
+  StreamSubscription<AuthSession?>? _authSubscription;
+  void dispose() {
+    _disposed = true;
+    unawaited(_authSubscription?.cancel());
+    _authSubscription = null;
+  }
+
   bool _alive() => !_disposed;
 
   Future<DeleteAllOutcome?>? _inFlight;
@@ -274,8 +313,30 @@ class PrivacyActions {
   /// Builds the file and opens the share sheet. Throws on failure so the
   /// screen can offer "다시 시도" with the same format.
   Future<void> export(ExportFormat format) async {
-    final file = await exporter.build(format);
-    await share(file);
+    final generation = await writer.runOwnedTransaction(
+      writer.refreshPurgeGeneration,
+      alive: _alive,
+    );
+    final guard = ExportGuard(
+      isCurrent: () =>
+          !_disposed &&
+          writer.purgeGeneration == generation &&
+          (!serverPurge || backend.currentSession?.userId == writer.ctx.userId),
+      validate: () => writer.runOwnedTransaction(
+        () async {},
+        alive: _alive,
+        generation: generation,
+      ),
+    );
+    ExportFile? file;
+    try {
+      await guard.check();
+      file = await exporter.build(format);
+      await guard.check();
+      await share(file, guard: guard);
+    } finally {
+      file?.bytes.fillRange(0, file.bytes.length, 0);
+    }
   }
 
   /// 모든 기록 삭제. A delete or recovery already running in this instance
@@ -308,15 +369,22 @@ class PrivacyActions {
     try {
       if (_disposed) return DeleteAllFailed(StateError('account changed'));
       var current = await purge.state();
-      if (current.stage == PurgeStage.pending) return await _completeLocal(current.pendingEpoch!);
+      if (current.stage == PurgeStage.pending)
+        return await _completeLocal(current.pendingEpoch!);
       if (current.stage == PurgeStage.requested) {
         final settled = await _settleRequested(current, resend: true);
         if (settled != null) return settled;
-        current = await purge.state(); // refused → cleared → a new request below
+        current = await purge
+            .state(); // refused → cleared → a new request below
       }
-      if (await sessions.readSnapshot() != null) return const DeleteAllBlocked();
+      if (await sessions.readSnapshot() != null)
+        return const DeleteAllBlocked();
       if (!serverPurge) {
-        final epoch = await writer.runOwnedTransaction(() => purge.markPending(current.epoch + 1), alive: _alive, purgeWork: true);
+        final epoch = await writer.runOwnedTransaction(
+          () => purge.markPending(current.epoch + 1),
+          alive: _alive,
+          purgeWork: true,
+        );
         return await _completeLocal(epoch);
       }
       // The request is formed against the server's current epoch ([S09e]):
@@ -328,25 +396,44 @@ class PrivacyActions {
         if (row == null) return DeleteAllFailed(StateError('no profile'));
         expected = ProfileSnapshot.fromJson(row).purgeEpoch;
       } on Object catch (e) {
-        appLog.w('purge-all: profile unreadable before the request (${e.runtimeType}) · nothing stored');
+        appLog.w(
+          'purge-all: profile unreadable before the request (${e.runtimeType}) · nothing stored',
+        );
         return DeleteAllFailed(e);
       }
       if (_disposed) return DeleteAllFailed(StateError('account changed'));
       final id = _newRequestId();
       _lastRequestId = id;
-      await writer.runOwnedTransaction(() => purge.markRequested(id, expectedEpoch: expected), alive: _alive, purgeWork: true);
+      await writer.runOwnedTransaction(
+        () => purge.markRequested(id, expectedEpoch: expected),
+        alive: _alive,
+        purgeWork: true,
+      );
       final answer = await _call(id, expected);
-      if (_disposed) return DeleteAllFailed(StateError('account changed')); // the call record keeps the answer
+      if (_disposed)
+        return DeleteAllFailed(
+          StateError('account changed'),
+        ); // the call record keeps the answer
       switch (answer) {
         case PurgeServed(:final epoch, :final superseded):
-          if (superseded) appLog.i('purge-all: superseded by a newer purge · converging to epoch $epoch');
+          if (superseded)
+            appLog.i(
+              'purge-all: superseded by a newer purge · converging to epoch $epoch',
+            );
           return await _confirmServed(epoch);
         case PurgeRefused(:final error):
-          await writer.runOwnedTransaction(purge.clearRequested, alive: _alive, purgeWork: true);
+          await writer.runOwnedTransaction(
+            purge.clearRequested,
+            alive: _alive,
+            purgeWork: true,
+          );
           return DeleteAllFailed(error);
         case PurgeUnknown(:final error):
-          appLog.w('purge-all: no answer (${error.runtimeType}) · asking the server profile');
-          return await _settleRequested(await purge.state(), resend: false) ?? DeleteAllFailed(error);
+          appLog.w(
+            'purge-all: no answer (${error.runtimeType}) · asking the server profile',
+          );
+          return await _settleRequested(await purge.state(), resend: false) ??
+              DeleteAllFailed(error);
       }
     } on _MeasuringNow {
       return const DeleteAllBlocked();
@@ -399,14 +486,26 @@ class PrivacyActions {
 
   Future<PurgeAnswer> _invoke(String requestId, int? expectedEpoch) async {
     try {
-      final res = await backend.invoke('purge-all', body: <String, dynamic>{'request_id': requestId, 'expected_epoch': ?expectedEpoch});
+      final res = await backend.invoke(
+        'purge-all',
+        body: <String, dynamic>{
+          'request_id': requestId,
+          'expected_epoch': ?expectedEpoch,
+        },
+      );
       final epoch = res['epoch'];
-      if (epoch is! num) return PurgeUnknown(StateError('purge-all answered without an epoch'));
-      return PurgeServed(epoch.toInt(), replayed: res['replayed'] == true, superseded: res['superseded'] == true);
+      if (epoch is! num)
+        return PurgeUnknown(StateError('purge-all answered without an epoch'));
+      return PurgeServed(
+        epoch.toInt(),
+        replayed: res['replayed'] == true,
+        superseded: res['superseded'] == true,
+      );
     } on EdgeFunctionException catch (e) {
       // 4xx = the server answered and did not purge (401/403 no profile,
       // 400 bad request, 429 limit) — except a request timeout.
-      if (e.status >= 400 && e.status < 500 && e.status != 408) return PurgeRefused(e);
+      if (e.status >= 400 && e.status < 500 && e.status != 408)
+        return PurgeRefused(e);
       return PurgeUnknown(e);
     } on Object catch (e) {
       return PurgeUnknown(e);
@@ -426,7 +525,10 @@ class PrivacyActions {
   ///     again — the server replays / supersedes a request it has seen and
   ///     never purges twice — and that answer decides; without an answer the
   ///     request stays open (barrier kept) until the next trigger or retry.
-  Future<DeleteAllOutcome?> _settleRequested(PurgeState s, {required bool resend}) async {
+  Future<DeleteAllOutcome?> _settleRequested(
+    PurgeState s, {
+    required bool resend,
+  }) async {
     final id = s.requestId!;
     _lastRequestId = id;
     final call = _calls[id];
@@ -443,31 +545,48 @@ class PrivacyActions {
     if (_disposed) return DeleteAllFailed(StateError('account changed'));
     if (profile != null) {
       final since = s.expectedEpoch ?? s.epoch;
-      if (profile.purgeRequestId == id || profile.purgeEpoch > since) return await _confirmServed(profile.purgeEpoch);
+      if (profile.purgeRequestId == id || profile.purgeEpoch > since)
+        return await _confirmServed(profile.purgeEpoch);
     }
     if (!resend) return const DeleteAllUnconfirmed();
     final again = await _call(id, s.expectedEpoch);
     if (_disposed) return DeleteAllFailed(StateError('account changed'));
     switch (again) {
       case PurgeServed(:final epoch, :final replayed, :final superseded):
-        appLog.i('purge-all: resend ${superseded ? 'superseded' : replayed ? 'replayed' : 'served'} · converging to epoch $epoch');
+        appLog.i(
+          'purge-all: resend ${superseded
+              ? 'superseded'
+              : replayed
+              ? 'replayed'
+              : 'served'} · converging to epoch $epoch',
+        );
         return await _confirmServed(epoch);
       case PurgeRefused():
         return await _refused();
       case PurgeUnknown(:final error):
-        appLog.w('purge-all: resend without an answer (${error.runtimeType}) · the request stays open');
+        appLog.w(
+          'purge-all: resend without an answer (${error.runtimeType}) · the request stays open',
+        );
         return const DeleteAllUnconfirmed();
     }
   }
 
   Future<DeleteAllOutcome?> _refused() async {
-    await writer.runOwnedTransaction(purge.clearRequested, alive: _alive, purgeWork: true);
+    await writer.runOwnedTransaction(
+      purge.clearRequested,
+      alive: _alive,
+      purgeWork: true,
+    );
     appLog.i('purge: the server refused the request · intent cleared');
     return null;
   }
 
   Future<DeleteAllOutcome> _confirmServed(int epoch) async {
-    final stored = await writer.runOwnedTransaction(() => purge.markPending(epoch), alive: _alive, purgeWork: true);
+    final stored = await writer.runOwnedTransaction(
+      () => purge.markPending(epoch),
+      alive: _alive,
+      purgeWork: true,
+    );
     return _completeLocal(stored);
   }
 
@@ -485,7 +604,8 @@ class PrivacyActions {
   Future<DeleteAllOutcome> _completeLocal(int epoch) async {
     final photoResult = await writer.runOwnedTransaction(
       () async {
-        if ((await purge.state()).pendingEpoch != epoch) return null; // finished by another caller
+        if ((await purge.state()).pendingEpoch != epoch)
+          return null; // finished by another caller
         if (await sessions.readSnapshot() != null) throw const _MeasuringNow();
         final r = await photos.wipeAll(alive: _alive);
         if (_disposed) throw StateError('account changed');
@@ -499,7 +619,10 @@ class PrivacyActions {
     );
     if (photoResult == null) return const DeleteAllDone();
     if (photoResult.allDone) return const DeleteAllDone();
-    return DeleteAllPartial(failedPhotos: photoResult.failedCount, storeUnavailable: photoResult.storeUnavailable);
+    return DeleteAllPartial(
+      failedPhotos: photoResult.failedCount,
+      storeUnavailable: photoResult.storeUnavailable,
+    );
   }
 }
 
@@ -507,7 +630,9 @@ class PrivacyActions {
 /// disposed so its in-flight work stops.
 @Riverpod(keepAlive: true)
 PrivacyActions privacyActions(Ref ref) {
-  final signedIn = ref.watch(authModeProvider) == AuthMode.backend && ref.watch(authGateProvider) is AuthGateSignedIn;
+  final signedIn =
+      ref.watch(authModeProvider) == AuthMode.backend &&
+      ref.watch(authGateProvider) is AuthGateSignedIn;
   final a = PrivacyActions(
     writer: ref.watch(syncWriterProvider),
     sessions: ref.watch(sessionRepositoryProvider),
@@ -520,5 +645,10 @@ PrivacyActions privacyActions(Ref ref) {
     serverPurge: signedIn,
   );
   ref.onDispose(a.dispose);
+  // Invalidate immediately on a gate transition, even before a lazy
+  // dependent-provider rebuild. A later A login never revives this instance.
+  ref.listen(authGateProvider, (before, after) {
+    if (before?.userId != after.userId) a.dispose();
+  });
   return a;
 }

@@ -84,7 +84,7 @@ class ExportService {
   }
 
   Future<ExportFile> buildJson() async {
-    final map = await exportMap();
+    final map = await db.transaction(exportMap);
     // Only a detached value snapshot crosses the isolate boundary. Neither
     // the database, a provider, nor the authenticated client is captured.
     final bytes = encodeInBackground ? await compute(_encodeJson, map) : _encodeJson(map);
@@ -121,6 +121,16 @@ class ExportService {
   // CSV zip
 
   Future<ExportFile> buildCsvZip() async {
+    final payload = await db.transaction(_csvSnapshot);
+    final bytes = encodeInBackground ? await compute(_encodeCsvZip, payload) : _encodeCsvZip(payload);
+    return ExportFile(
+      name: 'soongong-${_stamp()}.zip',
+      bytes: bytes,
+      mimeType: 'application/zip',
+    );
+  }
+
+  Future<Map<String, String>> _csvSnapshot() async {
     final subjects = <String, String>{
       for (final s in await (db.select(db.subjects)..where((s) => s.userId.equals(userId))).get())
         if (s.deletedAt == null && s.name != null) s.id: s.name!,
@@ -130,12 +140,7 @@ class ExportService {
       'planner.csv': await plannerCsv(subjects),
       'wrongs.csv': await wrongsCsv(subjects),
     };
-    final bytes = encodeInBackground ? await compute(_encodeCsvZip, payload) : _encodeCsvZip(payload);
-    return ExportFile(
-      name: 'soongong-${_stamp()}.zip',
-      bytes: bytes,
-      mimeType: 'application/zip',
-    );
+    return payload;
   }
 
   Future<String> sessionsCsv(Map<String, String> subjects) async {

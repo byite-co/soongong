@@ -41,6 +41,19 @@ jobs:
       - name: Generated files are committed and up to date
         run: sh tool/ci/check_clean_tree.sh
 
+      # Keep the gate strict. A permitted CI environment can return the
+      # exact generated diff when local Flutter execution is unavailable.
+      - name: Capture codegen diff on failure
+        if: failure()
+        run: git diff --binary > "$RUNNER_TEMP/codegen.patch"
+
+      - name: Upload codegen diff
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codegen-diff
+          path: ${{ runner.temp }}/codegen.patch
+
       - name: Analyze
         run: flutter analyze --fatal-infos
 
