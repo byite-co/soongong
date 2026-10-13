@@ -1,5 +1,7 @@
 # EXT-01~04 순차 적용 · 통합 인계
 
+> 후속 검토에서 확인된 고유 결함 10건의 수정·회귀·잔여 조건은 [EXT-FIX-01](EXT-FIX-01.md)을 따른다. 아래 CI와 커밋 기록은 당시 증거이며 후속 코드의 검증으로 재사용하지 않는다.
+
 2026-10-13 KST. 통합 브랜치 `feat/s14-oss-integration`, [Draft PR #9](https://github.com/byite-co/soongong/pull/9). **main 미병합, 운영 미배포.**
 
 ## 적용 결과

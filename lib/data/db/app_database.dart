@@ -3,8 +3,9 @@
 // is wiped on account switch / purge / epoch mismatch. Logout preserves DB
 // records and the device encryption key (the current S09 implementation).
 //
-// Schema changes: never edit an existing migration — bump [schemaVersion],
-// add a step in [migration] and mark the PR `SCHEMA-CHANGE` (D27).
+// Schema changes require a new version/step and `SCHEMA-CHANGE` (D27).
+// EXT-FIX-01 explicitly repairs existing transaction/version atomicity without
+// changing schema shape; see docs/handoff/EXT-FIX-01.md for that exception.
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
