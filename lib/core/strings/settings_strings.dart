@@ -47,7 +47,8 @@ abstract final class SettingsStrings {
   static const String consentSection = '동의';
   static const String consentAccount = '동의 ① · 계정과 기록 저장';
   static const String consentReading = '동의 ② · 판독 사진 외부 전송';
-  static String consentVersionAt(String version, String at) => '버전 $version · $at';
+  static String consentVersionAt(String version, String at) =>
+      '버전 $version · $at';
   static const String consentNone = '동의 전';
   static String consentRevokedAt(String at) => '철회함 · $at';
   static const String consentRevoke = '동의 ② 철회';
@@ -97,7 +98,12 @@ abstract final class SettingsStrings {
   static const String notifOff = '꺼짐';
   static String notifReviewAt(String time) => '복습 $time';
   static const String notifEventShort = '일정';
-  static const List<String> notifTimes = <String>['19:00', '20:00', '21:00', '22:00'];
+  static const List<String> notifTimes = <String>[
+    '19:00',
+    '20:00',
+    '21:00',
+    '22:00',
+  ];
   static const String notifPickTime = '다른 시각 선택';
   static const String notifDeniedTitle = '기기 알림이 꺼져 있습니다';
   static const String notifDeniedBody =
@@ -131,12 +137,17 @@ abstract final class SettingsStrings {
   static const String logout = '로그아웃';
   static const String deleteAccount = '계정 삭제';
   static const String logoutTitle = '로그아웃할까요?';
-  static const String logoutBody = '기록은 이 기기에 남으며 같은 계정으로 다시 로그인하면 볼 수 있습니다. 현재 다른 기기로 기록을 복원할 수는 없습니다.\n이 기기의 판독 사진은 로그아웃 시 삭제됩니다.';
+  static const String logoutBody =
+      '기록은 이 기기에 남으며 같은 계정으로 다시 로그인하면 볼 수 있습니다. 현재 다른 기기로 기록을 복원할 수는 없습니다.\n이 기기의 판독 사진은 로그아웃 시 삭제됩니다.';
   static const String deleteAccountTitle = '계정을 삭제할까요?';
   static const String deleteAccountBody =
       '계정과 이 기기의 모든 기록(세션·플래너·오답·과목·설정)이 지워지고 되돌릴 수 없습니다.\n구독은 스토어에서 따로 해지해야 합니다.';
   static const String deleteAccountConfirm = '삭제';
   static const String logoutConfirm = '로그아웃';
+  static const String logoutCleanupPending =
+      '이 기기의 파일 정리가 끝나지 않아 로그아웃하지 않았습니다. 다시 시도할 수 있습니다.';
+  static const String accountDeleteLocalPending =
+      '서버 계정은 삭제됐지만 이 기기의 파일·기록 정리가 남아 있습니다. 다시 시도하면 기기 정리만 진행합니다.';
 
   // Save states
   static const String saved = '저장했습니다';

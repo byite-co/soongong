@@ -12,6 +12,7 @@
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../data/auth/account_binding.dart';
 import '../../../data/auth/auth_backend.dart';
 import '../../../data/auth/auth_gate.dart';
 import '../../../data/auth/auth_models.dart';
@@ -20,9 +21,23 @@ import '../../../data/auth/auth_repository.dart';
 import '../../../data/db/app_database.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../data/repositories/sync_writer.dart';
+import '../../../data/temp/temp_ownership.dart';
+import '../../../data/temp/temp_providers.dart';
 import '../../privacy/application/photo_retention.dart';
 
 part 'account_controller.g.dart';
+
+/// The remote account is already deleted. Retrying performs only local work.
+class AccountDeleteLocalCleanupFailed implements Exception {
+  const AccountDeleteLocalCleanupFailed({
+    this.remaining = 0,
+    this.unknown = true,
+  });
+  final int remaining;
+  final bool unknown;
+  @override
+  String toString() => 'AccountDeleteLocalCleanupFailed';
+}
 
 class AccountController {
   AccountController({
@@ -33,7 +48,11 @@ class AccountController {
     required this.writer,
     required this.db,
     required this.applyProfile,
-  });
+    this.temporary,
+    AccountBinding? binding,
+  }) : binding =
+           binding ??
+           AccountBinding(db, temporary: temporary, photos: photos.store);
 
   /// The account this controller acts for.
   final String userId;
@@ -42,6 +61,12 @@ class AccountController {
   final PhotoRetention photos;
   final SyncWriter writer;
   final AppDatabase db;
+  final TempOwnership? temporary;
+  final AccountBinding binding;
+  bool _serverDeleted = false;
+  Future<void>? _deletion;
+  Future<void>? _logout;
+  bool get serverDeleted => _serverDeleted;
 
   /// Hands the profile `update-consent` returns to the auth gate.
   final void Function(ProfileSnapshot profile) applyProfile;
@@ -55,28 +80,89 @@ class AccountController {
   /// Throws [PhotoWipeFailed] when a photo file could not be deleted (rows
   /// and the sweep marker stay; nothing else happens) and [StateError] when
   /// the account changed meanwhile (the wipe stops at that point, [S09c]).
-  Future<void> logout() async {
+  Future<void> logout() => _logout ??= _performLogout().whenComplete(() {
+    _logout = null;
+  });
+
+  Future<void> _revokeTemporary() async {
+    try {
+      final result = await temporary?.revoke(userId);
+      if (result != null && !result.complete) {
+        throw PhotoWipeFailed(
+          result.remaining,
+          storeUnavailable: result.unknown,
+        );
+      }
+    } on PhotoWipeFailed {
+      rethrow;
+    } on Object {
+      throw const PhotoWipeFailed(0, storeUnavailable: true);
+    }
+  }
+
+  Future<void> _performLogout() async {
+    _guard();
+    temporary?.beginBoundary(userId);
+    await _revokeTemporary();
     _guard();
     final result = await photos.wipeAll(alive: _alive);
     _guard();
-    if (!result.allDone) throw PhotoWipeFailed(result.failedCount, storeUnavailable: result.storeUnavailable);
+    if (!result.allDone) {
+      throw PhotoWipeFailed(
+        result.failedCount,
+        storeUnavailable: result.storeUnavailable,
+      );
+    }
     await auth.signOut();
   }
 
   /// Photos first (a failure stops before the server call), then
   /// `delete-account`, then the local database — only while it is still
   /// bound to this account (the owned transaction refuses otherwise).
-  Future<void> deleteAccount() async {
-    _guard();
-    final result = await photos.wipeAll(alive: _alive);
-    _guard();
-    if (!result.allDone) throw PhotoWipeFailed(result.failedCount, storeUnavailable: result.storeUnavailable);
-    await auth.deleteAccount(forUserId: userId);
+  Future<void> deleteAccount() =>
+      _deletion ??= _performDelete().whenComplete(() {
+        _deletion = null;
+      });
+
+  Future<void> _performDelete() async {
+    if (!_serverDeleted) _guard();
+    temporary?.beginBoundary(userId);
+    _serverDeleted = _serverDeleted || await binding.deletedAccount() == userId;
+    if (!_serverDeleted) {
+      _guard();
+      await _revokeTemporary();
+      _guard();
+      final result = await photos.wipeAll(alive: _alive);
+      _guard();
+      if (!result.allDone) {
+        throw PhotoWipeFailed(
+          result.failedCount,
+          storeUnavailable: result.storeUnavailable,
+        );
+      }
+      await auth.deleteAccount(forUserId: userId, signOutAfterDelete: false);
+      _serverDeleted = true;
+    }
+    await retryLocalCleanup();
+  }
+
+  Future<void> retryLocalCleanup() async {
+    if (!_serverDeleted && await binding.deletedAccount() != userId) {
+      throw StateError('account deletion not confirmed');
+    }
+    _serverDeleted = true;
     try {
-      await writer.runOwnedTransaction(db.wipeAll, purgeWork: true);
-    } on StateError {
-      // Another account is bound to the database by now: its data is not
-      // ours to wipe; the server-side deletion already succeeded.
+      await binding.rememberDeletion(userId);
+      await binding.finishDeletion(userId);
+      if (_signedInAsOwner) await auth.signOut();
+      await binding.clearDeletionReceipt(userId);
+    } on AccountLocalCleanupPending catch (error) {
+      throw AccountDeleteLocalCleanupFailed(
+        remaining: error.remaining,
+        unknown: error.unknown,
+      );
+    } on Object {
+      throw const AccountDeleteLocalCleanupFailed();
     }
   }
 
@@ -84,6 +170,14 @@ class AccountController {
   /// revoked); the gate gets the returned profile.
   Future<void> revokeReadingConsent() async {
     _guard();
+    final cleanup = await temporary?.cancelPicker(userId);
+    _guard();
+    if (cleanup != null && !cleanup.complete) {
+      throw PhotoWipeFailed(
+        cleanup.remaining,
+        storeUnavailable: cleanup.unknown,
+      );
+    }
     final profile = await auth.updateReadingConsent(granted: false);
     _guard();
     applyProfile(profile);
@@ -104,8 +198,13 @@ AccountController accountController(Ref ref) {
     photos: ref.watch(photoRetentionProvider),
     writer: ref.watch(syncWriterProvider),
     db: ref.watch(appDatabaseProvider),
+    temporary: ref.watch(tempOwnershipProvider),
+    binding: ref.watch(accountBindingProvider),
     applyProfile: (p) => ref.read(authGateProvider.notifier).applyProfile(p),
   );
   ref.onDispose(c.dispose);
+  ref.listen(authGateProvider, (before, after) {
+    if (before?.userId != after.userId) c.dispose();
+  });
   return c;
 }

@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/domain/local_date.dart';
+import '../../../core/strings/common_strings.dart';
 import '../../../core/strings/settings_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tokens.dart';
@@ -19,6 +20,7 @@ import '../../../core/utils/time_format.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../../data/auth/auth_models.dart';
 import '../../auth/domain/auth_redirect.dart';
+import '../../privacy/application/photo_retention.dart';
 import '../application/account_controller.dart';
 import '../application/settings_providers.dart';
 
@@ -47,39 +49,52 @@ class AccountScreen extends ConsumerStatefulWidget {
 }
 
 class _AccountScreenState extends ConsumerState<AccountScreen> {
-  void _back() => context.canPop() ? context.pop() : context.go(AppPaths.settings);
+  void _back() =>
+      context.canPop() ? context.pop() : context.go(AppPaths.settings);
 
   Future<void> _logout() async {
+    final controller = ref.read(accountControllerProvider);
     await showAppModal(
       context,
       title: SettingsStrings.logoutTitle,
       body: SettingsStrings.logoutBody,
       primaryLabel: SettingsStrings.logoutConfirm,
-      onConfirm: () => ref.read(accountControllerProvider).logout(),
+      onConfirm: controller.logout,
+      errorTextFor: (error) => error is PhotoWipeFailed
+          ? SettingsStrings.logoutCleanupPending
+          : null,
     );
   }
 
   Future<void> _deleteAccount() async {
+    final controller = ref.read(accountControllerProvider);
     await showAppModal(
       context,
       title: SettingsStrings.deleteAccountTitle,
       body: SettingsStrings.deleteAccountBody,
       primaryLabel: SettingsStrings.deleteAccountConfirm,
       destructive: true,
-      onConfirm: () => ref.read(accountControllerProvider).deleteAccount(),
+      onConfirm: controller.deleteAccount,
+      errorTextFor: (error) => error is AccountDeleteLocalCleanupFailed
+          ? SettingsStrings.accountDeleteLocalPending
+          : null,
+      retryLabel: CommonStrings.retry,
     );
   }
 
   Future<void> _revoke() async {
+    final controller = ref.read(accountControllerProvider);
     final ok = await showAppModal(
       context,
       title: SettingsStrings.consentRevokeTitle,
       body: SettingsStrings.consentRevokeBody,
       primaryLabel: SettingsStrings.consentRevokeConfirm,
       destructive: true,
-      onConfirm: () => ref.read(accountControllerProvider).revokeReadingConsent(),
+      onConfirm: controller.revokeReadingConsent,
     );
-    if (ok && mounted) showAppToast(context, message: SettingsStrings.consentRevoked);
+    if (ok && mounted) {
+      showAppToast(context, message: SettingsStrings.consentRevoked);
+    }
   }
 
   /// Local date and time of a UTC timestamp (원본 §4.2: 버전과 일시, S09c).
@@ -88,15 +103,25 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   String _consentAccountFact(ProfileSnapshot? p) {
     final at = p?.consentAccountAt;
     if (p == null || at == null) return SettingsStrings.consentNone;
-    return SettingsStrings.consentVersionAt(p.consentAccountVersion ?? '', _date(at));
+    return SettingsStrings.consentVersionAt(
+      p.consentAccountVersion ?? '',
+      _date(at),
+    );
   }
 
   String _consentReadingFact(ProfileSnapshot? p) {
     if (p == null) return SettingsStrings.consentNone;
     final revoked = p.consentReadingRevokedAt;
     final at = p.consentReadingAt;
-    if (p.readingConsentActive && at != null) return SettingsStrings.consentVersionAt(p.consentReadingVersion ?? '', _date(at));
-    if (revoked != null) return SettingsStrings.consentRevokedAt(_date(revoked));
+    if (p.readingConsentActive && at != null) {
+      return SettingsStrings.consentVersionAt(
+        p.consentReadingVersion ?? '',
+        _date(at),
+      );
+    }
+    if (revoked != null) {
+      return SettingsStrings.consentRevokedAt(_date(revoked));
+    }
     return SettingsStrings.consentNone;
   }
 
@@ -111,7 +136,10 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       child: info.localOnly
           ? const AppListSection(
               children: <Widget>[
-                AppListRow(label: SettingsStrings.localOnlyTitle, hint: SettingsStrings.localOnlyBody),
+                AppListRow(
+                  label: SettingsStrings.localOnlyTitle,
+                  hint: SettingsStrings.localOnlyBody,
+                ),
               ],
             )
           : Column(
@@ -121,15 +149,22 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                   children: <Widget>[
                     AppListRow(
                       label: info.email ?? SettingsStrings.accountEmailUnknown,
-                      hint: info.providerLabel ?? SettingsStrings.providerUnknown,
+                      hint:
+                          info.providerLabel ?? SettingsStrings.providerUnknown,
                       leading: Container(
                         width: 36,
                         height: 36,
                         alignment: Alignment.center,
-                        decoration: BoxDecoration(color: c.priWeak, shape: BoxShape.circle),
+                        decoration: BoxDecoration(
+                          color: c.priWeak,
+                          shape: BoxShape.circle,
+                        ),
                         child: Text(
                           info.initial,
-                          style: AppTypography.withWeight(AppTypography.body, 700).copyWith(color: c.priTx, height: 1),
+                          style: AppTypography.withWeight(
+                            AppTypography.body,
+                            700,
+                          ).copyWith(color: c.priTx, height: 1),
                         ),
                       ),
                     ),
@@ -162,8 +197,16 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 const AppListSection(
                   title: SettingsStrings.syncSection,
                   children: <Widget>[
-                    AppListRow(key: AccountKeys.syncLast, label: SettingsStrings.syncLast, value: SettingsStrings.syncLastNone),
-                    AppListRow(key: AccountKeys.syncNow, label: SettingsStrings.syncNow, value: SettingsStrings.syncNotConnected),
+                    AppListRow(
+                      key: AccountKeys.syncLast,
+                      label: SettingsStrings.syncLast,
+                      value: SettingsStrings.syncLastNone,
+                    ),
+                    AppListRow(
+                      key: AccountKeys.syncNow,
+                      label: SettingsStrings.syncNow,
+                      value: SettingsStrings.syncNotConnected,
+                    ),
                   ],
                 ),
                 Row(
@@ -190,7 +233,10 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                             alignment: Alignment.center,
                             child: Text(
                               SettingsStrings.deleteAccount,
-                              style: AppTypography.withWeight(AppTypography.label, 600).copyWith(color: c.accTx),
+                              style: AppTypography.withWeight(
+                                AppTypography.label,
+                                600,
+                              ).copyWith(color: c.accTx),
                             ),
                           ),
                         ),
