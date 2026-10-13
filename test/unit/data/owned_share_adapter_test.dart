@@ -172,6 +172,27 @@ void main() {
   );
 
   test(
+    'EXP-06 next actual export expires the previous shared attachment',
+    () async {
+      Future<void> share() => shareExportFile(
+        file(),
+        guard: guard(),
+        createTask: create,
+        shareFile: (_) async {
+          calls++;
+        },
+      );
+      await share();
+      final old = payload();
+      now = now.add(const Duration(hours: 24));
+      await share();
+      expect(old.existsSync(), isFalse);
+      expect(payload().readAsBytesSync(), [42]);
+      expect(calls, 2);
+    },
+  );
+
+  test(
     'EXP-07/08 handoff kill and concurrent A/B same-name exports recover without cross deletion',
     () async {
       final tasks = <OwnedTempTask>[];
