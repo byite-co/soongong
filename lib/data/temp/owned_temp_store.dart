@@ -45,6 +45,7 @@ class OwnedTempStore {
     this.beforeDelete,
     this.removeFile,
     this.listDirectory,
+    this.legacyClean,
   }) : now = now ?? DateTime.now;
 
   final Future<Directory> Function() root;
@@ -56,6 +57,9 @@ class OwnedTempStore {
   bool Function()? recoveryReady;
   final void Function(File file)? removeFile;
   final List<FileSystemEntity> Function(Directory directory)? listDirectory;
+
+  /// False means pre-ledger files may remain. They are never owned by a scope.
+  final Future<bool> Function()? legacyClean;
   final Map<String, Stopwatch> _leases = {};
   final Map<String, Stopwatch> _ages = {};
   final Set<String> _revoked = {};
@@ -244,6 +248,13 @@ class OwnedTempStore {
         try {
           if (recoveryReady != null && !recoveryReady!()) {
             return const TempCleanupResult(unknown: true);
+          }
+          try {
+            if (legacyClean != null && !await legacyClean!()) {
+              result = result.plus(const TempCleanupResult(unknown: true));
+            }
+          } on Object {
+            result = result.plus(const TempCleanupResult(unknown: true));
           }
           final base = await _root();
           final clock = File(p.join(base.path, '.clock'));
