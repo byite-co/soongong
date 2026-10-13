@@ -220,80 +220,84 @@ class AppModal extends StatelessWidget {
               color: c.surface,
               borderRadius: BorderRadius.circular(AppRadius.dialog),
               clipBehavior: Clip.antiAlias,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.page,
-                  vertical: AppSpacing.s24,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    Semantics(
-                      header: true,
-                      child: Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        style: AppTypography.heading.copyWith(color: c.tx),
-                      ),
-                    ),
-                    if (body != null)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: AppSpacing.s8,
-                          left: AppSpacing.s6,
-                          right: AppSpacing.s6,
-                        ),
+              // Long disclosures and retry errors remain reachable at large
+              // text scales; short dialogs keep their natural content height.
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.page,
+                    vertical: AppSpacing.s24,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      Semantics(
+                        header: true,
                         child: Text(
-                          body!,
+                          title,
                           textAlign: TextAlign.center,
-                          style: AppTypography.label.copyWith(
-                            color: c.tx2,
-                            height: 1.6,
-                          ),
+                          style: AppTypography.heading.copyWith(color: c.tx),
                         ),
                       ),
-                    if (errorText != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.s10),
-                        child: Semantics(
-                          liveRegion: true,
+                      if (body != null)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            top: AppSpacing.s8,
+                            left: AppSpacing.s6,
+                            right: AppSpacing.s6,
+                          ),
                           child: Text(
-                            errorText!,
+                            body!,
                             textAlign: TextAlign.center,
-                            style: AppTypography.withWeight(
-                              AppTypography.label,
-                              600,
-                            ).copyWith(color: c.accTx),
+                            style: AppTypography.label.copyWith(
+                              color: c.tx2,
+                              height: 1.6,
+                            ),
                           ),
                         ),
+                      if (errorText != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.s10),
+                          child: Semantics(
+                            liveRegion: true,
+                            child: Text(
+                              errorText!,
+                              textAlign: TextAlign.center,
+                              style: AppTypography.withWeight(
+                                AppTypography.label,
+                                600,
+                              ).copyWith(color: c.accTx),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: AppSpacing.s20),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: AppButton.secondary(
+                              label: secondaryLabel,
+                              onPressed: running ? null : onSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.s8),
+                          Expanded(
+                            child: destructive
+                                ? AppButton.destructive(
+                                    label: primaryLabel,
+                                    busy: running,
+                                    onPressed: onPrimary,
+                                  )
+                                : AppButton(
+                                    label: primaryLabel,
+                                    busy: running,
+                                    onPressed: onPrimary,
+                                  ),
+                          ),
+                        ],
                       ),
-                    const SizedBox(height: AppSpacing.s20),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: AppButton.secondary(
-                            label: secondaryLabel,
-                            onPressed: running ? null : onSecondary,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.s8),
-                        Expanded(
-                          child: destructive
-                              ? AppButton.destructive(
-                                  label: primaryLabel,
-                                  busy: running,
-                                  onPressed: onPrimary,
-                                )
-                              : AppButton(
-                                  label: primaryLabel,
-                                  busy: running,
-                                  onPressed: onPrimary,
-                                ),
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
