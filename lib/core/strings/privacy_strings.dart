@@ -91,9 +91,9 @@ abstract final class PrivacyStrings {
   static const String exportCsv = 'CSV로 내보내기';
   static const String exportJson = 'JSON으로 내보내기';
   static const String exportHint =
-      '세션 · 플래너 · 오답 · 과목 · 설정을 파일로 저장합니다. 사진은 포함되지 않습니다.\n앱이 만든 공유 파일은 24시간 유예 후 정리합니다. 받는 앱이 보관한 사본은 이 앱에서 삭제할 수 없습니다.';
+      '세션 · 플래너 · 오답 · 과목 · 설정을 파일로 저장합니다. 사진은 포함되지 않습니다.\n앱의 공유 파일은 24시간 유예가 지난 후 다음 실행·복귀 등 정리 기회에 삭제합니다. 받는 앱의 사본은 지우지 않습니다.';
   static const String temporaryPolicy =
-      '선택·촬영 과정에서 앱이 만든 임시 사진은 처리·취소 후 정리하고, 중단된 정리는 다음 실행·복귀 때 다시 시도합니다. 갤러리 원본은 지우지 않습니다. 공유용 임시 파일은 24시간 유예 후 정리하며, 로그아웃·계정 전환·전체 삭제 때는 즉시 정리를 시도합니다. 받는 앱의 사본은 삭제할 수 없습니다.';
+      '앱이 만든 선택·촬영 임시 사진은 처리·취소 후 정리하고, 실패하면 다음 실행·복귀 때 재시도합니다. 갤러리 원본은 지우지 않습니다. 공유 파일은 24시간 유예 후 다음 정리 기회에 삭제합니다. 로그아웃·계정 전환·전체 삭제 때는 즉시 정리를 시도해 공유가 중단될 수 있습니다. 받는 앱의 사본은 지우지 않습니다.';
   static const String exportFailed = '내보내지 못했습니다';
   static const String exportRetry = '다시 시도';
   static const String exporting = '파일 만드는 중…';
@@ -113,7 +113,7 @@ abstract final class PrivacyStrings {
   static const String deleteAllKeeps = '이 기기의 기록과 서버에 남은 관련 기록을 지웁니다 · 구독과 로그인은 유지';
   static const String deleteAllNext = '다음';
   static const String deleteAllFinalTitle = '정말 모든 기록을 삭제할까요?';
-  static const String deleteAllFinalBody = '서버와 이 기기의 기록이 지금 지워지며 되돌릴 수 없습니다.\n로그인과 구독 상태는 유지됩니다.';
+  static const String deleteAllFinalBody = '서버와 이 기기의 기록이 지금 지워지며 되돌릴 수 없습니다.\n앱의 임시파일 정리로 진행 중인 공유가 중단될 수 있습니다.\n로그인과 구독 상태는 유지됩니다.';
   static const String deleteAllConfirm = '삭제';
   static const String deleteAllDone = '모든 기록을 삭제했습니다';
   static String deleteAllPartial(int failed) =>

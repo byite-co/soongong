@@ -73,13 +73,17 @@ class PurgeRecovery {
     if (_started) return;
     _started = true;
     _ref.listen<AsyncValue<SessionSnapshot?>>(_snapshotProvider, (prev, next) {
-      if (next.hasValue && next.value == null && prev?.value != null) unawaited(resume());
+      if (next.hasValue && next.value == null && prev?.value != null)
+        unawaited(resume());
     });
     _ref.listen<AsyncValue<bool>>(_onlineProvider, (_, next) {
       if (next.value == true) unawaited(resume());
     });
     _ref.listen<AuthGateState>(authGateProvider, (prev, next) {
-      if (next is AuthGateSignedIn && !next.fromCache && prev?.userId != next.userId) unawaited(resume());
+      if (next is AuthGateSignedIn &&
+          !next.fromCache &&
+          prev?.userId != next.userId)
+        unawaited(resume());
     });
   }
 
@@ -108,7 +112,9 @@ class PurgeRecovery {
       final actions = _ref.read(privacyActionsProvider);
       final outcome = await actions.resume();
       _ref.read(purgeRecoveryStatusProvider.notifier).set(switch (outcome) {
-        null || DeleteAllDone() || DeleteAllPartial() => const PurgeRecoveryIdle(),
+        null ||
+        DeleteAllDone() ||
+        DeleteAllPartial() => const PurgeRecoveryIdle(),
         DeleteAllBlocked() => const PurgeRecoveryBlocked(),
         DeleteAllUnconfirmed() => const PurgeRecoveryChecking(),
         DeleteAllFailed(:final error) => PurgeRecoveryFailed(error),
@@ -119,19 +125,23 @@ class PurgeRecovery {
       // running: run again when it finishes so the state settles by itself.
       if (outcome is DeleteAllUnconfirmed) {
         final work = actions.pendingWork;
-        if (work != null) unawaited(work.then((_) => resume(), onError: (_) => resume()));
+        if (work != null)
+          unawaited(work.then((_) => resume(), onError: (_) => resume()));
       }
       return outcome;
-    } on Object catch (e, st) {
-      appLog.w('purge recovery failed', error: e, stackTrace: st);
-      _ref.read(purgeRecoveryStatusProvider.notifier).set(PurgeRecoveryFailed(e));
+    } on Object catch (e) {
+      appLog.w('purge recovery failed (${e.runtimeType})');
+      _ref
+          .read(purgeRecoveryStatusProvider.notifier)
+          .set(PurgeRecoveryFailed(e));
       return DeleteAllFailed(e);
     }
   }
 }
 
 @riverpod
-Stream<SessionSnapshot?> _snapshot(Ref ref) => ref.watch(sessionRepositoryProvider).watchSnapshot();
+Stream<SessionSnapshot?> _snapshot(Ref ref) =>
+    ref.watch(sessionRepositoryProvider).watchSnapshot();
 
 @riverpod
 Stream<bool> _online(Ref ref) => ref.watch(networkStatusProvider).online;

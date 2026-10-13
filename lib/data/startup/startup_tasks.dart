@@ -120,8 +120,8 @@ class UserStartupTasks {
         'expiredPhotos=$expiredPhotos',
       );
       return report;
-    } on Object catch (e, st) {
-      appLog.e('startup tasks failed', error: e, stackTrace: st);
+    } on Object catch (e) {
+      appLog.e('startup tasks failed (${e.runtimeType})');
       return null;
     }
   }
@@ -145,8 +145,8 @@ Future<void> runStartupTasks(ProviderContainer container) async {
   if (AppConfig.isDev) {
     try {
       await container.read(devSeederProvider).seedSubjects();
-    } on Object catch (e, st) {
-      appLog.e('dev seed failed', error: e, stackTrace: st);
+    } on Object catch (e) {
+      appLog.e('dev seed failed (${e.runtimeType})');
     }
   }
   attachStartupListener(container);

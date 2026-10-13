@@ -64,26 +64,26 @@ class _ForegroundActivityHookState extends ConsumerState<ForegroundActivityHook>
     if (gate is AuthGateSignedIn && gate.fromCache) {
       ref.read(authGateProvider.notifier).refreshProfile().catchError((
         Object e,
-        StackTrace st,
+        StackTrace _,
       ) {
-        appLog.w('profile refresh failed', error: e, stackTrace: st);
+        appLog.w('profile refresh failed (${e.runtimeType})');
       });
     }
     final today = LocalDate.of(ref.read(appClockProvider).now());
     ref.read(activityRepositoryProvider).touch(today).catchError((
       Object e,
-      StackTrace st,
+      StackTrace _,
     ) {
-      appLog.w('activity_days touch failed', error: e, stackTrace: st);
+      appLog.w('activity_days touch failed (${e.runtimeType})');
       return false;
     });
     // S09: 30-day photo expiry on foreground (D14) and the notification plan
     // re-read (device permission may have changed in the OS settings).
     ref.read(photoRetentionProvider).purgeExpired().catchError((
       Object e,
-      StackTrace st,
+      StackTrace _,
     ) {
-      appLog.w('photo expiry failed', error: e, stackTrace: st);
+      appLog.w('photo expiry failed (${e.runtimeType})');
       return 0;
     });
     // S09c: a 모든 기록 삭제 left open (server answer unknown · blocked ·
@@ -95,8 +95,8 @@ class _ForegroundActivityHookState extends ConsumerState<ForegroundActivityHook>
         .then((_) {
           return ref.read(notificationSchedulerProvider).reschedule();
         })
-        .catchError((Object e, StackTrace st) {
-          appLog.w('notification refresh failed', error: e, stackTrace: st);
+        .catchError((Object e, StackTrace _) {
+          appLog.w('notification refresh failed (${e.runtimeType})');
         });
   }
 

@@ -605,3 +605,13 @@ v2.2 → v2.3 변경(v2 검토 V2-01~11 반영): D2(pull 계약 단일화·tombs
 - 사진 작업은 성공·오류·finally까지 작업/계정/삭제 세대를 확인한다. 앱 캐시 경로 소유권은 route 재생성을 넘어 공유하며 사용자 원본을 삭제하지 않는다. gaze 종료는 camera2초 + native2초로 제한하고 실제 해제 미확인은 재시작 차단 상태로 유지한다.
 - D14와 제품 안내는 현재 local-only 저장·복원 미지원·파일 내보내기를 설명한다. S13 실제 동기화는 미래 구현 목표다. DB 준비/차단 화면은 DB를 읽지 않는 공통 한국어·시스템 테마 shell을 사용하고 정상 앱은 기존 사용자 테마를 따른다.
 - 새 패키지·스키마 형태·core/contracts 변경은 없다. 내부 ShareExport에 필수 guard를 추가하고 공통 auth에 선택적 AbortSignal을 추가했다. 관련 호출자와 전체 CI를 검증하며 실제 모델·실기기·물리 전원 손실 결과로 확대하지 않는다.
+
+## [RC-01~05] 임시파일 소유권·공유 유예·계정 경계 (2026-10-13)
+
+- **쓰기 전 불투명한 소유권**: 앱 임시 cache의 `soongong-owned-v1/<scope UUID>/<task UUID>`를 예약하고 marker를 payload보다 먼저 쓴다. 계정과 purge generation 매핑은 암호화 DB의 sync_meta 안에만 둔다. UUID 예약 디렉터리·독립 `.revoked`/`.delete` 표식으로 DB wipe나 marker 전후 중단에서도 소유 사본 정리 책임을 남긴다. 외부 원본·다른 기능·DB/키/암호화 복구 사본을 임시 정리에 포함하지 않는다. canonical 경로와 symlink를 검사하고, 열거/권한/상태 확인 실패는 unknown으로 유지한다.
+- **중단된 picker는 재선택**: 강제 종료 뒤 Android lost-data는 앱 단일 coordinator가 소비한다. 이전 사진을 자동 표시·전송·저장하지 않고, 검증된 앱 사본만 정리한 뒤 다시 선택하도록 안내한다. 이는 이번 개인정보 최소 보관을 위한 새 기본 결정이다. 확정 저장 문서와 기존 30일 사진 보관은 그대로다. iOS에 Android 복구 API가 있다고 가정하지 않는다.
+- **생성 지점의 좁은 native 패치**: image_picker 1.2.3의 고정 Android 0.8.13+23 / iOS 0.8.13+9 구현은 Dart callback 전에 파일을 만든다. 공개 API만으로 이 창의 소유권을 등록할 수 없어 exact-version path override를 사용한다. 카메라/provider/codec은 기존 구현을 유지하고 앱 사본의 위치·불변 owner·취소를 제한한다. LICENSE와 원본 archive/file hash는 third_party에 보관한다. share_plus 13.3.0의 전역 cache 복사 대신 소유 파일을 직접 URI/URL로 넘기는 native bridge를 사용한다.
+- **공유 기본 유예 24시간**: `TempRetentionPolicy.shareGrace`로 변경 가능하게 분리한다. 생성 시각 기준 24시간은 제품 기본값이며 플랫폼의 수신 완료 보장 시간이 아니다. success/dismissed/unavailable/예외/timeout도 읽기 완료를 뜻하지 않는다. 확실한 인계 전 실패는 즉시 정리, 인계 시도 후는 유예 뒤 앱 시작·복귀·cleanup 재시도·다음 export의 첫 실행 기회에 정리한다. 종료 중 정확한 시각 삭제를 약속하지 않는다. 유예가 끝난 임시 공유 링크는 사용할 수 없을 수 있다.
+- **명시 종료·삭제는 유예 없음**: 로그아웃·계정 전환·탈퇴·전체 삭제는 기존 작업을 즉시 무효화하고 앱 사본 정리를 시도한다. 진행 중 공유가 중단될 수 있음을 UI에 적는다. 이미 외부로 넘어간 사본이나 열린 FD는 회수할 수 없고 unlink/bytes 초기화는 물리 소거 보장이 아니다. clock rollback/재시작의 시간 비진행을 보수적으로 처리하며, 프로세스 내 monotonic age와 10분 active lease로 무기한 고착을 막는다. 실제 native writer가 종료되지 않았으면 정리 완료로 보고하지 않는다.
+- **계정/삭제 영수증**: 명시 로그아웃의 정리 실패는 재시도로 남기고, 강제 인증 종료는 접근을 즉시 차단한다. B binding 전에 A의 독립 정리 책임을 기록한다. 서버 계정 삭제가 확인되면 암호화된 로컬 영수증을 남겨 이후 재시도가 서버 삭제를 반복하지 않게 한다. 서버 응답과 최초 영수증 사이 강제 종료는 분산 원자성이 없어 별도 한계로 기록한다. 기존 purge-all epoch/request 멱등성은 유지한다.
+- **판정 단위**: 임시 task 잔여와 기존 사진 파일 잔여의 합은 UI에 ‘정리 N건’으로 적는다. unknown이면 개수 미확인을 표시한다. 새 40개 자동 시나리오, 기존 58개 복합 판정, 실기기 12개를 분리한다. host mock·실제 파일/DB·native bridge·실기기를 섞지 않는다. S13 실제 동기화, 승인된 모델 환경/평가, 공개 서비스 준비는 별도 미완료다. 세부 경로 원장과 검증은 `docs/handoff/EXT-FIX-02.md`를 따른다.

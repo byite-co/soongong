@@ -85,8 +85,8 @@ class AuthGateProfileError extends AuthGateState {
     required String userId,
     required this.reason,
     this.storageBlocked = false,
-  // Keep the public constructor name while access returns null when blocked.
-  // ignore: prefer_initializing_formals
+    // Keep the public constructor name while access returns null when blocked.
+    // ignore: prefer_initializing_formals
   }) : _userId = userId;
 
   @override
