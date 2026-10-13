@@ -352,10 +352,14 @@ class HttpTests(unittest.TestCase):
         self.assertTrue(exited.wait(2)); self.assert_free()
 
     def test_response_exact_limit_and_overflow(self):
+        envelope={'attempt_id':'11111111-1111-4111-8111-111111111111','provider':'local','model':'fixture'}
+        overhead=len(json.dumps(worker.worker_response(envelope,{'kind':'text'},'',0)).encode())
         for length, status in [(worker.MAX_RESPONSE, b"200"), (worker.MAX_RESPONSE + 1, b"503")]:
             # json.dumps adds two quote bytes to this ASCII string.
-            self.handler.execute = staticmethod(lambda *_args, **_kwargs: "a" * (length - 2))
-            self.assertIn(status, self.normal()); self.assert_free()
+            self.handler.execute = staticmethod(lambda *_args, **_kwargs: "a" * (length - overhead))
+            with patch("worker.time.monotonic",return_value=0):
+                self.assertIn(status, self.normal())
+            self.assert_free()
 
 
 if __name__ == "__main__": unittest.main()

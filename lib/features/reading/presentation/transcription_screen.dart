@@ -18,6 +18,9 @@ import '../../../data/repositories/study_repository.dart';
 import '../../../data/temp/temp_providers.dart';
 import '../../measure/application/measure_controller.dart';
 import '../application/study_providers.dart';
+import '../../../data/repositories/ai_request_repository.dart';
+import '../../../data/photos/study_crop.dart';
+import 'crop_dialog.dart';
 
 class TranscriptionScreen extends ConsumerStatefulWidget {
   const TranscriptionScreen({super.key, this.plannerItemId, this.pickImage});
@@ -39,9 +42,12 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
   String? _message;
   int _operation = 0;
   int? _generation;
+  String? _requestId;
+  void Function()? _releaseApproval;
 
   @override
   void dispose() {
+    _releaseApproval?.call();
     _operation++;
     _image?.fillRange(0, _image!.length, 0);
     _text.dispose();
@@ -114,6 +120,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
         _image?.fillRange(0, _image!.length, 0);
         _image = bytes;
         _transcription = null;
+        _requestId = null;
         _saved = null;
         _agreed = false;
         _text.clear();
@@ -169,7 +176,50 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       final epoch = before.epoch;
       if (!mounted || op != _operation) return;
       _generation = generation;
+      final approvals = ref.read(aiApprovalControllerProvider);
+      bool valid() {
+        if (!mounted ||
+            op != _operation ||
+            ref.read(currentUserIdProvider) != owner ||
+            writer.purgeGeneration != generation ||
+            !_agreed)
+          return false;
+        final gate = ref.read(authGateProvider);
+        return gate is AuthGateSignedIn &&
+            gate.profile?.readingConsentActive == true;
+      }
+
+      _requestId = null;
+      _releaseApproval = approvals.bind(
+        valid: valid,
+        generation: generation,
+        present: (quote) async {
+          if (!valid()) return false;
+          return await showDialog<bool>(
+                context: context,
+                builder: (dialog) => AlertDialog(
+                  title: const Text('전사 실행 확인'),
+                  content: Text(
+                    '${quote.operation == 'ocr_math' ? '수식 전사' : '한국어 전사'} · ${quote.points} AI 포인트\n정책: ${quote.id}\n이용 조건: ${quote.terms}\n개발 평가용입니다. 풀이·정답 판정은 하지 않습니다.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialog, false),
+                      child: const Text('취소'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialog, true),
+                      child: const Text('포인트 확인 · 실행'),
+                    ),
+                  ],
+                ),
+              ) ??
+              false;
+        },
+      );
       final result = await engine.transcribe(_image!, _kind, epoch: epoch);
+      _requestId = approvals.requestId;
+      if (!valid()) return;
       if (!mounted ||
           op != _operation ||
           ref.read(currentUserIdProvider) != owner) {
@@ -193,6 +243,12 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
         setState(() => _message = StudyStrings.error);
       }
     } finally {
+      if (mounted && op == _operation) {
+        _requestId ??= ref.read(aiApprovalControllerProvider).requestId;
+        ref.invalidate(aiRequestsProvider);
+      }
+      _releaseApproval?.call();
+      _releaseApproval = null;
       if (mounted && op == _operation) setState(() => _busy = false);
     }
   }
@@ -214,19 +270,30 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       _message = null;
     });
     try {
-      final result = await repo.save(
-        transcription: transcription,
-        text: _text.text,
-        generation: generation,
-        id: _saved?.id,
-        expectedRevision: _saved?.revision,
-        plannerItemId: widget.plannerItemId,
-      );
+      final result = _requestId != null
+          ? await ref
+                .read(aiRequestRepositoryProvider)
+                .confirm(
+                  _requestId!,
+                  _text.text,
+                  generation,
+                  expectedRevision: _saved?.revision,
+                  plannerItemId: widget.plannerItemId,
+                )
+          : await repo.save(
+              transcription: transcription,
+              text: _text.text,
+              generation: generation,
+              id: _saved?.id,
+              expectedRevision: _saved?.revision,
+              plannerItemId: widget.plannerItemId,
+            );
       final purge = await LocalPurge.readState(repo.db);
       if (!current() || purge.inProgress || purge.generation != generation) {
         return;
       }
       ref.invalidate(studyDocumentsProvider);
+      ref.invalidate(aiRequestsProvider);
       setState(() {
         _saved = result;
         _message = StudyStrings.saved;
@@ -284,9 +351,162 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
     }
   }
 
+  Future<void> _crop() async {
+    if (_busy || _image == null || _generation == null) return;
+    final op = ++_operation;
+    final owner = ref.read(currentUserIdProvider);
+    final generation = _generation!;
+    final writer = ref.read(syncWriterProvider);
+    final ownership = ref.read(tempOwnershipProvider);
+    final token = ownership.epoch(owner);
+    bool current() =>
+        mounted &&
+        op == _operation &&
+        ref.read(currentUserIdProvider) == owner &&
+        writer.purgeGeneration == generation &&
+        ownership.epoch(owner) == token;
+    setState(() => _busy = true);
+    try {
+      final selection = await showDialog<CropSelection>(
+        context: context,
+        builder: (_) => StudyCropDialog(image: _image!),
+      );
+      if (selection == null || !current()) return;
+      final task = await ownership.create(
+        writer,
+        'picker',
+        generation: generation,
+        alive: current,
+      );
+      try {
+        final bytes = await cropStudyImage(
+          _image!,
+          selection.rect,
+          selection.turns,
+          task,
+        );
+        if (!current()) {
+          bytes.fillRange(0, bytes.length, 0);
+          return;
+        }
+        setState(() {
+          _image!.fillRange(0, _image!.length, 0);
+          _image = bytes;
+          _transcription = null;
+          _requestId = null;
+          _saved = null;
+          _text.clear();
+          _agreed = false;
+        });
+      } finally {
+        await task.cleanup();
+      }
+    } on Object {
+      if (current()) setState(() => _message = StudyStrings.error);
+    } finally {
+      if (current()) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _recover(PendingAiRequest pending, {bool cancel = false}) async {
+    if (_busy) return;
+    final jobs = ref.read(remoteAiJobsProvider);
+    if (jobs == null) return;
+    final gate = ref.read(authGateProvider);
+    if (gate is! AuthGateSignedIn || gate.profile?.readingConsentActive != true)
+      return;
+    final owner = gate.userId;
+    final op = ++_operation;
+    final repository = ref.read(aiRequestRepositoryProvider);
+    final writer = repository.documents.writer;
+    bool current() =>
+        mounted &&
+        op == _operation &&
+        ref.read(currentUserIdProvider) == owner &&
+        writer.purgeGeneration == pending.generation;
+    setState(() => _busy = true);
+    try {
+      await jobs.status(pending.epoch, pending.id, cancel: cancel);
+      final updated = await repository.get(pending.id);
+      if (!current() || updated == null) return;
+      final currentGate = ref.read(authGateProvider);
+      if (currentGate is! AuthGateSignedIn ||
+          currentGate.profile?.readingConsentActive != true)
+        return;
+      final document = updated.documentId == null
+          ? null
+          : await repository.documents.get(updated.documentId!);
+      if (!current()) return;
+      setState(() {
+        _image?.fillRange(0, _image!.length, 0);
+        _image = null;
+        _agreed = false;
+        _requestId = updated.id;
+        _generation = updated.generation;
+        _transcription = updated.expired ? null : updated.transcription;
+        _kind = updated.operation == 'ocr_math'
+            ? TranscriptionKind.math
+            : TranscriptionKind.text;
+        _text.text = updated.correction ?? _transcription?.text ?? '';
+        _saved = document;
+        _message =
+            '${_requestState(updated)}\n원본 사진은 보관하지 않았습니다. 요청을 자동 재실행하지 않습니다.';
+      });
+    } on Object {
+      if (current())
+        setState(
+          () => _message =
+              '요청을 조회하지 못했습니다. 요청 없음·연결 오류는 다시 실행하지 않습니다. 상태를 다시 확인해 주세요.',
+        );
+    } finally {
+      if (current()) {
+        ref.invalidate(aiRequestsProvider);
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  String _requestState(PendingAiRequest p) {
+    final state = p.expired
+        ? '결과 보관 만료'
+        : switch (p.state) {
+            'succeeded' => '결과 수신 · 사용자 확인 필요',
+            'cancelled' => '취소됨',
+            'failed' => '처리 실패',
+            'reconciliation_required' => '실행 여부 확인 중',
+            'submitting' => '전송 결과 확인 필요',
+            _ => '처리 중',
+          };
+    final points = switch (p.pointsState) {
+      'released' => '포인트 반환',
+      'settled' => '포인트 사용 확정',
+      'reserved' => '포인트 예약 중',
+      _ => '포인트 상태 확인 필요',
+    };
+    return '$state · $points';
+  }
+
   @override
   Widget build(BuildContext context) {
     final documents = ref.watch(studyDocumentsProvider);
+    final requests = ref.watch(aiRequestsProvider);
+    ref.listen(authGateProvider, (_, next) {
+      if (next is AuthGateSignedIn &&
+          next.profile?.readingConsentActive == true)
+        return;
+      _releaseApproval?.call();
+      _operation++;
+      _image?.fillRange(0, _image!.length, 0);
+      setState(() {
+        _image = null;
+        _transcription = null;
+        _requestId = null;
+        _text.clear();
+        _busy = false;
+        _agreed = false;
+        _saved = null;
+      });
+    });
     ref.listen(tempInvalidationProvider, (_, next) {
       if (next.asData?.value != ref.read(currentUserIdProvider)) return;
       _operation++;
@@ -294,6 +514,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       setState(() {
         _image = null;
         _transcription = null;
+        _requestId = null;
         _text.clear();
         _agreed = false;
         _busy = false;
@@ -311,6 +532,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
           _image = null;
           _text.clear();
           _transcription = null;
+          _requestId = null;
           _saved = null;
           _busy = false;
           _agreed = false;
@@ -326,6 +548,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
         _image = null;
         _text.clear();
         _transcription = null;
+        _requestId = null;
         _saved = null;
         _busy = false;
         _agreed = false;
@@ -337,6 +560,19 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
         padding: const EdgeInsets.all(20),
         children: [
           const Text(StudyStrings.localOnly),
+          TextButton(
+            onPressed: _busy
+                ? null
+                : () => context.push(
+                    Uri(
+                      path: '/reading/grading',
+                      queryParameters: widget.plannerItemId == null
+                          ? null
+                          : {'itemId': widget.plannerItemId!},
+                    ).toString(),
+                  ),
+            child: const Text('채점표시 판독으로 이동'),
+          ),
           const Text(StudyStrings.interruptedPicker),
           const SizedBox(height: 16),
           AppButton.secondary(
@@ -352,6 +588,10 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
           if (_image != null) ...[
             const SizedBox(height: 16),
             Image.memory(_image!, height: 220, fit: BoxFit.contain),
+            TextButton(
+              onPressed: _busy ? null : _crop,
+              child: const Text('영역 선택 · 회전'),
+            ),
             SegmentedButton<TranscriptionKind>(
               segments: const [
                 ButtonSegment(
@@ -369,6 +609,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
                   : (v) => setState(() {
                       _kind = v.single;
                       _transcription = null;
+                      _requestId = null;
                       _saved = null;
                       _text.clear();
                     }),
@@ -389,11 +630,30 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
           ],
           if (_transcription != null) ...[
             const Text(StudyStrings.review),
+            Text('엔진: ${_transcription!.engine}'),
+            if (_kind == TranscriptionKind.math)
+              const Text('LaTeX 원문 · 자동 실행이나 수학적 검증을 하지 않습니다.'),
+            SelectableText(_transcription!.text),
             TextField(
               controller: _text,
               enabled: !_busy,
               maxLines: 10,
               maxLength: 20000,
+              onChanged: (value) {
+                final id = _requestId;
+                final generation = _generation;
+                if (id != null && generation != null) {
+                  ref
+                      .read(aiRequestRepositoryProvider)
+                      .correct(id, value, generation)
+                      .catchError((Object _) {
+                        if (mounted)
+                          setState(
+                            () => _message = '교정 내용 보관에 실패했습니다. 입력은 유지됩니다.',
+                          );
+                      });
+                }
+              },
             ),
             AppButton(
               label: StudyStrings.confirm,
@@ -407,6 +667,34 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
               child: Text(_message!),
             ),
           const SizedBox(height: 16),
+          const Text('이전 전사 요청 · 상태 조회'),
+          ...requests.when(
+            data: (rows) => rows
+                .map(
+                  (p) => ListTile(
+                    title: Text(p.operation == 'ocr_math' ? '수식 전사' : '한국어 전사'),
+                    subtitle: Text(_requestState(p)),
+                    onTap: _busy ? null : () => _recover(p),
+                    trailing:
+                        {
+                          'submitting',
+                          'reserved',
+                          'dispatching',
+                          'reconciliation_required',
+                        }.contains(p.state)
+                        ? TextButton(
+                            onPressed: _busy
+                                ? null
+                                : () => _recover(p, cancel: true),
+                            child: const Text('취소 요청'),
+                          )
+                        : null,
+                  ),
+                )
+                .toList(),
+            loading: () => <Widget>[],
+            error: (_, _) => <Widget>[const Text('이전 요청을 읽지 못했습니다.')],
+          ),
           const Text(StudyStrings.history),
           ...documents.when(
             data: (rows) => rows

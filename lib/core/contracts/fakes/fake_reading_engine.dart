@@ -368,7 +368,7 @@ class FakeReadingEngine implements ReadingEngine {
     return MarksUpdated(req.items);
   }
 
-  static double _confidenceOf(ReadingResult? result, int page, int number) {
+  static double? _confidenceOf(ReadingResult? result, int page, int number) {
     if (result == null) return 1;
     for (final p in result.pages) {
       if (p.index != page) continue;
@@ -393,8 +393,9 @@ class FakeReadingEngine implements ReadingEngine {
 
   @override
   Future<QuotaSnapshot> quota() async {
-    final reserved =
-        _requests.values.where((r) => r.state == FakeRequestState.active).length;
+    final reserved = _requests.values
+        .where((r) => r.state == FakeRequestState.active)
+        .length;
     return QuotaSnapshot(
       used: _used,
       reserved: reserved,
@@ -410,11 +411,11 @@ class FakeReadingEngine implements ReadingEngine {
     bool zeroWrong = false,
   }) {
     ReadingItem item(int n, Mark mark, double conf, double top) => ReadingItem(
-          number: n,
-          mark: zeroWrong ? Mark.correct : mark,
-          confidence: conf,
-          box: Rect.fromLTWH(0.08, top, 0.84, 0.06),
-        );
+      number: n,
+      mark: zeroWrong ? Mark.correct : mark,
+      confidence: conf,
+      box: Rect.fromLTWH(0.08, top, 0.84, 0.06),
+    );
     final page0 = <ReadingItem>[
       item(1, Mark.correct, 0.98, 0.10),
       item(2, Mark.correct, 0.97, 0.18),

@@ -13,6 +13,7 @@ import {
 } from "../_shared/study.ts";
 import { type DeadlineClock, STUDY_DEADLINE_MS, StudyDeadline } from "../_shared/study_deadline.ts";
 import { AiJobs, inputDigest } from "../_shared/ai_jobs.ts";
+import { receipt } from "../_shared/worker_receipt.ts";
 
 interface StudyDependencies {
   user: (req: Request, signal: AbortSignal) => Promise<Caller>;
@@ -109,9 +110,15 @@ export async function handle(
       throw new HttpError(response.status === 429 ? 429 : 503, "engine_unavailable");
     }
     const raw = await deadline.run((signal) => boundedJson(response.body, 256000, signal));
+    const evidence = receipt(raw, dispatch.attempt_id, dispatch.provider, dispatch.model);
+    // Cost evidence is independent of result validity, revocation and refunds.
+    await deadline.run(signal => deps.jobs.rpc("ai_record_evidence", {
+      p_job: job.job_id, p_reading_cost: null, p_attempt: evidence.attempt_id,
+      p_provider: evidence.provider, p_model: evidence.model, p_usage: evidence.usage,
+    }, signal));
     const parsedResult = body.operation === "ocr"
-      ? transcriptionResponse.safeParse(raw)
-      : solutionResponse.safeParse(raw);
+      ? transcriptionResponse.safeParse(evidence.result)
+      : solutionResponse.safeParse(evidence.result);
     if (!parsedResult.success) throw new HttpError(502, "invalid_engine_result");
     const result = parsedResult.data;
     if (body.operation === "ocr" && (!("kind" in result) || result.kind !== body.kind)) {

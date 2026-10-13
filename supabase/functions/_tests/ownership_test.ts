@@ -24,7 +24,7 @@ const A = "aaaaaaaa-0000-4000-8000-000000000001";
 const B = "bbbbbbbb-0000-4000-8000-000000000002";
 const X = "60000000-0000-4000-8000-000000000001"; // same request_id for both accounts
 
-Deno.test("worker: reading_finish and photo_delete_done carry the claimed job's user_id", async () => {
+Deno.test("worker: reading_finish_attempt and photo_delete_done carry the claimed job's user_id", async () => {
   let claimed = 0;
   const jobs = [
     { request_id: X, user_id: A, attempts: 1, object_paths: [`${A}/${X}/p0.jpg`], subject_id: null, range_text: null },
@@ -32,12 +32,12 @@ Deno.test("worker: reading_finish and photo_delete_done carry the claimed job's 
   ];
   const rec = recorder({
     reading_claim_job: () => jobs[claimed++] ?? null,
-    reading_finish: (a) => ({ outcome: "failed", status: "failed", user_id: a.p_user, request_id: a.p_request_id, object_paths: [`${a.p_user}/${a.p_request_id}/p0.jpg`] }),
+    reading_finish_attempt: (a) => ({ outcome: "failed", status: "failed", user_id: a.p_user, request_id: a.p_request_id, object_paths: [`${a.p_user}/${a.p_request_id}/p0.jpg`] }),
     photo_delete_done: () => 1,
   });
   const out = await runOnce(undefined, 20, rec.call, (paths) => Promise.resolve(paths.filter(() => false)));
   assertEquals(out.processed, [{ user_id: A, request_id: X }, { user_id: B, request_id: X }]);
-  const finishes = rec.calls.filter((c) => c.name === "reading_finish").map((c) => [c.args.p_user, c.args.p_request_id]);
+  const finishes = rec.calls.filter((c) => c.name === "reading_finish_attempt").map((c) => [c.args.p_user, c.args.p_request_id]);
   assertEquals(finishes, [[A, X], [B, X]]);
   const dones = rec.calls.filter((c) => c.name === "photo_delete_done").map((c) => [c.args.p_user, c.args.p_request_id, c.args.p_paths]);
   assertEquals(dones, [[A, X, [`${A}/${X}/p0.jpg`]], [B, X, [`${B}/${X}/p0.jpg`]]]);

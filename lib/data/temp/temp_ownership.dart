@@ -58,6 +58,21 @@ class TempOwnership {
     }
   }
 
+  Future<bool> ownsFile(SyncWriter writer, String path) async {
+    final token = epoch(writer.ctx.userId);
+    final mapping = await _mapping();
+    if (mapping == null ||
+        mapping['owner'] != writer.ctx.userId ||
+        mapping['generation'] != writer.purgeGeneration ||
+        _boundaries.contains(writer.ctx.userId))
+      return false;
+    final owned = await store.ownsActivePayload(
+      mapping['scope'] as String,
+      path,
+    );
+    return owned && token == epoch(writer.ctx.userId);
+  }
+
   Future<OwnedTempTask> create(
     SyncWriter writer,
     String kind, {

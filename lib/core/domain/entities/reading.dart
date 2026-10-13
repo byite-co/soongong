@@ -72,7 +72,7 @@ abstract class WrongItem with _$WrongItem {
     required int pageIndex,
     required int number,
     required WrongMark mark,
-    required double confidence,
+    required double? confidence,
     required bool userConfirmed,
     @Default(WrongItemStatus.open) WrongItemStatus status,
     DateTime? resolvedAt,

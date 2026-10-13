@@ -70,7 +70,7 @@ function fixture() {
     },
     fetch: ((_input: RequestInfo | URL, _init?: RequestInit) => {
       calls.worker++;
-      return Promise.resolve(Response.json(result));
+      return Promise.resolve(Response.json({worker_version:1,attempt_id:"33333333-3333-4333-8333-333333333333",provider:"local",model:"fixture",result,usage:{requests:1,images:1,pages:1,crops:0,elapsed_ms:1},billing:"local_no_external_api"}));
     }) as typeof fetch,
   };
   return { clock, calls, io };

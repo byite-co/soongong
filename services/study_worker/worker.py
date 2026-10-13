@@ -63,8 +63,9 @@ def checked_models():
     if actual != set(files):
         raise ValueError("model_manifest_mismatch")
     for relative, expected in files.items():
-        path = (root / relative).resolve()
-        if not path.is_relative_to(root) or path.is_symlink() or len(expected) != 64:
+        candidate = root / relative
+        path = candidate.resolve()
+        if not path.is_relative_to(root) or candidate.is_symlink() or any(p.is_symlink() for p in candidate.parents if p != root) or len(expected) != 64:
             raise ValueError("model_manifest_invalid")
         with path.open("rb") as stream:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
@@ -76,22 +77,14 @@ def checked_models():
 def infer_ocr(body):
     image = decode_image(body["image"])
     root, revision = checked_models()
-    kind = body["kind"]
+    if os.environ.get('WORKER_MODEL_ID') and os.environ['WORKER_MODEL_ID'] != revision:
+        raise ValueError('model_id_mismatch')
+    kind = body.get("kind", "text")
     if kind == "text":
-        import numpy as np
-        from paddleocr import PaddleOCR
-        engine = PaddleOCR(lang="korean", ocr_version="PP-OCRv3",
-            text_detection_model_dir=str(root / "detection"),
-            text_recognition_model_dir=str(root / "korean"),
-            use_doc_orientation_classify=False, use_doc_unwarping=False,
-            use_textline_orientation=False)
-        result = next(iter(engine.predict(np.asarray(image))))
-        blocks = []
-        for text, score, poly in zip(result["rec_texts"], result["rec_scores"], result["rec_polys"], strict=True):
-            points = np.asarray(poly)
-            box = [float(points[:, 0].min() / image.width), float(points[:, 1].min() / image.height),
-                   float(points[:, 0].max() / image.width), float(points[:, 1].max() / image.height)]
-            blocks.append({"text": str(text), "confidence": float(score), "box": [max(0., min(1., x)) for x in box]})
+        from paddle_adapter import load, recognize, grading
+        blocks = recognize(image, load(root))
+        if body['operation'] == 'reading':
+            return {'schema_version': 2, 'pages': [grading(image, blocks, body['page_index'])]}
         name = "paddleocr-3.7.0"
     elif kind == "math":
         from unimernet_adapter import recognize
@@ -230,7 +223,10 @@ def transport_input(envelope):
     body = envelope["input"]
     if not isinstance(body, dict) or type(body.get("schema_version")) is not int or body["schema_version"] != 1 or not integer(body.get("purge_epoch"), 0, 2**53-1) or body.get("consent_version") != "study-2026-10-13":
         raise ValueError("invalid_payload")
-    if body.get("operation") == "ocr":
+    if body.get("operation") == "reading":
+        if set(body) != {'schema_version','operation','page_index','image','purge_epoch','consent_version'} or not integer(body.get('page_index'),0,19) or not isinstance(body.get('image'),str) or not 4<=len(body['image'])<=5592408 or not re.fullmatch(r'[A-Za-z0-9+/]+={0,2}',body['image']):
+            raise ValueError('invalid_payload')
+    elif body.get("operation") == "ocr":
         if set(body) != {"schema_version", "operation", "kind", "image", "purge_epoch", "consent_version"} or body.get("kind") not in {"text", "math"} or not isinstance(body.get("image"), str) or not 4 <= len(body["image"]) <= 5592408 or not re.fullmatch(r"[A-Za-z0-9+/]+={0,2}", body["image"]):
             raise ValueError("invalid_payload")
     else:
@@ -240,6 +236,13 @@ def transport_input(envelope):
     if envelope["provider"] != "local" or not os.environ.get("WORKER_MODEL_ID") or envelope["model"] != os.environ["WORKER_MODEL_ID"]:
         raise ValueError("billing_adapter_unconfigured")
     return body
+
+
+def worker_response(envelope, body, output, elapsed_ms):
+    return {'worker_version':1,'attempt_id':envelope['attempt_id'],
+        'provider':envelope['provider'],'model':envelope['model'],'result':output,
+        'usage':{'requests':1,'images':1,'pages':1,'crops':int(body.get('kind')=='math'),'elapsed_ms':elapsed_ms},
+        'billing':'local_no_external_api'}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -268,9 +271,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             raw = read_body(self.rfile, self.connection, length,
                             min(deadline, time.monotonic() + self.body_seconds))
-            body = transport_input(json.loads(raw))
-            result = json.dumps(self.execute(body, timeout=deadline - time.monotonic(),
-                cancelled=self.disconnected), ensure_ascii=False, allow_nan=False).encode()
+            envelope = json.loads(raw)
+            body = transport_input(envelope)
+            started = time.monotonic()
+            output = self.execute(body, timeout=deadline - time.monotonic(), cancelled=self.disconnected)
+            # Keep inner result v1. The receipt is private authenticated data;
+            # it carries units, not client-supplied money or wallet authority.
+            result = json.dumps(worker_response(envelope, body, output, max(0,round((time.monotonic()-started)*1000))),ensure_ascii=False,allow_nan=False).encode()
             if len(result) > MAX_RESPONSE: raise ValueError("result_too_large")
             remaining = deadline - time.monotonic()
             if remaining <= 0 or self.disconnected(): raise TimeoutError("inference_timeout")

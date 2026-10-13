@@ -80,8 +80,8 @@ class ReadingItem {
   });
 
   final int number;
-  final Mark mark;
-  final double confidence;
+  final Mark? mark;
+  final double? confidence;
   final Rect? box;
 }
 
@@ -116,7 +116,7 @@ class WrongItemDraft {
   final int pageIndex;
   final int number;
   final Mark mark;
-  final double confidence;
+  final double? confidence;
   final bool userConfirmed;
 }
 

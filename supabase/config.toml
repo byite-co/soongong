@@ -74,3 +74,6 @@ verify_jwt = true
 verify_jwt = true
 [functions.study-maintenance]
 verify_jwt = false
+
+[functions.reading-quota]
+verify_jwt = true

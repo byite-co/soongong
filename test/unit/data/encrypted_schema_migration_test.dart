@@ -46,7 +46,7 @@ class _FaultDatabase extends AppDatabase {
 
   @override
   Future<void> customStatement(String statement, [List<Object?>? args]) async {
-    if (statement == 'PRAGMA user_version = 4') {
+    if (statement == 'PRAGMA user_version = 5') {
       if (fault == _Fault.beforeVersion) {
         throw StateError('injected_before_version');
       }
@@ -315,7 +315,7 @@ void main() {
             requireReadyDatabase(_FaultDatabase(executor(), fault)),
             throwsA(isA<DatabaseProtectionException>()),
           );
-          expect(inspect((db) => db.userVersion), 4);
+          expect(inspect((db) => db.userVersion), 5);
           final committed = inspect(databaseFingerprint);
           final retry = AppDatabase(executor());
           try {

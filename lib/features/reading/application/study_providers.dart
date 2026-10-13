@@ -10,12 +10,42 @@ import '../../../data/engines/transcription/remote_transcription_engine.dart';
 import '../../../data/repositories/remote_study_restore.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../data/repositories/study_repository.dart';
+import '../../../data/repositories/ai_request_repository.dart';
+import '../../../data/engines/transcription/remote_ai_jobs.dart';
+import 'ai_approval_controller.dart';
 
-final transcriptionEngineProvider = Provider<TranscriptionEngine?>(
-  (ref) => AppConfig.hasBackendConfig
-      ? RemoteTranscriptionEngine(Supabase.instance.client)
-      : null,
+final aiApprovalControllerProvider = Provider<AiApprovalController>((ref) {
+  ref.watch(currentUserIdProvider);
+  final controller = AiApprovalController();
+  ref.onDispose(controller.close);
+  return controller;
+});
+final aiRequestRepositoryProvider = Provider<AiRequestRepository>(
+  (ref) => AiRequestRepository(ref.watch(studyRepositoryProvider)),
 );
+final aiRequestsProvider = FutureProvider.autoDispose((ref) {
+  ref.watch(studyGenerationProvider);
+  return ref.watch(aiRequestRepositoryProvider).list();
+});
+final remoteAiJobsProvider = Provider<RemoteAiJobs?>((ref) {
+  if (!AppConfig.hasBackendConfig || !AppConfig.devOcrEnabled) return null;
+  final controller = ref.watch(aiApprovalControllerProvider);
+  final repository = ref.watch(aiRequestRepositoryProvider);
+  late RemoteAiJobs jobs;
+  jobs = RemoteAiJobs(
+    Supabase.instance.client,
+    approve: (op, epoch) => controller.approve(jobs, op, epoch),
+    beforeSend: repository.prepare,
+    onJob: repository.record,
+    checkCurrent: controller.check,
+  );
+  return jobs;
+});
+
+final transcriptionEngineProvider = Provider<TranscriptionEngine?>((ref) {
+  final jobs = ref.watch(remoteAiJobsProvider);
+  return jobs == null ? null : RemoteTranscriptionEngine.withJobs(jobs);
+});
 
 final studyRepositoryProvider = Provider<StudyRepository>((ref) {
   var alive = true;

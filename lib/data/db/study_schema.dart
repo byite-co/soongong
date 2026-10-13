@@ -41,3 +41,25 @@ substr(trim(replace(replace(replace(text,char(13),' '),char(10),' '),char(9),' '
 1,CASE WHEN solution_json IS NULL THEN 0 ELSE 1 END,0,'available',updated_at
 FROM study_documents
 ''';
+
+/// v5: encrypted, account-bound request recovery. No input image or credential.
+const String createStudyAiRequests = '''
+CREATE TABLE study_ai_requests (
+ request_id TEXT NOT NULL PRIMARY KEY,
+ user_id TEXT NOT NULL,
+ purge_epoch INTEGER NOT NULL,
+ generation INTEGER NOT NULL,
+ quote_id TEXT NOT NULL,
+ operation TEXT NOT NULL CHECK (operation IN ('ocr_text','ocr_math')),
+ input_digest TEXT NOT NULL,
+ approved INTEGER NOT NULL CHECK (approved = 1),
+ created_at TEXT NOT NULL,
+ state TEXT NOT NULL,
+ points_state TEXT,
+ result_json TEXT,
+ corrected_text TEXT,
+ document_id TEXT,
+ document_revision INTEGER,
+ result_expired INTEGER NOT NULL DEFAULT 0 CHECK (result_expired IN (0,1))
+)
+''';

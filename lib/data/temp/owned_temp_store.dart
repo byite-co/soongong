@@ -71,6 +71,29 @@ class OwnedTempStore {
   );
 
   static bool validId(String value) => _uuid.hasMatch(value);
+  Future<bool> ownsActivePayload(String scope, String path) =>
+      _serial(() async {
+        try {
+          final base = await _root();
+          _safe(base, path);
+          final parts = p.split(p.relative(path, from: base.path));
+          if (parts.length != 4 ||
+              parts[0] != scope ||
+              !validId(parts[1]) ||
+              parts[2] != 'payload' ||
+              !_leases.containsKey('$scope/${parts[1]}') ||
+              _revoked.contains(scope))
+            return false;
+          final task = Directory(p.join(base.path, scope, parts[1]));
+          if (File(p.join(task.path, '.delete')).existsSync() ||
+              File(p.join(task.parent.path, '.revoked')).existsSync())
+            return false;
+          return FileSystemEntity.typeSync(path, followLinks: false) ==
+              FileSystemEntityType.file;
+        } on Object {
+          return false;
+        }
+      });
   Future<T> _serial<T>(FutureOr<T> Function() work) {
     final result = _tail.then((_) => work());
     _tail = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});

@@ -48,7 +48,7 @@ const request=(id:string,input:unknown={schema_version:1,operation:"ocr",kind:"t
 function edge() {
   let calls=0;
   const io={jobs,user:async()=>({userId:A,deviceId:null}),profile:async()=>await value(`select jsonb_build_object('purge_epoch',purge_epoch,'consent_account_at',consent_account_at,'consent_reading_at',consent_reading_at,'consent_reading_revoked_at',consent_reading_revoked_at) from public.profiles where user_id='${A}'`) as Record<string,unknown>,fetch:(async(_url,init)=>{
-    calls++;const b=JSON.parse(String(init?.body));assertEquals(b.version,2);assertEquals(b.limits.max_attempts,1);assert(b.attempt_id);return Response.json(tr);
+    calls++;const b=JSON.parse(String(init?.body));assertEquals(b.version,2);assertEquals(b.limits.max_attempts,1);assert(b.attempt_id);return Response.json({worker_version:1,attempt_id:b.attempt_id,provider:b.provider,model:b.model,result:tr,usage:{requests:1,images:1,pages:1,crops:0,elapsed_ms:1},billing:"local_no_external_api"});
   }) as typeof fetch};
   return {io,calls:()=>calls};
 }

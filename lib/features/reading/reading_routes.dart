@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 
 import 'presentation/problem_solver_screen.dart';
 import 'presentation/transcription_screen.dart';
+import 'presentation/grading_screen.dart';
 
 /// Routes owned by the `reading` feature.
 ///
@@ -14,17 +15,28 @@ import 'presentation/transcription_screen.dart';
 /// (D27: the item's `range_text`, else its title, is the reading range).
 /// S10 replaces the placeholder builder and reads both query parameters.
 final List<RouteBase> readingRoutes = <RouteBase>[
-  GoRoute(path: '/reading/solve/:id', builder: (_, state) => ProblemSolverScreen(documentId: state.pathParameters['id']!)),
+  GoRoute(
+    path: '/reading/grading',
+    builder: (_, state) =>
+        GradingScreen(plannerItemId: state.uri.queryParameters['itemId']),
+  ),
+  GoRoute(
+    path: '/reading/solve/:id',
+    builder: (_, state) =>
+        ProblemSolverScreen(documentId: state.pathParameters['id']!),
+  ),
   GoRoute(
     path: readingCapturePath,
     name: 'capture',
-    builder: (_, state) => TranscriptionScreen(plannerItemId: state.uri.queryParameters['itemId']),
+    builder: (_, state) =>
+        TranscriptionScreen(plannerItemId: state.uri.queryParameters['itemId']),
   ),
 ];
 
 const String readingCapturePath = '/reading/capture';
 
 /// `/reading/capture?from=planner&itemId=…` (S07 → S10 hand-off).
-String readingCaptureFromPlanner(String plannerItemId) =>
-    Uri(path: readingCapturePath, queryParameters: <String, String>{'from': 'planner', 'itemId': plannerItemId})
-        .toString();
+String readingCaptureFromPlanner(String plannerItemId) => Uri(
+  path: readingCapturePath,
+  queryParameters: <String, String>{'from': 'planner', 'itemId': plannerItemId},
+).toString();

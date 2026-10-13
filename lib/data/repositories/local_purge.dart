@@ -210,6 +210,10 @@ class LocalPurge {
       );
     }
     await db.customStatement(
+      'DELETE FROM study_ai_requests WHERE user_id=? AND purge_epoch < ?',
+      [ctx.userId, epoch],
+    );
+    await db.customStatement(
       'DELETE FROM study_documents WHERE user_id=? AND purge_epoch < ?',
       [ctx.userId, epoch],
     );

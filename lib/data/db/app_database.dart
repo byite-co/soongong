@@ -68,7 +68,7 @@ class AppDatabase extends _$AppDatabase {
   /// v1 — S02 tables. v2 — S02c: partial unique index on
   /// `review_entries(wrong_item_id) WHERE deleted_at IS NULL` (SCHEMA-CHANGE).
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   /// Partial unique indexes (drift `@TableIndex` cannot express `WHERE`).
   /// Same statements in the S03 DDL (docs/data-model.md §4).
@@ -83,12 +83,14 @@ class AppDatabase extends _$AppDatabase {
       await m.createAll();
       await _ensureStudyDocuments();
       await customStatement(createStudyMetadata);
+      await customStatement(createStudyAiRequests);
       for (final sql in partialUniqueIndexes) {
         await customStatement(sql);
       }
       await customStatement('PRAGMA user_version = $schemaVersion');
     }),
     onUpgrade: (m, from, to) => transaction(() async {
+      if (from < 5) await customStatement(createStudyAiRequests);
       // Inspect the exact historical v3 body table before introducing v4.
       if (from < 4) {
         await _ensureStudyDocuments();
@@ -108,6 +110,7 @@ class AppDatabase extends _$AppDatabase {
     beforeOpen: (details) async {
       await _validateStudyTable('study_documents', createStudyDocuments);
       await _validateStudyTable('study_metadata', createStudyMetadata);
+      await _validateStudyTable('study_ai_requests', createStudyAiRequests);
       await customStatement('PRAGMA foreign_keys = OFF');
       // Journal changes cannot run inside the schema transaction. This
       // is the sole runtime journal policy, including the encrypted opener.
@@ -225,6 +228,7 @@ class AppDatabase extends _$AppDatabase {
   /// Deletes every row of every table (account switch · logout · purge-all ·
   /// epoch mismatch, D27 · D2). Photo files are deleted by the caller.
   Future<void> wipeAll() => transaction(() async {
+    await customStatement('DELETE FROM study_ai_requests');
     await customStatement('DELETE FROM study_metadata');
     await customStatement('DELETE FROM study_documents');
     for (final t in allTables) {

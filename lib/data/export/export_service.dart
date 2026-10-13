@@ -90,6 +90,15 @@ class ExportService {
                 .get())
             .map((r) => r.data)
             .toList();
+    tables['study_ai_requests'] =
+        (await db
+                .customSelect(
+                  'SELECT request_id,operation,created_at,state,points_state,document_id,document_revision,result_expired FROM study_ai_requests WHERE user_id=?',
+                  variables: [Variable(userId)],
+                )
+                .get())
+            .map((r) => r.data)
+            .toList();
     tables['photos'] = <Map<String, Object?>>[
       for (final p in photos)
         (Map<String, Object?>.of(p.toJson())..remove('local_path')),
