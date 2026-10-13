@@ -89,9 +89,15 @@ void main() {
               deleting ? AccountKeys.deleteAccount : AccountKeys.logout,
             );
             await tester.ensureVisible(entry);
+            // A small viewport really scrolls here; its new render position
+            // must be laid out before tap computes the hit-test coordinate.
+            await pumpStudy(tester);
+            _withinViewport(tester.getRect(entry));
+            expect(entry.hitTestable(), findsOneWidget);
             await tester.tap(entry);
             await pumpStudy(tester);
             expect(tester.takeException(), isNull);
+            expect(find.byType(AppModal), findsOneWidget);
 
             final confirm = _modalButton(
               deleting
