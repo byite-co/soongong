@@ -74,10 +74,17 @@ void main() {
         await tester.tap(find.widgetWithText(TextButton, StudyStrings.delete));
         await pumpStudy(tester);
         expect(oldRepo.deletes, 0);
-        expect(
-          (await completeStudy(tester, rig.repo.get('race-document')))!.text,
-          'replacement document',
+        expect(rig.repo.deletes, 0);
+        final replacement = await completeStudy(
+          tester,
+          rig.repo.get('race-document'),
         );
+        expect(
+          replacement,
+          isNotNull,
+          reason: 'stale dialog must not delete the replacement',
+        );
+        expect(replacement!.text, 'replacement document');
         expect(find.text(StudyStrings.error), findsNothing);
       },
     );
@@ -88,7 +95,12 @@ void main() {
     (tester) async {
       final rig = await start(tester);
       final action = tester
-          .widget<IconButton>(find.byTooltip(StudyStrings.delete))
+          .widget<IconButton>(
+            find.byWidgetPredicate(
+              (widget) =>
+                  widget is IconButton && widget.tooltip == StudyStrings.delete,
+            ),
+          )
           .onPressed!;
       action();
       action();

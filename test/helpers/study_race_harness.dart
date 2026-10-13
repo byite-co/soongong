@@ -220,6 +220,7 @@ class StudyRaceHarness {
     final purge = LocalPurge(h.db, repo.writer.ctx);
     await completeStudy(tester, purge.markPending(1));
     await completeStudy(tester, purge.run(epoch: 1));
+    await completeStudy(tester, purge.clearPending());
     await pumpStudy(tester);
   }
 }

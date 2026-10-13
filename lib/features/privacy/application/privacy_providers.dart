@@ -649,8 +649,9 @@ class PrivacyActions {
           if ((await purge.state()).pendingEpoch != epoch) {
             return null; // finished by another caller
           }
-          if (await sessions.readSnapshot() != null)
+          if (await sessions.readSnapshot() != null) {
             throw const _MeasuringNow();
+          }
           final r = await photos.wipeAll(alive: _alive);
           if (_disposed) throw StateError('account changed');
           await purge.run(epoch: epoch);
