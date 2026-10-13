@@ -225,7 +225,10 @@ void main() {
       expect(find.text(StudyStrings.confirm), findsNothing);
       expect(find.text(StudyStrings.saved), findsNothing);
       expect(
-        await completeStudy(tester, h.db.select(h.db.studyDocuments).get()),
+        await completeStudy(
+          tester,
+          h.db.customSelect('SELECT id FROM study_documents').get(),
+        ),
         isEmpty,
       );
       expect(transcriber.inputs, hasLength(1));
