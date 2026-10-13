@@ -96,7 +96,7 @@ void main() {
       late WaitingExport exporter;
       final h = AppHarness(
         mode: AuthMode.localOnly,
-        extraOverrides: [exportServiceProvider.overrideWith((ref) => exporter)],
+        exportFactory: (_, _) => exporter,
       );
       exporter = WaitingExport(h.db);
       addTearDown(h.dispose);
@@ -140,7 +140,7 @@ void main() {
       late WaitingExport exporter;
       final h = AppHarness(
         mode: AuthMode.localOnly,
-        extraOverrides: [exportServiceProvider.overrideWith((ref) => exporter)],
+        exportFactory: (_, _) => exporter,
       );
       exporter = WaitingExport(h.db);
       addTearDown(h.dispose);
@@ -154,7 +154,8 @@ void main() {
       await actions.export(ExportFormat.json);
       expect(h.exports, hasLength(1));
       expect(
-        (jsonDecode(utf8.decode(h.exports.single.bytes)) as Map<String, dynamic>)['user_id'],
+        (jsonDecode(utf8.decode(h.exports.single.bytes))
+            as Map<String, dynamic>)['user_id'],
         'local',
       );
     },
@@ -169,19 +170,9 @@ void main() {
           session: const AuthSession(userId: 'account-a', email: null),
           profileRow: {...kProfileRowOnboardingDone, 'user_id': 'account-a'},
         ),
-        extraOverrides: [
-          exportServiceProvider.overrideWith((ref) {
-            final db = ref.watch(appDatabaseProvider);
-            final userId = ref.watch(currentUserIdProvider);
-            return waitForEncoding
-                ? WaitingExport(db, userId: userId)
-                : ExportService(
-                    db: db,
-                    userId: userId,
-                    encodeInBackground: false,
-                  );
-          }),
-        ],
+        exportFactory: (db, userId) => waitForEncoding
+            ? WaitingExport(db, userId: userId)
+            : ExportService(db: db, userId: userId, encodeInBackground: false),
       );
       addTearDown(h.dispose);
       await signedInAs(h, 'account-a');
@@ -223,7 +214,10 @@ void main() {
       await fresh.export(ExportFormat.json);
       expect(h.exports, hasLength(1));
       final json = utf8.decode(h.exports.single.bytes);
-      expect((jsonDecode(json) as Map<String, dynamic>)['user_id'], 'account-a');
+      expect(
+        (jsonDecode(json) as Map<String, dynamic>)['user_id'],
+        'account-a',
+      );
       expect(json, contains('new-account-a-request'));
       expect(json, isNot(contains('belongs-only-to-b')));
     },
@@ -242,29 +236,24 @@ void main() {
         final buffers = <Uint8List>[];
         final h = AppHarness(
           mode: AuthMode.localOnly,
-          extraOverrides: [
-            shareExportProvider.overrideWithValue((
-              file, {
-              required guard,
-            }) async {
-              buffers.add(file.bytes);
-              await shareExportFile(
-                file,
-                guard: guard,
-                temporaryDirectory: () async => directory,
-                writeFile: (out, bytes) async {
-                  if (holdWrite) {
-                    entered.complete();
-                    await resume.future;
-                  }
-                  await out.writeAsBytes(bytes, flush: true);
-                },
-                shareFile: (params) async {
-                  sharedPaths.add(params.files!.single.path);
-                },
-              );
-            }),
-          ],
+          shareExportCallback: (file, {required guard}) async {
+            buffers.add(file.bytes);
+            await shareExportFile(
+              file,
+              guard: guard,
+              temporaryDirectory: () async => directory,
+              writeFile: (out, bytes) async {
+                if (holdWrite) {
+                  entered.complete();
+                  await resume.future;
+                }
+                await out.writeAsBytes(bytes, flush: true);
+              },
+              shareFile: (params) async {
+                sharedPaths.add(params.files!.single.path);
+              },
+            );
+          },
         );
         addTearDown(h.dispose);
         final actions = h.container.read(privacyActionsProvider);
@@ -309,7 +298,8 @@ void main() {
         expect(sharedPaths[1], isNot(originalPath));
         expect(File(originalPath).readAsBytesSync(), originalBytes);
         expect(
-          (jsonDecode(File(sharedPaths[1]).readAsStringSync()) as Map<String, dynamic>)['user_id'],
+          (jsonDecode(File(sharedPaths[1]).readAsStringSync())
+              as Map<String, dynamic>)['user_id'],
           'local',
         );
         expect(directory.listSync(), hasLength(2));

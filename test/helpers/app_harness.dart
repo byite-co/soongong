@@ -44,6 +44,8 @@ class AppHarness {
     FakeNotificationGateway? notifications,
     FakeNetworkStatus? network,
     this.photoStore,
+    this.exportFactory,
+    this.shareExportCallback,
     AppDatabase? db,
     this.extraOverrides = const <Override>[],
   }) : clock = FixedClock(now ?? kHarnessNow),
@@ -78,6 +80,11 @@ class AppHarness {
   /// S09b: an injected store (e.g. `FailingPhotoStore`), else a plain one on [photoDir].
   final PhotoStore? photoStore;
 
+  /// Inject export boundaries without overriding one provider twice. The
+  /// factory still follows the real current-user provider on account changes.
+  final ExportService Function(AppDatabase db, String userId)? exportFactory;
+  final ShareExport? shareExportCallback;
+
   /// S09c: further provider overrides (e.g. `supportEmailProvider`).
   final List<Override> extraOverrides;
 
@@ -97,12 +104,14 @@ class AppHarness {
       appDatabaseProvider.overrideWithValue(db),
       appClockProvider.overrideWithValue(clock),
       exportServiceProvider.overrideWith(
-        (ref) => ExportService(
-          db: db,
-          userId: ref.watch(currentUserIdProvider),
-          clock: clock,
-          encodeInBackground: false,
-        ),
+        (ref) =>
+            exportFactory?.call(db, ref.watch(currentUserIdProvider)) ??
+            ExportService(
+              db: db,
+              userId: ref.watch(currentUserIdProvider),
+              clock: clock,
+              encodeInBackground: false,
+            ),
       ),
       authModeProvider.overrideWithValue(mode),
       authBackendProvider.overrideWithValue(backend),
@@ -119,18 +128,21 @@ class AppHarness {
       photoStoreProvider.overrideWithValue(
         photoStore ?? PhotoStore(() async => photoDir),
       ),
-      shareExportProvider.overrideWithValue((file, {required guard}) async {
-        await guard.check();
-        final err = shareError;
-        if (err != null) throw err;
-        exports.add(
-          ExportFile(
-            name: file.name,
-            bytes: Uint8List.fromList(file.bytes),
-            mimeType: file.mimeType,
-          ),
-        );
-      }),
+      shareExportProvider.overrideWithValue(
+        shareExportCallback ??
+            (file, {required guard}) async {
+              await guard.check();
+              final err = shareError;
+              if (err != null) throw err;
+              exports.add(
+                ExportFile(
+                  name: file.name,
+                  bytes: Uint8List.fromList(file.bytes),
+                  mimeType: file.mimeType,
+                ),
+              );
+            },
+      ),
       ...extraOverrides,
     ],
   );
