@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/data/auth/auth_gate.dart';
 import 'package:soongong/data/auth/auth_mode.dart';
 import 'package:soongong/data/auth/auth_models.dart';
-import 'package:soongong/data/export/export_service.dart';
 import 'package:soongong/data/db/app_database.dart';
+import 'package:soongong/data/export/export_service.dart';
 import 'package:soongong/data/repositories/local_purge.dart';
 import 'package:soongong/data/repositories/repository_providers.dart';
 import 'package:soongong/data/temp/owned_temp_store.dart';
@@ -15,7 +14,6 @@ import 'package:soongong/data/temp/temp_ownership.dart';
 import 'package:soongong/data/temp/temp_providers.dart';
 import 'package:soongong/features/privacy/application/photo_retention.dart';
 import 'package:soongong/features/privacy/application/privacy_providers.dart';
-
 import '../../helpers/app_harness.dart';
 import '../../helpers/fake_auth_backend.dart';
 
@@ -214,8 +212,9 @@ void main() {
       final store = OwnedTempStore(
         () async => dir,
         removeFile: (file) {
-          if (fail && file.path.endsWith('private.jpg'))
+          if (fail && file.path.endsWith('private.jpg')) {
             throw const FileSystemException('injected');
+          }
           file.deleteSync();
         },
       );

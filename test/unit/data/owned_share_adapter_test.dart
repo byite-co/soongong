@@ -41,8 +41,9 @@ void main() {
       () async => root,
       now: () => now,
       removeFile: (f) {
-        if (failDelete && f.path.endsWith('attachment.json'))
+        if (failDelete && f.path.endsWith('attachment.json')) {
           throw const FileSystemException('synthetic');
+        }
         f.deleteSync();
       },
     );

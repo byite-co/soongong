@@ -210,8 +210,9 @@ class OwnedTempStore {
             if (data['scope'] != scope || data['task'] != task) {
               throw const TempStoreUnavailable();
             }
-            if (data['kind'] == kind)
+            if (data['kind'] == kind) {
               result = result.plus(await _deleteTask(base, scope, task, entry));
+            }
           }
         } on Object {
           result = result.plus(const TempCleanupResult(unknown: true));

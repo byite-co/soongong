@@ -27,8 +27,9 @@ class OwnedPickerCoordinator {
             'task': task,
           })
           .timeout(const Duration(seconds: 5));
-      if (state == null || state['unknown'] != false)
+      if (state == null || state['unknown'] != false) {
         throw const TempStoreUnavailable();
+      }
       return state['active'] == false;
     };
   }
@@ -53,10 +54,11 @@ class OwnedPickerCoordinator {
       // Single consumer. Never read/restore/send/save recovered bytes. The
       // owned-root scan also covers creation before lost-data registration.
       var found = false;
-      if (android)
+      if (android) {
         found = !(await picker.retrieveLostData().timeout(
           const Duration(seconds: 5),
         )).isEmpty;
+      }
       final native = await channel
           .invokeMapMethod<String, dynamic>('recover')
           .timeout(const Duration(seconds: 5));

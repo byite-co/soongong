@@ -51,8 +51,9 @@ class _ForegroundActivityHookState extends ConsumerState<ForegroundActivityHook>
     if (Platform.isAndroid || Platform.isIOS) {
       unawaited(
         ref.read(ownedPickerCoordinatorProvider).recover().then((state) async {
-          if (state != PickerRecoveryState.unavailable)
+          if (state != PickerRecoveryState.unavailable) {
             await temporaryStore.sweep();
+          }
         }),
       );
     } else {

@@ -81,26 +81,30 @@ class PhotoStore {
     final directory = await _root();
     final type = FileSystemEntity.typeSync(directory.path, followLinks: false);
     if (type == FileSystemEntityType.notFound) return directory;
-    if (type != FileSystemEntityType.directory)
+    if (type != FileSystemEntityType.directory) {
       throw const PhotoStoreUnavailable('unsafe-root');
+    }
     return Directory(directory.resolveSymbolicLinksSync());
   }
 
   static void _safePath(Directory root, String path) {
-    if (!p.isWithin(root.path, path))
+    if (!p.isWithin(root.path, path)) {
       throw const PhotoStoreUnavailable('outside-root');
+    }
     var current = root.path;
     for (final component in p.split(p.relative(path, from: root.path))) {
       current = p.join(current, component);
       final type = FileSystemEntity.typeSync(current, followLinks: false);
-      if (type == FileSystemEntityType.link)
+      if (type == FileSystemEntityType.link) {
         throw const PhotoStoreUnavailable('unsafe-link');
+      }
       if (type == FileSystemEntityType.notFound) return;
       final canonical = type == FileSystemEntityType.directory
           ? Directory(current).resolveSymbolicLinksSync()
           : File(current).resolveSymbolicLinksSync();
-      if (!p.isWithin(root.path, canonical))
+      if (!p.isWithin(root.path, canonical)) {
         throw const PhotoStoreUnavailable('outside-root');
+      }
     }
   }
 
@@ -199,8 +203,9 @@ class PhotoStore {
     final Directory dir;
     try {
       dir = await root();
-      if (!dir.existsSync())
+      if (!dir.existsSync()) {
         return const SweepResult(left: <String>[], complete: true);
+      }
       files = await listAll();
     } on PhotoStoreUnavailable {
       return const SweepResult(left: <String>[], complete: false);
@@ -252,8 +257,9 @@ class PhotoStore {
         _safePath(base, e.path);
         if (e is! File) continue;
         if (now.difference(e.statSync().modified) >= olderThan &&
-            _deleteFile(e))
+            _deleteFile(e)) {
           n++;
+        }
       }
     } on Object catch (e) {
       appLog.w('photo cache clear failed (${e.runtimeType})');
