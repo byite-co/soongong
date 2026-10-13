@@ -283,12 +283,8 @@ class AuthGate extends _$AuthGate {
     try {
       final cached = await ref.read(profileCacheProvider).read();
       return cached != null && cached.userId == userId ? cached : null;
-    } on Object catch (e, st) {
-      appLog.w(
-        'auth gate: profile cache read failed',
-        error: e,
-        stackTrace: st,
-      );
+    } on Object catch (e) {
+      appLog.w('auth gate: profile cache read failed (${e.runtimeType})');
       return null;
     }
   }
@@ -315,12 +311,8 @@ class AuthGate extends _$AuthGate {
           );
         }
       });
-    } on Object catch (e, st) {
-      appLog.w(
-        'auth gate: profile cache write failed',
-        error: e,
-        stackTrace: st,
-      );
+    } on Object catch (e) {
+      appLog.w('auth gate: profile cache write failed (${e.runtimeType})');
     }
   }
 

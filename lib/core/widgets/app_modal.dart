@@ -130,8 +130,8 @@ class _AppModalPageState extends State<_AppModalPage> {
     try {
       await cb();
       if (mounted) Navigator.of(context).pop(true);
-    } catch (e, st) {
-      appLog.w('AppModal onConfirm failed', error: e, stackTrace: st);
+    } catch (e) {
+      appLog.w('AppModal onConfirm failed (${e.runtimeType})');
       if (mounted) {
         setState(() {
           _running = false;

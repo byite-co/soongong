@@ -118,8 +118,9 @@ class TempOwnership {
     final token = epoch(userId);
     final scopes = {...?_known[userId]};
     final mapping = await _mapping();
-    if (epoch(userId) == token && mapping?['owner'] == userId)
+    if (epoch(userId) == token && mapping?['owner'] == userId) {
       scopes.add(mapping!['scope'] as String);
+    }
     for (final scope in scopes) {
       await store.markRevoked(scope);
     }
@@ -136,8 +137,9 @@ class TempOwnership {
     final token = epoch(userId);
     final scopes = {...?_known[userId]};
     final mapping = await _mapping();
-    if (epoch(userId) == token && mapping?['owner'] == userId)
+    if (epoch(userId) == token && mapping?['owner'] == userId) {
       scopes.add(mapping!['scope'] as String);
+    }
     var result = const TempCleanupResult();
     for (final scope in scopes) {
       result = result.plus(await store.cancelKind(scope, 'picker'));
