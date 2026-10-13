@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logger/logger.dart';
 import 'package:soongong/data/engines/engines.dart';
 import 'package:soongong/data/engines/seat/camera_lease.dart';
 
@@ -72,7 +73,12 @@ void main() {
   });
 
   test('a dispose that throws is returned as failed with the error', () async {
-    final boom = CameraException('disposeFailed', 'native release failed');
+    const private = '/private/REG04-photo.jpg REG04-secret-token';
+    final logs = <LogEvent>[];
+    void record(LogEvent event) => logs.add(event);
+    Logger.addLogListener(record);
+    addTearDown(() => Logger.removeLogListener(record));
+    final boom = CameraException('disposeFailed', private);
     final c = _FakeController(_front, onDispose: () async => throw boom);
     final src = _source(c);
     final h = await src.open(_cfg, onFrame: (_) {}, onFault: (_, _) {});
@@ -81,6 +87,14 @@ void main() {
     expect(r.error, same(boom));
     expect(h.isOpen, isFalse, reason: 'the session is over either way');
     expect(src.hasOpenSession, isFalse);
+    final failures = logs.where(
+      (e) => '${e.message}'.contains('dispose failed'),
+    );
+    expect(failures, hasLength(1));
+    expect(failures.single.error, isNull);
+    expect(failures.single.stackTrace, isNull);
+    expect('${failures.single.message}', isNot(contains('REG04-photo.jpg')));
+    expect('${failures.single.message}', isNot(contains('REG04-secret-token')));
   });
 
   test(
