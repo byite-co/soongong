@@ -14,6 +14,7 @@ import platform
 import subprocess
 import time
 import unicodedata
+from functools import partial
 from diagnostics import parent_children_usage
 
 
@@ -158,11 +159,29 @@ def code_provenance():
     return values
 
 
+def paddle_evaluation_child(body, connection, *, cpu_threads):
+    """Local evaluation only. The HTTP worker always retains its default 4.
+
+    Spawned child mutation cannot affect the evaluator or a serving worker.
+    All image validation, limits, process cleanup and receipt paths remain in
+    worker.child. Requested native concurrency is not an observed thread count.
+    """
+    import paddle_adapter
+    from worker import child
+    original=paddle_adapter.load
+    paddle_adapter.load=partial(original, cpu_threads=cpu_threads)
+    try:child(body, connection)
+    finally:paddle_adapter.load=original
+
+
 def run(args):
     from worker import execute,checked_models
     rows=json.loads(args.manifest.read_text(encoding='utf-8-sig'));validate_split(rows)
     repetitions=getattr(args,'repetitions',1)
     if type(repetitions) is not int or not 1<=repetitions<=3:raise ValueError('invalid_repetitions')
+    threads=getattr(args,'paddle_cpu_threads',None)
+    if threads is not None and (type(threads) is not int or threads not in (1,2,4) or args.kind=='math'):
+        raise ValueError('invalid_paddle_thread_comparison')
     destination=args.output.resolve()
     if destination.is_relative_to(Path(__file__).resolve().parents[2]):raise ValueError('raw_report_must_be_outside_repository')
     if args.output.exists():raise ValueError('report_already_exists')
@@ -177,7 +196,9 @@ def run(args):
         'parent': 'RUSAGE_CHILDREN cumulative waited-for children; CPU delta may include other children; RSS never differenced',
         'gpu': 'unmeasured'}, 'code':code_provenance(),
       'models_lock_sha256':hashlib.sha256((root/'models.lock.json').read_bytes()).hexdigest(),
-      'repetitions':repetitions,'rows':[]}
+      'repetitions':repetitions,'rows':[],
+      'paddle_cpu_threads_requested':threads if threads is not None else 4 if args.kind!='math' else None,
+      'native_active_threads':'unverified; requested constructor setting is not observed native concurrency'}
     # Validate every input and fix eligible/rejected strata before any attempt.
     # Repeat failures stay in their original stratum; no post-hoc exclusions.
     prepared=[{**row,'input_validation':classify_input(input_bytes(row))} for row in rows]
@@ -194,7 +215,8 @@ def run(args):
         diagnostics={}; usage_before=parent_children_usage()
         try:
             body={'operation':'reading','page_index':row.get('page_index',0)} if args.kind=='reading' else {'operation':'ocr','kind':args.kind}
-            result=execute({**body,'image':base64.b64encode(raw).decode()},timeout=50,diagnostics=diagnostics)
+            options={'_target':partial(paddle_evaluation_child,cpu_threads=threads)} if threads is not None else {}
+            result=execute({**body,'image':base64.b64encode(raw).decode()},timeout=50,diagnostics=diagnostics,**options)
             if args.kind=='reading':
                 entry['prediction']=[{'page_index':p['index'],**item} for p in result['pages'] for item in p['items']]
             else:entry['prediction']='\n'.join(b['text'] for b in result['blocks'])
@@ -219,4 +241,5 @@ if __name__=='__main__':
     parser.add_argument('--protocol',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--kind',choices=['text','math','reading'],required=True)
     parser.add_argument('--repetitions',type=int,choices=(1,2,3),default=1)
+    parser.add_argument('--paddle-cpu-threads',type=int,choices=(1,2,4),default=None)
     run(parser.parse_args())

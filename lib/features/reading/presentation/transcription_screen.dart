@@ -597,6 +597,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          const Text(StudyStrings.inputSupport),
           const Text(StudyStrings.localOnly),
           TextButton(
             onPressed: _busy
@@ -652,6 +653,8 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
                       _text.clear();
                     }),
             ),
+            if (_kind == TranscriptionKind.math)
+              const Text(StudyStrings.mathSource),
             const Text(StudyStrings.consent),
             CheckboxListTile(
               value: _agreed,

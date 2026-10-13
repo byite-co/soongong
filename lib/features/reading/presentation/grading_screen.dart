@@ -13,6 +13,7 @@ import '../../../core/contracts/reading_engine.dart';
 import '../../../core/domain/entities/subject.dart';
 import '../../../core/domain/enums.dart';
 import '../../../core/domain/ids.dart';
+import '../../../core/strings/study_strings.dart';
 import '../../../data/auth/auth_gate.dart';
 import '../../../data/photos/owned_picker_coordinator.dart';
 import '../../../data/repositories/repository_providers.dart';
@@ -406,9 +407,7 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Text(
-            '문항 번호와 채점표시 후보를 읽습니다. 모든 결과를 직접 확인해야 합니다. 신규 AI 포인트는 차감하지 않으며 기존 판독 횟수를 사용합니다.',
-          ),
+          const Text(StudyStrings.gradingSupport),
           if (!enabled) const Text('현재 빌드에서는 개발 판독이 꺼져 있습니다.'),
           DropdownButton<String>(
             value: subjects.any((s) => s.id == subject) ? subject : null,

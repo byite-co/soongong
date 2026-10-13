@@ -4,7 +4,9 @@ import os
 import re
 
 
-def load(root):
+def load(root, *, cpu_threads=4):
+    if type(cpu_threads) is not int or cpu_threads not in (1, 2, 4):
+        raise ValueError('invalid_cpu_threads')
     os.environ['PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK'] = 'True'
     os.environ['HF_HUB_OFFLINE'] = '1'
     os.environ['TRANSFORMERS_OFFLINE'] = '1'
@@ -17,7 +19,7 @@ def load(root):
         text_detection_model_dir=str(root/'detection'),
         text_recognition_model_dir=str(root/'korean'),
         use_doc_orientation_classify=False, use_doc_unwarping=False,
-        use_textline_orientation=False, device='cpu', cpu_threads=4,
+        use_textline_orientation=False, device='cpu', cpu_threads=cpu_threads,
         enable_mkldnn=False)
 
 

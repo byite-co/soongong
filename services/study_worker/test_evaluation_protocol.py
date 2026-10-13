@@ -5,6 +5,7 @@ import io
 import json
 from pathlib import Path
 import tempfile
+import sys
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -95,6 +96,29 @@ class EvaluationProtocolTests(unittest.TestCase):
         self.assertNotEqual(first[:60], module.select_indices(seed=20261015)[:60])
         with self.assertRaisesRegex(ValueError, 'insufficient_unseen_rows'):
             module.select_indices(total=70, previous=60, count=60)
+
+    def test_thread_comparison_passes_exact_setting_and_restores_adapter(self):
+        import paddle_adapter
+        with tempfile.TemporaryDirectory() as directory:
+            folder=Path(directory)
+            (folder/'models.lock.json').write_text('{"revision":"paddle-v5-next02"}')
+            received=[]
+            fake=SimpleNamespace(PaddleOCR=lambda **options: received.append(options))
+            with patch.dict(sys.modules, {'paddleocr':fake}):
+                for count in (1,2,4):
+                    with patch('worker.child', side_effect=lambda _b,_c:paddle_adapter.load(folder)):
+                        original=paddle_adapter.load
+                        evaluation.paddle_evaluation_child({},None,cpu_threads=count)
+                        self.assertIs(paddle_adapter.load,original)
+                    self.assertEqual(received[-1]['cpu_threads'],count)
+                    self.assertFalse(received[-1]['enable_mkldnn'])
+                for invalid in (0,8,True,'4'):
+                    with self.assertRaisesRegex(ValueError,'invalid_cpu_threads'):
+                        paddle_adapter.load(folder,cpu_threads=invalid)
+            with patch('worker.child',side_effect=ValueError('synthetic')):
+                with self.assertRaises(ValueError):
+                    evaluation.paddle_evaluation_child({},None,cpu_threads=1)
+                self.assertIs(paddle_adapter.load,original)
 
 
 if __name__ == '__main__':

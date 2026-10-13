@@ -63,6 +63,22 @@ Tests exercise image boundaries and manifest integrity, not OCR accuracy.
 Reference API: UniMERNet `demo.py` at `5a2c80d96b1d2dba447ff18d873e5fb73ba03c35`;
 PaddleOCR API via its pinned package. No upstream assets or datasets copied.
 
+NEXT-02b adds opt-in request diagnostics to `execute(..., diagnostics={})`.
+The fixed numeric child buffer records stages, rejection codes and sampled
+`RUSAGE_SELF`; parent cleanup signals and the exit observed before cleanup are
+separate. EOF/SIGKILL never proves OOM. Child RSS excludes descendants/GPU and
+is incomplete when a final sample is unavailable. Historical evaluator
+`RUSAGE_CHILDREN` RSS was cumulative parent accounting, not per-request RSS.
+
+`ocr_evaluation.py --repetitions 3` preserves every attempt and freezes input
+eligibility before inference. Raw reports must be new files outside this
+repository. For controlled local Paddle comparisons, `--paddle-cpu-threads
+1|2|4` changes only that spawned evaluation child; HTTP requests still use 4.
+Requested constructor concurrency is not proof of observed native concurrency.
+All CPU/wall/response/image limits remain active. Use the v2 protocol in
+`docs/evidence/next02b/protocol-v2.json`; see `docs/handoff/NEXT-02b.md` for
+blocked model/device evaluations and the preserved quality failures.
+
 ## EXT-02 math solver
 
 The retained solver helper (HTTP execution is closed by NEXT-01 until verified

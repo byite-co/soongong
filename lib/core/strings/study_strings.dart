@@ -13,6 +13,12 @@ abstract final class StudyStrings {
   static const unsupported = '이 문제 또는 정답 형식은 검증 범위 밖입니다.';
   static const saveSolution = '확인한 풀이 저장';
   static const title = '손글씨 인식';
+  static const inputSupport =
+      '한 번에 사진 1장을 선택합니다. 한글과 수식의 손글씨 인식 정확도는 아직 검증 중이므로 원본과 대조해 교정하세요.';
+  static const mathSource =
+      '수식은 LaTeX 원문으로 표시합니다. 조판된 수식 미리보기와 수학적 검증은 지원하지 않습니다.';
+  static const gradingSupport =
+      '한 번에 사진 1장에서 문항 번호와 빨간 동그라미·가위표·세모 후보를 읽습니다. 판독 정확도는 아직 검증 중입니다. 찍음·안 품은 직접 지정하고 모든 표시를 원본과 대조해 확정하세요. 기존 판독 횟수를 사용하며 AI 포인트는 차감하지 않습니다.';
   static const select = '사진 선택';
   static const camera = '사진 촬영';
   static const interruptedPicker =
@@ -29,7 +35,7 @@ abstract final class StudyStrings {
   static const error = '처리하지 못했습니다. 입력은 유지됩니다. 다시 시도해 주세요.';
   static const cacheCleanupFailed =
       '사진 임시 파일을 정리하지 못했습니다. 다시 시도하기 전에 앱의 임시 저장공간을 확인해주세요.';
-  static const tooLarge = '사진은 4MB 이하로 선택해 주세요.';
+  static const tooLarge = '사진은 4MiB 이하로 선택해 주세요.';
   static const review = '사진과 대조해 인식된 내용을 교정해 주세요.';
   static const saved = '이 기기에 저장되었습니다.';
   static const localOnly = '확정한 텍스트는 이 기기에 저장됩니다. 기기 간 동기화는 아직 지원하지 않습니다.';
