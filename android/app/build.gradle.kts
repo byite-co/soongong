@@ -63,6 +63,12 @@ flutter {
     source = "../.."
 }
 
+// The AGP host-test package consumes the Flutter asset directory too. Flutter's
+// APK wiring does not add this dependency to the new AGP 9 host-test task.
+tasks.matching { it.name == "packageDevDebugUnitTestForUnitTest" }.configureEach {
+    dependsOn("copyFlutterAssetsDevDebug")
+}
+
 dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.mockito:mockito-core:5.23.0")
