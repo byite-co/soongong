@@ -280,7 +280,9 @@ void main() {
         reason: 'one probe then one measurement session',
       );
       expect(measure.cameraLost, isFalse);
-      expect(measure.seated, Duration.zero);
+      // A successfully opened camera resumes the existing seated-time policy.
+      // The exact-zero assertion above applies to the blocked start only.
+      expect(measure.paused, isFalse);
       // Actual measurement already owns the resource: gaze start cannot touch it.
       await tester.tap(find.widgetWithText(FilledButton, GazeStrings.start));
       await pumpStudy(tester);

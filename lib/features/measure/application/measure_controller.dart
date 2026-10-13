@@ -310,6 +310,9 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
         subjectId: subjectId,
         plannerItemId: task?.id,
       );
+      // Camera acquisition can fail or wait behind another owner. Persist the
+      // initial interval as paused until this run actually finishes opening.
+      if (mode == SessionMode.camera) _timeline!.pause(at);
       final first = _timeline!.snapshot(at);
       await _owned(() => sessions.startActive(first), newRecord: true);
       _todayBaseSeconds = await _todaySeatedBefore(_timeline!.sessionId);
@@ -375,6 +378,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _startEngine() async {
+    _timeline!.pause(now);
     await _stopEngine();
     if (!isLive || _background || _disposed) return;
     final token = ++_generation;
@@ -413,6 +417,13 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     final next = engine.start(SeatEngineConfig(lowPower: lowPower));
     try {
       await next;
+      if (token == _generation &&
+          isLive &&
+          !_background &&
+          !_disposed &&
+          !cameraLost) {
+        _timeline!.resume(now);
+      }
     } on Object {
       if (token == _generation) {
         cameraLost = true;
@@ -440,7 +451,6 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       _timeline!.pause(now);
       await _stopEngine();
       if (!isLive || _background) return;
-      _timeline!.resume(now);
       _resumeOnForeground = false;
       await _startEngine();
     }
@@ -502,8 +512,11 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       }
       cameraLost = false;
       reconnectFailed = false;
-      _timeline!.resume(now);
-      if (mode == SessionMode.camera) await _startEngine();
+      if (mode == SessionMode.camera) {
+        await _startEngine();
+      } else {
+        _timeline!.resume(now);
+      }
       if (cameraLost) reconnectFailed = true;
       await checkpoint();
     } on Object {
@@ -683,7 +696,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
         _clock = SessionClock(wall: FixedClock(anchor), monotonic: monotonic)
           ..start();
         _timeline = SessionTimeline.fromSnapshot(_draft!, newId: newUuid);
-        _timeline!.resume(now);
+        if (recoveryMode == SessionMode.manual) _timeline!.resume(now);
         _todayBaseSeconds = await _todaySeatedBefore(id);
         _draft = null;
         phase = MeasurePhase.focus;
