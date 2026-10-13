@@ -380,7 +380,12 @@ PhotoRetention photoRetention(Ref ref) {
   );
   ref.onDispose(retention.dispose);
   ref.listen(authGateProvider, (before, after) {
-    if (before?.userId != after.userId) retention.dispose();
+    if (before?.userId != after.userId) {
+      retention.dispose();
+      // A lazy dependency can coalesce A -> B -> A to the same user id.
+      // Disposal alone would then leave the old cancelled object cached.
+      ref.invalidateSelf();
+    }
   });
   return retention;
 }

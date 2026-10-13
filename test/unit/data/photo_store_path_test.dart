@@ -184,14 +184,42 @@ void main() {
     );
 
     test(
-      'stopped by proceed → incomplete, the unreached files listed',
+      'stopped before listing → incomplete and no new owner paths are read',
       () async {
         write('a/1.jpg');
         write('b/2.jpg');
-        final store = PhotoStore(() async => dir);
+        final store = _ObservedListingStore(() async => dir);
         final sweep = await store.sweep(proceed: () => false);
         expect(sweep.complete, isFalse);
+        expect(sweep.clean, isFalse);
+        expect(
+          sweep.left,
+          isEmpty,
+          reason: 'the cancelled snapshot is unknown',
+        );
+        expect(store.listCalls, 0);
+        expect(File(p.join(dir.path, 'a', '1.jpg')).existsSync(), isTrue);
+        expect(File(p.join(dir.path, 'b', '2.jpg')).existsSync(), isTrue);
+      },
+    );
+
+    test(
+      'stopped after listing → incomplete, the unreached files listed',
+      () async {
+        write('a/1.jpg');
+        write('b/2.jpg');
+        var alive = true;
+        final store = _ObservedListingStore(
+          () async => dir,
+          afterListing: () => alive = false,
+        );
+        final sweep = await store.sweep(proceed: () => alive);
+        expect(sweep.complete, isFalse);
+        expect(sweep.clean, isFalse);
         expect(sweep.left.toSet(), <String>{'a/1.jpg', 'b/2.jpg'});
+        expect(store.listCalls, 1);
+        expect(File(p.join(dir.path, 'a', '1.jpg')).existsSync(), isTrue);
+        expect(File(p.join(dir.path, 'b', '2.jpg')).existsSync(), isTrue);
       },
     );
 
@@ -256,6 +284,21 @@ void main() {
       },
     );
   });
+}
+
+class _ObservedListingStore extends PhotoStore {
+  _ObservedListingStore(super.root, {this.afterListing});
+
+  final void Function()? afterListing;
+  int listCalls = 0;
+
+  @override
+  Future<List<String>> listAll() async {
+    listCalls++;
+    final files = await super.listAll();
+    afterListing?.call();
+    return files;
+  }
 }
 
 class _ListingFailsStore extends PhotoStore {
