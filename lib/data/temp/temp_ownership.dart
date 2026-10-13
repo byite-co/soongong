@@ -26,7 +26,11 @@ class TempOwnership {
     invalidate(userId);
   }
 
-  void endBoundary(String userId) => _boundaries.remove(userId);
+  void endBoundary(String userId) {
+    _epochs[userId] = epoch(userId) + 1;
+    _boundaries.remove(userId);
+  }
+
   void invalidate(String userId) {
     _epochs[userId] = epoch(userId) + 1;
     _invalidations.add(userId);
@@ -111,9 +115,11 @@ class TempOwnership {
   /// Known cleanup failures are returned and remain independently retryable.
   Future<TempCleanupResult> revoke(String userId) async {
     invalidate(userId);
-    final mapping = await _mapping();
+    final token = epoch(userId);
     final scopes = {...?_known[userId]};
-    if (mapping?['owner'] == userId) scopes.add(mapping!['scope'] as String);
+    final mapping = await _mapping();
+    if (epoch(userId) == token && mapping?['owner'] == userId)
+      scopes.add(mapping!['scope'] as String);
     for (final scope in scopes) {
       await store.markRevoked(scope);
     }
@@ -127,9 +133,11 @@ class TempOwnership {
   Future<TempCleanupResult> cancelPicker(String userId) async {
     _epochs[userId] = epoch(userId) + 1;
     _invalidations.add(userId);
-    final mapping = await _mapping();
+    final token = epoch(userId);
     final scopes = {...?_known[userId]};
-    if (mapping?['owner'] == userId) scopes.add(mapping!['scope'] as String);
+    final mapping = await _mapping();
+    if (epoch(userId) == token && mapping?['owner'] == userId)
+      scopes.add(mapping!['scope'] as String);
     var result = const TempCleanupResult();
     for (final scope in scopes) {
       result = result.plus(await store.cancelKind(scope, 'picker'));

@@ -477,8 +477,8 @@ class _SeatLabScreenState extends ConsumerState<SeatLabScreen> {
     _lastDiag = null;
     if (_running) {
       _recorder.beginSegment(_now); // the run in progress stays tracked
-  });
     }
+  });
 
   Future<void> _setMinFaceSize(double v) async {
     if (_running || v == _minFaceSize) return;
