@@ -10,10 +10,12 @@ class AiApproval {
     required this.operation,
     required this.epoch,
     this.generation = 0,
+    this.inputRegion,
   });
   final String requestId, quoteId, operation;
   final int epoch;
   final int generation;
+  final Map<String, Object?>? inputRegion;
 }
 
 class AiJobUnavailable extends StudyEngineException {
@@ -42,7 +44,7 @@ class RemoteAiJobs {
                  .data
              as Map,
        )),
-       session = (() => client.auth.currentSession);
+       session = (() => client.auth.currentUser?.id);
 
   /// Transport seam only; envelope, approval, session and result checks remain.
   RemoteAiJobs.withTransport({
@@ -72,7 +74,7 @@ class RemoteAiJobs {
     final epoch = input['purge_epoch'] as int;
     final approval = await authorize(operation, epoch);
     checkCurrent?.call();
-    if (!identical(session(), owner) ||
+    if (session() != owner ||
         approval.operation != operation ||
         approval.epoch != epoch ||
         !_uuid(approval.requestId) ||
@@ -81,7 +83,7 @@ class RemoteAiJobs {
     }
     await beforeSend?.call(approval, input);
     checkCurrent?.call();
-    if (!identical(session(), owner)) {
+    if (session() != owner) {
       throw const StudyEngineException('account_changed');
     }
     final job = await invoke('study-infer', {
@@ -90,7 +92,7 @@ class RemoteAiJobs {
       'quote_id': approval.quoteId,
       'input': input,
     });
-    if (!identical(session(), owner)) {
+    if (session() != owner) {
       throw const StudyEngineException('account_changed');
     }
     if (job['version'] != 2 ||
@@ -123,7 +125,7 @@ class RemoteAiJobs {
       'purge_epoch': epoch,
       'request_id': requestId,
     });
-    if (!identical(session(), owner)) {
+    if (session() != owner) {
       throw const StudyEngineException('account_changed');
     }
     await onJob?.call(requestId, result);
@@ -139,7 +141,7 @@ class RemoteAiJobs {
       'purge_epoch': epoch,
       'operation': operation,
     });
-    if (!identical(session(), owner)) {
+    if (session() != owner) {
       throw const StudyEngineException('account_changed');
     }
     return result;

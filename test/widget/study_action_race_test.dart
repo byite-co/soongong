@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soongong/core/contracts/transcription_engine.dart';
 import 'package:soongong/core/strings/study_strings.dart';
 import 'package:soongong/core/widgets/app_button.dart';
 import 'package:soongong/data/auth/auth_models.dart';
@@ -170,5 +171,37 @@ void main() {
     await pumpStudy(tester);
     expect(tester.takeException(), isNull);
     expect(await completeStudy(tester, rig.repo.list()), isEmpty);
+  });
+  testWidgets('A12 long malformed LaTeX stays editable and never auto saves', (
+    tester,
+  ) async {
+    final rig = await start(tester, seed: false);
+    await pressStudy(tester, StudyStrings.select);
+    await tester.tap(find.text(StudyStrings.math));
+    await tester.tap(find.byType(CheckboxListTile));
+    await pumpStudy(tester);
+    await pressStudy(tester, StudyStrings.recognize);
+    final malformed = List.filled(1500, r'\frac{').join();
+    rig.transcriber.calls.single.complete(
+      DocumentTranscription(
+        kind: TranscriptionKind.math,
+        engine: 'fixture',
+        blocks: [
+          TranscriptionBlock(text: malformed, box: const [0, 0, 1, 1]),
+        ],
+      ),
+    );
+    await pumpStudy(tester);
+    expect(tester.takeException(), isNull);
+    expect(await completeStudy(tester, rig.repo.list()), isEmpty);
+    expect(find.text('LaTeX 원문 · 자동 실행이나 수학적 검증을 하지 않습니다.'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'x^{2}');
+    await pressStudy(tester, StudyStrings.confirm);
+    final documents = await completeStudy(tester, rig.repo.list());
+    expect(documents.length, 1);
+    expect(
+      (await completeStudy(tester, rig.repo.get(documents.single.id)))!.text,
+      'x^{2}',
+    );
   });
 }

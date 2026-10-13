@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -34,6 +35,7 @@ class TranscriptionScreen extends ConsumerStatefulWidget {
 class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
   final _text = TextEditingController();
   Uint8List? _image;
+  Map<String, Object?>? _inputRegion;
   TranscriptionKind _kind = TranscriptionKind.text;
   DocumentTranscription? _transcription;
   StudyDocument? _saved;
@@ -123,6 +125,10 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       setState(() {
         _image?.fillRange(0, _image!.length, 0);
         _image = bytes;
+        _inputRegion = {
+          'original_sha256': sha256.convert(bytes).toString(),
+          'transforms': <Object?>[],
+        };
         _transcription = null;
         _requestId = null;
         _saved = null;
@@ -199,6 +205,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       release = approvals.bind(
         valid: valid,
         generation: generation,
+        inputRegion: _inputRegion,
         present: (quote) async {
           if (!valid()) return false;
           return await showDialog<bool>(
@@ -400,6 +407,21 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
         setState(() {
           _image!.fillRange(0, _image!.length, 0);
           _image = bytes;
+          _inputRegion = {
+            ...?_inputRegion,
+            'transforms': [
+              ...(_inputRegion?['transforms'] as List<Object?>? ?? const []),
+              {
+                'clockwise_quarter_turns': selection.turns,
+                'normalized_rotated_crop': [
+                  selection.rect.left,
+                  selection.rect.top,
+                  selection.rect.right,
+                  selection.rect.bottom,
+                ],
+              },
+            ],
+          };
           _transcription = null;
           _requestId = null;
           _saved = null;

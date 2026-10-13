@@ -55,7 +55,7 @@ class AiRequestRepository {
     // INSERT (never replace) makes an ID collision or repeated dispatch fail closed.
     await documents.db.customStatement(
       'INSERT INTO study_ai_requests '
-      '(request_id,user_id,purge_epoch,generation,quote_id,operation,input_digest,approved,created_at,state) VALUES(?,?,?,?,?,?,?,1,?,?)',
+      '(request_id,user_id,purge_epoch,generation,quote_id,operation,input_digest,input_region_json,approved,created_at,state) VALUES(?,?,?,?,?,?,?,?,1,?,?)',
       [
         approval.requestId,
         documents.writer.ctx.userId,
@@ -64,6 +64,7 @@ class AiRequestRepository {
         approval.quoteId,
         approval.operation,
         digest,
+        approval.inputRegion == null ? null : jsonEncode(approval.inputRegion),
         documents.writer.ctx.nowUtc().toIso8601String(),
         'submitting',
       ],

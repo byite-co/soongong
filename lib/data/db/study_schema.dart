@@ -52,6 +52,7 @@ CREATE TABLE study_ai_requests (
  quote_id TEXT NOT NULL,
  operation TEXT NOT NULL CHECK (operation IN ('ocr_text','ocr_math')),
  input_digest TEXT NOT NULL,
+ input_region_json TEXT,
  approved INTEGER NOT NULL CHECK (approved = 1),
  created_at TEXT NOT NULL,
  state TEXT NOT NULL,

@@ -27,11 +27,13 @@ class AiApprovalController {
   bool Function()? _valid;
   Future<bool> Function(AiQuote)? _present;
   int _generation = 0;
+  Map<String, Object?>? _inputRegion;
   String? requestId;
   void Function() bind({
     required bool Function() valid,
     required int generation,
     required Future<bool> Function(AiQuote) present,
+    Map<String, Object?>? inputRegion,
   }) {
     if (_ticket != null) throw StateError('approval_busy');
     final ticket = Object();
@@ -39,6 +41,7 @@ class AiApprovalController {
     _valid = valid;
     _present = present;
     _generation = generation;
+    _inputRegion = inputRegion;
     requestId = null;
     return () {
       if (identical(_ticket, ticket)) {
@@ -99,6 +102,7 @@ class AiApprovalController {
           operation: operation,
           epoch: epoch,
           generation: _generation,
+          inputRegion: _inputRegion,
         );
       }
       quote = latest;

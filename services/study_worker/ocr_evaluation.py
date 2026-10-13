@@ -33,6 +33,35 @@ def distance(a,b):
 def quantile(values,p):
     return sorted(values)[max(0,math.ceil(len(values)*p)-1)] if values else None
 
+def grading_metrics(rows):
+    marks=['correct','wrong','partial','unsolved','guessed']; truth={}; predictions={}
+    for index,row in enumerate(rows):
+        if not isinstance(row.get('ground_truth'),list):continue
+        for item in row['ground_truth']:
+            key=(index,item['page_index'],item['number'])
+            if key in truth or item['mark'] not in marks:raise ValueError('invalid_ground_truth')
+            truth[key]=item['mark']
+        for item in row.get('prediction') or []:
+            key=(index,item['page_index'],item['number'])
+            if key in predictions:raise ValueError('duplicate_prediction')
+            predictions[key]=item.get('mark')
+    per_mark={}; f1=[]
+    for mark in marks:
+        tp=sum(value==mark and truth.get(key)==mark for key,value in predictions.items())
+        fp=sum(value==mark and truth.get(key)!=mark for key,value in predictions.items())
+        fn=sum(value==mark and predictions.get(key)!=mark for key,value in truth.items())
+        precision=tp/(tp+fp) if tp+fp else None;recall=tp/(tp+fn) if tp+fn else None
+        score=2*tp/(2*tp+fp+fn) if 2*tp+fp+fn else None
+        per_mark[mark]={'tp':tp,'fp':fp,'fn':fn,'precision':precision,'recall':recall,'f1':score}
+        if score is not None:f1.append(score)
+    noncorrect=sum(m!='correct' for m in truth.values())
+    return {'ground_truth_items':len(truth),'detected_items':len(predictions),'per_mark':per_mark,
+      'macro_f1':sum(f1)/5 if len(f1)==5 else None,
+      'number_link_precision':sum(k in truth for k in predictions)/len(predictions) if predictions else None,
+      'coverage':sum(k in predictions for k in truth)/len(truth) if truth else None,
+      'unknown_fraction':sum(v is None for v in predictions.values())/len(predictions) if predictions else None,
+      'noncorrect_as_correct_rate':sum(v!='correct' and predictions.get(k)=='correct' for k,v in truth.items())/noncorrect if noncorrect else None}
+
 
 def summarize(rows,kind):
     labeled=[r for r in rows if isinstance(r.get('ground_truth'),str)]
@@ -46,7 +75,9 @@ def summarize(rows,kind):
     out['timeouts']=sum(r.get('error')=='TimeoutError' for r in rows)
     out['sequential_attempts_per_hour']=3600*len(rows)/sum(times) if times and sum(times)>0 else None
     out['valid_rate']=out['valid']/len(rows) if rows else None
-    if kind=='math':
+    if kind=='reading':
+        out.update(grading_metrics(rows))
+    elif kind=='math':
         out['normalized_exact_match']=sum(r.get('valid',False) and normalize(r.get('prediction',''),False)==normalize(r['ground_truth'],False) for r in labeled)/len(labeled) if labeled else None
     else:
         for spaces in [True,False]:
@@ -86,9 +117,12 @@ def run(args):
         if hashlib.sha256(raw).hexdigest()!=row['sha256']:raise ValueError('input_hash_mismatch')
         entry=dict(row);start=time.perf_counter()
         try:
-            result=execute({'operation':'ocr','kind':args.kind,'image':base64.b64encode(raw).decode()},timeout=50)
-            entry['prediction']='\n'.join(b['text'] for b in result['blocks'])
-            entry['result']=result;entry['valid']=bool(entry['prediction'].strip());entry['error']=None
+            body={'operation':'reading','page_index':row.get('page_index',0)} if args.kind=='reading' else {'operation':'ocr','kind':args.kind}
+            result=execute({**body,'image':base64.b64encode(raw).decode()},timeout=50)
+            if args.kind=='reading':
+                entry['prediction']=[{'page_index':p['index'],**item} for p in result['pages'] for item in p['items']]
+            else:entry['prediction']='\n'.join(b['text'] for b in result['blocks'])
+            entry['result']=result;entry['valid']=bool(entry['prediction']);entry['error']=None
         except Exception as error:
             entry['prediction']=None;entry['valid']=False;entry['error']=type(error).__name__
         entry['seconds']=time.perf_counter()-start
@@ -101,4 +135,4 @@ def run(args):
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--manifest',type=Path,required=True)
     parser.add_argument('--protocol',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--kind',choices=['text','math'],required=True);run(parser.parse_args())
+    parser.add_argument('--kind',choices=['text','math','reading'],required=True);run(parser.parse_args())

@@ -209,13 +209,13 @@ void main() {
         origin: ReadingOrigin.home,
       );
       final before = (await h.outbox()).length;
-      final mark = ConfirmedMark(
+      const mark = ConfirmedMark(
         pageIndex: 0,
         number: 3,
         mark: Mark.wrong,
         wrongItemId: 'wrong-1',
       );
-      final item = WrongItemDraft(
+      const item = WrongItemDraft(
         id: 'wrong-1',
         pageIndex: 0,
         number: 3,

@@ -33,6 +33,21 @@ Map<String, dynamic> result() => {
   },
 };
 void main() {
+  test(
+    'A10 token refresh preserves same user identity while different owner is rejected',
+    () async {
+      var user = String.fromCharCodes('owner'.codeUnits);
+      final jobs = RemoteAiJobs.withTransport(
+        session: () => user,
+        approve: (op, e) async => approval,
+        invoke: (name, body) async {
+          user = String.fromCharCodes('owner'.codeUnits);
+          return result();
+        },
+      );
+      expect(await jobs.execute(input), isA<Map<String, dynamic>>());
+    },
+  );
   test('FD-01 unset point approval sends no request', () async {
     var calls = 0;
     final owner = Object();

@@ -1,5 +1,5 @@
 import unittest
-from ocr_evaluation import summarize,validate_split,normalize
+from ocr_evaluation import summarize,validate_split,normalize,grading_metrics
 
 class EvaluationTests(unittest.TestCase):
     def test_timeout_and_empty_remain_denominator(self):
@@ -18,3 +18,14 @@ class EvaluationTests(unittest.TestCase):
         for field in ['sha256','source','writer_id','document_id']:
             first={**rows[0],field:'shared'};second={**rows[0],'sha256':'b','source':'two','split':'train',field:'shared'}
             with self.assertRaises(ValueError):validate_split([first,second])
+    def test_grading_unknown_and_timeout_are_not_dropped(self):
+        truth=[{'page_index':0,'number':n,'mark':m} for n,m in enumerate(['correct','wrong','partial','unsolved','guessed'])]
+        prediction=[{**truth[0],'mark':None},{**truth[1],'mark':'correct'}]+truth[2:]
+        out=grading_metrics([{'ground_truth':truth,'prediction':prediction},{'ground_truth':truth,'prediction':None}])
+        self.assertEqual(out['ground_truth_items'],10);self.assertEqual(out['coverage'],.5)
+        self.assertEqual(out['per_mark']['correct']['precision'],0)
+        self.assertEqual(out['per_mark']['wrong']['fn'],2)
+        self.assertEqual(out['unknown_fraction'],.2)
+    def test_missing_mark_class_cannot_pass_macro_f1(self):
+        item={'page_index':0,'number':1,'mark':'correct'}
+        self.assertIsNone(grading_metrics([{'ground_truth':[item],'prediction':[item]}])['macro_f1'])
