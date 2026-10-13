@@ -420,6 +420,7 @@ class RemoteReadingEngine implements ReadingEngine {
             ? const SaveSaved()
             : SaveAlreadySaved(
                 marks: (out['marks'] as List)
+                    .map((m) => Map<String, dynamic>.from(m as Map))
                     .map(
                       (m) => ConfirmedMark(
                         pageIndex: m['page_index'] as int,

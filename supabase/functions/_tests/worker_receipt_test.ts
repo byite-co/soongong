@@ -25,3 +25,25 @@ Deno.test("A17/A18 existing reading receipt reservation prevents unknown attempt
     await assertRejects(()=>callEngine({...job,object_paths:["other/private.jpg"]}));
   }finally{for(const[k,v]of Object.entries(before)){if(v===undefined)Deno.env.delete(k);else Deno.env.set(k,v);}}
 });
+Deno.test("A02/A18 reading wire limits match worker contract and invalid result still records receipt",async()=>{
+  const keys={READING_AI_ENABLED:'true',READING_AI_USER_IDS:attempt,READING_WORKER_URL:'https://fixture.invalid/infer',STUDY_WORKER_SECRET:'synthetic-test-only-0000000000000000',SUPABASE_URL:'https://storage.invalid',SUPABASE_SERVICE_ROLE_KEY:'synthetic'};
+  const old=Object.fromEntries(Object.keys(keys).map(k=>[k,Deno.env.get(k)]));
+  try {
+    for(const[k,v]of Object.entries(keys))Deno.env.set(k,v);
+    let receipts=0,fetches=0;
+    const call=<T>(name:string,args:Record<string,unknown>):Promise<T>=>{
+      if(name==='reading_ai_begin') return Promise.resolve({claimed:true,cost_id:attempt,attempt_id:attempt,provider:'local',model:'fixture',epoch:0} as T);
+      assertEquals(name,'ai_record_evidence'); assertEquals(args.p_usage,good.usage);receipts++;return Promise.resolve(null as T);
+    };
+    const fetcher=(async(url,init)=>{
+      fetches++;
+      if(String(url).startsWith('https://storage.invalid'))return new Response(new Uint8Array([1,2,3]));
+      const body=JSON.parse(String(init?.body));
+      assertEquals(body.limits,{max_input_tokens:1,max_output_tokens:1,max_attempts:1});
+      assertEquals(body.input.operation,'reading');assertEquals(body.input.page_index,0);
+      return Response.json(good); // intentionally text inner result, valid receipt
+    }) as typeof fetch;
+    await assertRejects(()=>callEngine({user_id:attempt,request_id:attempt,attempts:1,object_paths:[`${attempt}/${attempt}/p0.jpg`],subject_id:null,range_text:null},call,fetcher));
+    assertEquals(receipts,1);assertEquals(fetches,2);
+  } finally {for(const[k,v]of Object.entries(old)){if(v===undefined)Deno.env.delete(k);else Deno.env.set(k,v);}}
+});

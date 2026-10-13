@@ -1,5 +1,5 @@
 import unittest
-from evaluate import summarize,validate_split,normalize
+from ocr_evaluation import summarize,validate_split,normalize
 
 class EvaluationTests(unittest.TestCase):
     def test_timeout_and_empty_remain_denominator(self):

@@ -43,6 +43,8 @@ def summarize(rows,kind):
          'max_child_rss_kib':max((r.get('child_rss_kib',0) for r in rows),default=0),
          'external_api_calls':0,'external_api_cost_krw':0,'infrastructure_cost_krw':None,
          'confirmed_documents':None,'human_correction_time':None}
+    out['timeouts']=sum(r.get('error')=='TimeoutError' for r in rows)
+    out['sequential_attempts_per_hour']=3600*len(rows)/sum(times) if times and sum(times)>0 else None
     out['valid_rate']=out['valid']/len(rows) if rows else None
     if kind=='math':
         out['normalized_exact_match']=sum(r.get('valid',False) and normalize(r.get('prediction',''),False)==normalize(r['ground_truth'],False) for r in labeled)/len(labeled) if labeled else None

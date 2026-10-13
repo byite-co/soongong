@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/core/contracts/reading_engine.dart';
+import 'package:soongong/core/domain/enums.dart';
 import 'package:soongong/data/engines/remote_reading_engine.dart';
 
 import 'data/db_test_helpers.dart';
@@ -124,7 +125,7 @@ void main() {
     );
     expect(calls, 0);
   });
-  for (final gone in ['not_found', 'request_deleted'])
+  for (final gone in ['not_found', 'request_deleted']) {
     test('A14 $gone is terminal with no second poll', () async {
       var calls = 0;
       final e = engine((n, b) async {
@@ -139,6 +140,7 @@ void main() {
         gone == 'not_found' ? isA<NotFound>() : isA<Deleted>(),
       );
     });
+  }
   test(
     'A14 polling uses 2s then 5s and returns uncertain output unchanged',
     () async {
@@ -176,12 +178,9 @@ void main() {
       throwsFormatException,
     );
     final bad = output();
-    ((bad['pages'] as List).single['items'] as List).single['box'] = [
-      0,
-      0,
-      double.nan,
-      1,
-    ];
+    final badPage = (bad['pages'] as List).single as Map;
+    final badItem = (badPage['items'] as List).single as Map;
+    badItem['box'] = [0, 0, double.nan, 1];
     expect(() => RemoteReadingEngine.result(id, bad), throwsFormatException);
   });
   test('A14 cancel completion and failure map server truth', () async {
@@ -200,4 +199,90 @@ void main() {
       isA<CancelAlreadyFailed>(),
     );
   });
+  test(
+    'A16 save replay mirrors real server rows once without outgoing mutations',
+    () async {
+      final subject = await h.subjects.create(name: 'test', colorIndex: 0);
+      final draft = await h.reading.createDraft(
+        subjectId: subject.id,
+        rangeText: 'range',
+        origin: ReadingOrigin.home,
+      );
+      final before = (await h.outbox()).length;
+      final mark = ConfirmedMark(
+        pageIndex: 0,
+        number: 3,
+        mark: Mark.wrong,
+        wrongItemId: 'wrong-1',
+      );
+      final item = WrongItemDraft(
+        id: 'wrong-1',
+        pageIndex: 0,
+        number: 3,
+        mark: Mark.wrong,
+        confidence: null,
+        userConfirmed: true,
+      );
+      var calls = 0;
+      final e = engine((name, body) async {
+        calls++;
+        expect(name, 'reading-save');
+        expect(body['marks'], [
+          {
+            'page_index': 0,
+            'number': 3,
+            'mark': 'wrong',
+            'wrong_item_id': 'wrong-1',
+          },
+        ]);
+        return {
+          'outcome': calls == 1 ? 'saved' : 'already_saved',
+          'marks': body['marks'],
+          'items': [
+            serverRow(
+              'wrong-1',
+              userId: h.ctx.userId,
+              content: {
+                'request_id': draft.requestId,
+                'subject_id': subject.id,
+                'range_text': 'range',
+                'page_index': 0,
+                'number': 3,
+                'mark': 'wrong',
+                'confidence': null,
+                'user_confirmed': true,
+                'status': 'open',
+                'resolved_at': null,
+              },
+            ),
+          ],
+          'entries': [
+            serverRow(
+              'review-1',
+              userId: h.ctx.userId,
+              content: {
+                'wrong_item_id': 'wrong-1',
+                'due_at': '2026-10-14T00:00:00Z',
+                'interval_days': 1,
+                'consecutive_correct': 0,
+                'last_result': null,
+              },
+            ),
+          ],
+        };
+      });
+      expect(await e.save(draft.requestId, [mark], [item]), isA<SaveSaved>());
+      expect(
+        await e.save(draft.requestId, [mark], [item]),
+        isA<SaveAlreadySaved>(),
+      );
+      expect((await h.db.select(h.db.wrongItems).get()).length, 1);
+      expect((await h.db.select(h.db.reviewEntries).get()).length, 1);
+      expect(
+        (await h.wrongs.getByRequest(draft.requestId)).single.confidence,
+        isNull,
+      );
+      expect((await h.outbox()).length, before);
+    },
+  );
 }

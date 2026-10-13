@@ -29,11 +29,11 @@ export interface EngineResult {
 }
 
 /** Owner paths come only from the atomic claim, never from a user URL. */
-export async function callEngine(job: ClaimedJob, call: RpcCall = rpc, fetcher: typeof fetch = fetch): Promise<EngineResult> {
+export async function callEngine(job: ClaimedJob, call: RpcCall = rpc, fetcher: typeof fetch = fetch, budget?: StudyDeadline): Promise<EngineResult> {
   if (envOr("READING_AI_ENABLED", "false") !== "true" || !envList("READING_AI_USER_IDS").includes(job.user_id)) {
     return {ok:false, status:503, reason:"engine_unavailable"};
   }
-  const deadline = new StudyDeadline(new AbortController().signal, 55000);
+  const deadline = budget ?? new StudyDeadline(new AbortController().signal, 55000);
   try {
     const endpoint = new URL(env("READING_WORKER_URL"));
     const secret = env("STUDY_WORKER_SECRET");
@@ -63,7 +63,7 @@ export async function callEngine(job: ClaimedJob, call: RpcCall = rpc, fetcher: 
       const response=await deadline.run(signal=>fetcher(endpoint,{method:"POST",redirect:"error",signal,
         headers:{authorization:`Bearer ${secret}`,"content-type":"application/json"},
         body:JSON.stringify({version:2,attempt_id:reservation.attempt_id,provider:reservation.provider,model:reservation.model,
-          limits:{max_input_tokens:0,max_output_tokens:0,max_attempts:1},
+          limits:{max_input_tokens:1,max_output_tokens:1,max_attempts:1},
           input:{schema_version:1,operation:"reading",page_index:index,image,purge_epoch:reservation.epoch,consent_version:"study-2026-10-13"}})}));
       if(!response.ok) throw new Error("engine_unavailable");
       const evidence=receipt(await deadline.run(signal=>boundedJson(response.body,256000,signal)),reservation.attempt_id,reservation.provider,reservation.model);
@@ -80,7 +80,7 @@ export async function callEngine(job: ClaimedJob, call: RpcCall = rpc, fetcher: 
       return parsed.data.pages[0];
     });
     return {ok:true,status:200,result:{schema_version:2,pages:normalized}};
-  } finally { deadline.close(); }
+  } finally { if (!budget) deadline.close(); }
 }
 
 export async function runOnce(
@@ -117,8 +117,12 @@ export async function runOnce(
 
 export async function handle(req: Request): Promise<Response> {
   requireJobSecret(req);
-  const out = await runOnce();
-  return json(out);
+  const deadline = new StudyDeadline(req.signal);
+  const call: RpcCall = <T>(name: string, args: Record<string, unknown>) => deadline.run(signal => rpc<T>(name, args, signal));
+  try {
+    const out = await deadline.run(() => runOnce(job => callEngine(job, call, fetch, deadline), 1, call));
+    return json(out);
+  } finally { deadline.close(); }
 }
 
 if (import.meta.main) {

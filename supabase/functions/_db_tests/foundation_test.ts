@@ -22,7 +22,7 @@ async function sql(source:string,signal?:AbortSignal,label="fd_query"):Promise<s
 }
 async function value(source:string):Promise<unknown> {return JSON.parse(await sql(`select coalesce(to_jsonb((${source})),'null'::jsonb);`));}
 function statement(name:string,args:Record<string,unknown>) {
-  if(!/^(ai_|study_)[a-z0-9_]+$/.test(name) || Object.keys(args).some(k=>!/^p_[a-z_]+$/.test(k))) throw new Error("invalid_test_rpc");
+  if(!/^(ai_|study_|reading_)[a-z0-9_]+$/.test(name) || Object.keys(args).some(k=>!/^p_[a-z_]+$/.test(k))) throw new Error("invalid_test_rpc");
   return `public.${name}(${Object.entries(args).map(([k,v])=>`${k}=>${literal(v)}`).join(",")})`;
 }
 const transport:JobRpc=async<T>(name:string,args:Record<string,unknown>,signal:AbortSignal)=>JSON.parse(await sql(name === "study_object_claim"
@@ -31,7 +31,7 @@ const transport:JobRpc=async<T>(name:string,args:Record<string,unknown>,signal:A
 const jobs=new AiJobs(transport), signal=()=>new AbortController().signal;
 const reserve=(user=A,request=crypto.randomUUID())=>({p_user:user,p_epoch:0,p_request:request,p_quote:Q,p_operation:"ocr_text",p_digest:"a".repeat(64),p_document:null,p_revision:null});
 async function setup(points=10,limit=300000,infra=100000) {
-  await sql(`TRUNCATE public.study_documents,public.study_object_deletions,public.ai_jobs,public.ai_policies,public.ai_point_lots,public.ai_budgets RESTART IDENTITY CASCADE;
+  await sql(`TRUNCATE public.reading_requests,public.reading_ai_policies,public.reading_quota,public.study_documents,public.study_object_deletions,public.ai_jobs,public.ai_policies,public.ai_point_lots,public.ai_budgets RESTART IDENTITY CASCADE;
     CREATE OR REPLACE FUNCTION public.study_now() RETURNS timestamptz LANGUAGE sql VOLATILE SET search_path='' AS $$ SELECT '2026-10-13T00:00:00Z'::timestamptz $$;
     INSERT INTO auth.users(id) VALUES('${A}'),('${B}') ON CONFLICT DO NOTHING;
     INSERT INTO public.profiles(user_id,consent_account_at,consent_reading_at) VALUES('${A}',now(),now()),('${B}',now(),now()) ON CONFLICT(user_id) DO UPDATE SET purge_epoch=0,consent_reading_revoked_at=null,consent_account_at=now(),consent_reading_at=now();
@@ -89,6 +89,20 @@ Deno.test("FD-19 different users serialize on global budget including infrastruc
   await setup(10,300,100);assertEquals(await race(statement("ai_reserve",reserve()),statement("ai_reserve",reserve(B))),{ok:false,value:"budget_exceeded"});
   assertEquals(await value("select reserved_krw+infrastructure_krw+spent_krw from public.ai_budgets"),300);
   assertEquals(await value("select sum(reserved) from public.ai_point_lots"),3);
+});
+Deno.test("A20 actual reading versus OCR lock race shares one global budget and refunds quota on denial",async()=>{
+  await setup(10,300,100);
+  const rid=crypto.randomUUID();
+  await sql(`INSERT INTO public.subscription_state(user_id,expires_at,will_renew,period_type,has_history) VALUES('${B}',now()+interval '1 day',true,'NORMAL',true) ON CONFLICT(user_id) DO UPDATE SET expires_at=excluded.expires_at;
+    INSERT INTO public.reading_ai_policies(enabled,provider,model,fixed_price,currency,krw_per_currency,price_version,fx_version,fx_at) VALUES(true,'local','fixture',200,'KRW',1,'test','test',now());
+    SELECT public.reading_submit('${B}','${rid}',${literal({subject_id:crypto.randomUUID(),range_text:'synthetic',origin:'home',object_paths:[`${B}/${rid}/p0.jpg`]})});
+    SELECT public.reading_claim_job();`);
+  assertEquals(await race(statement('ai_reserve',reserve(A)),statement('reading_ai_begin',{p_user:B,p_request:rid,p_attempt:1})),{ok:false,value:'budget_exceeded'});
+  await sql(`SELECT public.reading_finish_attempt('${B}','${rid}',1,'failed',null,'budget_exceeded');`);
+  assertEquals(await value('select spent_krw+reserved_krw+infrastructure_krw from public.ai_budgets'),300);
+  assertEquals(await value(`select reserved from public.reading_quota where user_id='${B}'`),0);
+  assertEquals(await value('select count(*) from public.reading_ai_costs'),0);
+  assertEquals(await value(`select reserved from public.ai_point_lots where user_id='${B}'`),0);
 });
 Deno.test("FD-16 injected settlement failure rolls back result and point charge",async()=>{
   await setup();const job=await jobs.reserve(reserve(),signal());await jobs.dispatch(A,0,job.job_id,signal());
