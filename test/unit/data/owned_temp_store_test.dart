@@ -396,6 +396,84 @@ void main() {
   }
 
   test(
+    'EXP-10 recovered share expires when the wall clock freezes after restart',
+    () async {
+      const policy = TempRetentionPolicy(
+        activeLease: Duration(milliseconds: 10),
+        shareGrace: Duration(seconds: 1),
+      );
+      final prior = store(policy: policy);
+      final task = await prior.create(_scopeA, 'export');
+      final file = payload(task, 'recovered-frozen-clock');
+      task.markShared();
+      task.release();
+      await prior.sweep();
+
+      // The restart sees genuine wall-clock progress, so the persisted clock
+      // guard must allow a reader during the remaining creation-based grace.
+      now = now.add(const Duration(milliseconds: 100));
+      final restarted = store(policy: policy);
+      expect((await restarted.sweep()).complete, isTrue);
+      expect(file.readAsStringSync(), 'recovered-frozen-clock');
+
+      // Keep wall time fixed while the real host Stopwatch advances.
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      expect((await restarted.sweep()).complete, isTrue);
+      expect(file.existsSync(), isFalse);
+      expect(task.directory.existsSync(), isFalse);
+    },
+  );
+
+  test(
+    'EXP-10 recovered monotonic budget uses only the original remaining grace',
+    () async {
+      const policy = TempRetentionPolicy(
+        activeLease: Duration(milliseconds: 10),
+        shareGrace: Duration(seconds: 10),
+      );
+      final prior = store(policy: policy);
+      final task = await prior.create(_scopeA, 'export');
+      final file = payload(task, 'original-deadline');
+      task.markShared();
+      task.release();
+      await prior.sweep();
+      final marker = File(p.join(task.directory.path, 'marker.json'));
+      final originalMarker = marker.readAsStringSync();
+
+      now = now.add(const Duration(seconds: 9));
+      final restarted = store(policy: policy);
+      expect((await restarted.sweep()).complete, isTrue);
+      expect(file.readAsStringSync(), 'original-deadline');
+      expect(marker.readAsStringSync(), originalMarker);
+
+      // A fresh ten-second allowance would silently extend the original TTL.
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      expect((await restarted.sweep()).complete, isTrue);
+      expect(file.existsSync(), isFalse);
+    },
+  );
+
+  for (final overdueMilliseconds in [0, 1]) {
+    test(
+      'EXP-10 recovered share at expiry plus ${overdueMilliseconds}ms has no new grace',
+      () async {
+        final prior = store();
+        final task = await prior.create(_scopeA, 'export');
+        final file = payload(task, 'already-expired');
+        task.markShared();
+        task.release();
+        await prior.sweep();
+
+        now = now.add(
+          Duration(hours: 24, milliseconds: overdueMilliseconds),
+        );
+        expect((await store().sweep()).complete, isTrue);
+        expect(file.existsSync(), isFalse);
+      },
+    );
+  }
+
+  test(
     'EXP-10 invalid future-expiry metadata is an owned orphan, not an indefinite lease',
     () async {
       final task = await store().create(_scopeA, 'export');
