@@ -115,4 +115,17 @@ class TempOwnership {
     }
     return result;
   }
+
+  Future<TempCleanupResult> cancelPicker(String userId) async {
+    _epochs[userId] = epoch(userId) + 1;
+    _invalidations.add(userId);
+    final mapping = await _mapping();
+    final scopes = {...?_known[userId]};
+    if (mapping?['owner'] == userId) scopes.add(mapping!['scope'] as String);
+    var result = const TempCleanupResult();
+    for (final scope in scopes) {
+      result = result.plus(await store.cancelKind(scope, 'picker'));
+    }
+    return result;
+  }
 }

@@ -81,11 +81,12 @@ class OwnedTempStore {
         dir.createSync(recursive: true);
       }
       if (FileSystemEntity.typeSync(absolute, followLinks: false) !=
-              FileSystemEntityType.directory ||
-          !p.equals(absolute, dir.resolveSymbolicLinksSync())) {
+          FileSystemEntityType.directory) {
         throw const TempStoreUnavailable();
       }
-      return Directory(absolute);
+      // /var -> /private/var on iOS is a platform alias in an ancestor;
+      // the reserved root itself must be a real directory, never a link.
+      return Directory(dir.resolveSymbolicLinksSync());
     } on Object {
       throw const TempStoreUnavailable();
     }
@@ -179,6 +180,37 @@ class OwnedTempStore {
     _safe(base, marker, missing: true);
     return _revoked.contains(scope) || File(marker).existsSync();
   });
+
+  Future<TempCleanupResult> cancelKind(String scope, String kind) =>
+      _serial(() async {
+        var result = const TempCleanupResult();
+        try {
+          if (!validId(scope) || !{'picker', 'export'}.contains(kind))
+            throw const TempStoreUnavailable();
+          final base = await _root();
+          final owner = Directory(p.join(base.path, scope));
+          _safe(base, owner.path, missing: true);
+          if (!owner.existsSync()) return result;
+          for (final entry in _list(owner)) {
+            final task = p.basename(entry.path);
+            if (task == '.revoked') continue;
+            _safe(base, entry.path);
+            if (!validId(task) || entry is! Directory)
+              throw const TempStoreUnavailable();
+            final marker = File(p.join(entry.path, 'marker.json'));
+            _safe(base, marker.path);
+            final data =
+                jsonDecode(marker.readAsStringSync()) as Map<String, dynamic>;
+            if (data['scope'] != scope || data['task'] != task)
+              throw const TempStoreUnavailable();
+            if (data['kind'] == kind)
+              result = result.plus(await _deleteTask(base, scope, task, entry));
+          }
+        } on Object {
+          result = result.plus(const TempCleanupResult(unknown: true));
+        }
+        return result;
+      });
 
   Future<TempCleanupResult> revoke(String scope) {
     invalidate(scope);

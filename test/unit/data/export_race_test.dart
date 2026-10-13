@@ -19,6 +19,17 @@ import 'package:soongong/features/privacy/application/privacy_providers.dart';
 import '../../helpers/app_harness.dart';
 import '../../helpers/fake_auth_backend.dart';
 
+// Ledger directories/tombstones are intentionally durable; assertions count
+// actual payloads, so a cleanup failure cannot hide behind an empty byte buffer.
+Iterable<File> exportPayloads(Directory directory) => directory
+    .listSync(recursive: true, followLinks: false)
+    .whereType<File>()
+    .where(
+      (file) => file.path.contains(
+        '${Platform.pathSeparator}payload${Platform.pathSeparator}',
+      ),
+    );
+
 class WaitingExport extends ExportService {
   WaitingExport(AppDatabase db, {super.userId = 'local'})
     : super(db: db, encodeInBackground: false);
@@ -279,7 +290,7 @@ void main() {
         await rejected;
         expect(sharedPaths, [originalPath]);
         expect(File(originalPath).readAsBytesSync(), originalBytes);
-        expect(directory.listSync(), hasLength(1));
+        expect(exportPayloads(directory), hasLength(1));
         expect(
           buffers.every((bytes) => bytes.every((byte) => byte == 0)),
           isTrue,
@@ -303,7 +314,7 @@ void main() {
               as Map<String, dynamic>)['user_id'],
           'local',
         );
-        expect(directory.listSync(), hasLength(2));
+        expect(exportPayloads(directory), hasLength(2));
       },
     );
   }
@@ -339,7 +350,7 @@ void main() {
         throwsStateError,
       );
       expect(calls, 0);
-      expect(directory.listSync(), isEmpty);
+      expect(exportPayloads(directory), isEmpty);
     },
   );
 
@@ -439,7 +450,7 @@ void main() {
       await rejected;
       expect(calls, 1);
       expect(File(normalPath!).existsSync(), isTrue);
-      expect(directory.listSync(), hasLength(1));
+      expect(exportPayloads(directory), hasLength(1));
     },
   );
 
@@ -472,7 +483,7 @@ void main() {
         throwsStateError,
       );
       expect(calls, 0);
-      expect(directory.listSync(), isEmpty);
+      expect(exportPayloads(directory), isEmpty);
     },
   );
 }
