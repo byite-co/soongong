@@ -39,6 +39,7 @@ class ControlledImage implements StudyPickedImage {
   Completer<Uint8List>? readWait;
   Completer<void>? cleanupWait;
   Object? cleanupError;
+  final Uint8List bytes = png();
   int size = 64;
   int cleaned = 0;
   @override
@@ -46,7 +47,7 @@ class ControlledImage implements StudyPickedImage {
       lengthWait == null ? size : await lengthWait!.future;
   @override
   Future<Uint8List> readAsBytes() async =>
-      readWait == null ? png() : await readWait!.future;
+      readWait == null ? bytes : await readWait!.future;
   @override
   Future<void> cleanup() async {
     cleaned++;
@@ -110,14 +111,20 @@ void main() {
     },
   );
 
-  for (final failure in ['oversize', 'length', 'read', 'cleanup']) {
+  for (final failure in [
+    'oversize',
+    'length',
+    'read',
+    'read success',
+    'cleanup',
+  ]) {
     testWidgets(
       'PICK-01/02/03 late $failure after purge cannot change new selection',
       (tester) async {
         final h = AppHarness(mode: AuthMode.localOnly);
         addTearDown(h.dispose);
         final old = ControlledImage();
-        if (failure == 'read') {
+        if (failure == 'read' || failure == 'read success') {
           old.readWait = Completer<Uint8List>();
         } else if (failure == 'cleanup') {
           old.cleanupWait = Completer<void>();
@@ -169,12 +176,17 @@ void main() {
         if (failure == 'read') {
           old.readWait!.completeError(StateError('synthetic read'));
         }
+        if (failure == 'read success') old.readWait!.complete(old.bytes);
         if (failure == 'cleanup') old.cleanupWait!.complete();
         await pumpSteps(tester);
         expect(
           (tester.widget<Image>(find.byType(Image)).image as MemoryImage).bytes,
-          png(),
+          same(fresh.bytes),
         );
+        expect(fresh.bytes, png());
+        if (failure == 'read success') {
+          expect(old.bytes, everyElement(0));
+        }
         expect(
           tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
           isTrue,
@@ -228,6 +240,11 @@ void main() {
       }
       expect(tester.takeException(), isNull);
       await h.unmount(tester);
+      if (outcome == 'success') {
+        expect(selection.bytes, everyElement(0));
+        expect(selection.cleaned, 1);
+        expect(tester.takeException(), isNull);
+      }
     });
   }
 
