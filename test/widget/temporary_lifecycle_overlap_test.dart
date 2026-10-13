@@ -47,6 +47,8 @@ void main() {
         const scopeA = '11111111-1111-4111-8111-111111111111';
         const scopeB = '22222222-2222-4222-8222-222222222222';
         final permitDelete = Completer<bool>();
+        final deleteEntered = Completer<void>();
+        final deletionOwners = <({String scope, String task, bool revoke})>[];
         var scans = 0;
         var deletionCalls = 0;
         var now = DateTime.utc(2026, 10, 13);
@@ -59,10 +61,13 @@ void main() {
             return directory.listSync(followLinks: false);
           },
           beforeDelete: (scope, task, revoke) {
-            expect(scope, scopeA);
-            expect(task, orphanId);
-            expect(revoke, isTrue);
+            // Flutter expect() checks the tester's async guard. This callback
+            // runs while pump is outstanding and the store intentionally
+            // catches failures: assertions here become unknown cleanup rather
+            // than useful test failures. Observe first, assert in the body.
+            deletionOwners.add((scope: scope, task: task, revoke: revoke));
             deletionCalls++;
+            if (!deleteEntered.isCompleted) deleteEntered.complete();
             return permitDelete.future;
           },
         );
@@ -87,7 +92,15 @@ void main() {
 
         // The real bootstrap entry starts deleting a released orphan and waits.
         final startup = runStartupTasks(h.container);
-        await pumpStudy(tester);
+        addTearDown(() async {
+          if (!permitDelete.isCompleted) permitDelete.complete(false);
+          await startup;
+        });
+        for (var i = 0; i < 100 && !deleteEntered.isCompleted; i++) {
+          await tester.pump(const Duration(milliseconds: 10));
+        }
+        expect(deleteEntered.isCompleted, isTrue);
+        expect(deletionOwners, [(scope: scopeA, task: orphanId, revoke: true)]);
         expect(deletionCalls, 1);
         expect(scans, 1);
         expect(store.calls, hasLength(1));
