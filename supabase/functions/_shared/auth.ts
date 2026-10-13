@@ -9,15 +9,27 @@ export interface Caller {
   deviceId: string | null;
 }
 
-export async function requireUser(req: Request): Promise<Caller> {
+export async function requireUser(req: Request, signal?: AbortSignal): Promise<Caller> {
+  signal?.throwIfAborted();
   const header = req.headers.get("authorization") ?? "";
   const m = /^Bearer\s+(.+)$/i.exec(header);
   if (!m) throw new HttpError(401, "not_authenticated");
   const client = createClient(env("SUPABASE_URL"), env("SUPABASE_ANON_KEY"), {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { Authorization: header } },
+    // Only callers opting into a deadline (study-infer) override the fetch.
+    // getUser has no per-call signal option in the pinned Auth SDK.
+    global: {
+      headers: { Authorization: header },
+      ...(signal
+        ? {
+          fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+            fetch(input, { ...init, signal }),
+        }
+        : {}),
+    },
   });
   const { data, error } = await client.auth.getUser(m[1]);
+  signal?.throwIfAborted();
   if (error || !data?.user) throw new HttpError(401, "not_authenticated");
   const deviceId = req.headers.get("x-device-id");
   return { userId: data.user.id, deviceId: deviceId && deviceId.length <= 64 ? deviceId : null };

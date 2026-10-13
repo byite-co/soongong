@@ -5,20 +5,34 @@ model children. Payloads are neither logged nor persisted; one child per call
 gives an enforceable deadline, reclaimed model memory, and no retained images.
 """
 import base64
+import ctypes
 import hashlib
 import hmac
 import io
 import json
 import multiprocessing as mp
+from multiprocessing.connection import wait
 import os
 from pathlib import Path
 import signal
+import select
+import socket
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from process_ipc import ResultReader, send_result
 
 MAX_BYTES = 4 * 1024 * 1024
 MAX_BODY = 5_600_000
+MAX_RESPONSE = 256_000
+BODY_SECONDS = 10
+REQUEST_SECONDS = 50
+PROCESS_CLEANUP_SECONDS = 1
 SLOT = threading.BoundedSemaphore(1)
+
+
+class ProcessCleanupFailed(RuntimeError):
+    """Fail closed: do not admit another request over an unreaped worker."""
 
 
 def decode_image(encoded):
@@ -93,6 +107,9 @@ def infer_ocr(body):
 def child(body, connection):
     # Child exceptions never serialize input, paths, model logs, or secrets.
     os.setsid()
+    def cancelled(_signum, _frame):
+        raise InterruptedError("inference_cancelled")
+    signal.signal(signal.SIGTERM, cancelled)
     os.environ.pop("WORKER_SECRET", None)
     try:
         import resource
@@ -106,39 +123,104 @@ def child(body, connection):
             result = solve(body)
         else:
             result = infer_ocr(body)
-        connection.send({"ok": result})
+        send_result(connection, {"ok": result})
     except BaseException:
-        connection.send({"error": "inference_failed"})
+        try: send_result(connection, {"error": "inference_failed"})
+        except (BrokenPipeError, EOFError, OSError): pass
     finally:
         connection.close()
 
 
-def execute(body, timeout=50):
+def execute(body, timeout=REQUEST_SECONDS, *, cancelled=lambda: False, _target=None, _clock=None):
+    now = _clock or time.monotonic
+    if timeout <= 0 or cancelled():
+        raise TimeoutError("inference_timeout")
+    deadline = now() + timeout
+    # Linux subreaper: if a hard kill prevents the worker from reaping CAS,
+    # those children are adopted here, not left to an unknown container PID 1.
+    # Reaping below is restricted to this request's own process group.
+    if ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) != 0:
+        raise OSError(ctypes.get_errno(), "subreaper_unavailable")
+    # Reserve part of this same budget for graceful CAS kill/join. It is not
+    # another allowance added after the caller's 50-second deadline.
+    cleanup = min(PROCESS_CLEANUP_SECONDS, timeout / 2)
     context = mp.get_context("spawn")
     parent, remote = context.Pipe(duplex=False)
-    process = context.Process(target=child, args=(body, remote))
-    process.start()
-    remote.close()
+    process = context.Process(target=_target or child, args=(body, remote))
+    started = False
+    reader = None
     try:
-        if not parent.poll(timeout):
+        process.start(); started = True; remote.close()
+        reader = ResultReader(parent, MAX_RESPONSE + 64)
+        while True:
+            remaining = deadline - cleanup - now()
+            if remaining <= 0 or cancelled():
+                raise TimeoutError("inference_timeout")
+            if reader.done.wait(min(remaining, 0.05)): break
+        result = reader.result()
+        if cancelled() or now() >= deadline:
             raise TimeoutError("inference_timeout")
-        result = parent.recv()
         if "ok" not in result:
             raise ValueError("inference_failed")
         return result["ok"]
     finally:
-        if process.is_alive():
+        cleanup_failed = False
+        if started:
+            # SIGTERM interrupts the worker's Python wait, allowing bounded_cas
+            # to kill AND reap its child before the worker exits. All request
+            # descendants share this worker's group for the hard fallback.
+            # Do not reap the group leader until killpg: its unreaped PID
+            # prevents that group ID from being recycled for another request.
+            try: os.kill(process.pid, signal.SIGTERM)
+            except ProcessLookupError: pass
+            wait([process.sentinel], timeout=max(0, min(cleanup * 0.75, deadline - now())))
             try: os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError: process.kill()
-        process.join(timeout=2)
-        parent.close()
+            except ProcessLookupError:
+                try: os.kill(process.pid, signal.SIGKILL)
+                except ProcessLookupError: pass
+            process.join(timeout=max(0, deadline - now()))
+            cleanup_failed = process.is_alive()
+            if not cleanup_failed:
+                while True:
+                    try: pid, _ = os.waitpid(-process.pid, os.WNOHANG)
+                    except ChildProcessError: break
+                    if pid: continue
+                    remaining = deadline - now()
+                    if remaining <= 0:
+                        cleanup_failed = True; break
+                    threading.Event().wait(min(.005, remaining))
+            if not cleanup_failed: process.close()
+        if reader is not None and not reader.close(deadline - now()):
+            cleanup_failed = True
+        remote.close(); parent.close()
+        if cleanup_failed: raise ProcessCleanupFailed("inference_cleanup_failed")
+
+
+def read_body(stream, connection, length, deadline):
+    """read1 performs at most one socket read, so a drip cannot reset the budget."""
+    raw = bytearray()
+    while len(raw) < length:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0: raise TimeoutError("body_timeout")
+        connection.settimeout(remaining)
+        part = stream.read1(min(65536, length - len(raw)))
+        if not part: raise ValueError("truncated_body")
+        raw.extend(part)
+        if len(raw) > MAX_BODY: raise ValueError("payload_too_large")
+    if time.monotonic() >= deadline: raise TimeoutError("body_timeout")
+    return raw
 
 
 class Handler(BaseHTTPRequestHandler):
+    body_seconds = BODY_SECONDS
+    request_seconds = REQUEST_SECONDS
+    execute = staticmethod(execute)
+
     def log_message(self, *_):
         pass
 
     def do_POST(self):
+        self.close_connection = True
         expected = "Bearer " + os.environ["WORKER_SECRET"]
         if not hmac.compare_digest(self.headers.get("Authorization", ""), expected):
             self.send_error(401); return
@@ -150,24 +232,49 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(413); return
         if not SLOT.acquire(blocking=False):
             self.send_error(429); return
+        deadline = time.monotonic() + self.request_seconds
+        release_slot = True
         try:
-            self.connection.settimeout(10)
-            raw = self.rfile.read(length)
-            if len(raw) != length: raise ValueError("truncated_body")
+            raw = read_body(self.rfile, self.connection, length,
+                            min(deadline, time.monotonic() + self.body_seconds))
             body = json.loads(raw)
             if body.get("schema_version") != 1 or body.get("operation") not in {"ocr", "solve"} or (body.get("operation") == "ocr" and body.get("kind") not in {"text", "math"}):
                 raise ValueError("invalid_payload")
-            result = json.dumps(execute(body), ensure_ascii=False, allow_nan=False).encode()
-            if len(result) > 256000: raise ValueError("result_too_large")
+            result = json.dumps(self.execute(body, timeout=deadline - time.monotonic(),
+                cancelled=self.disconnected), ensure_ascii=False, allow_nan=False).encode()
+            if len(result) > MAX_RESPONSE: raise ValueError("result_too_large")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or self.disconnected(): raise TimeoutError("inference_timeout")
+            self.connection.settimeout(remaining)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(result)))
             self.end_headers()
+            self.connection.settimeout(max(0, deadline - time.monotonic()))
             self.wfile.write(result)
-        except (Exception, TimeoutError):
-            self.send_error(503, "inference_unavailable")
-        finally: SLOT.release()
+        except ProcessCleanupFailed:
+            # A kernel-level failure to reap is not a free slot. A supervisor
+            # must restart this unhealthy worker; requests remain rejected.
+            release_slot = False
+            self.connection.settimeout(0)
+            try: self.send_error(503, "inference_unavailable")
+            except (ConnectionError, OSError): pass
+        except Exception:
+            # An unavailable response is best effort, never another blocking
+            # socket timeout after the request's deadline/cleanup budget.
+            self.connection.settimeout(0)
+            try: self.send_error(503, "inference_unavailable")
+            except (ConnectionError, OSError): pass
+        finally:
+            if release_slot: SLOT.release()
+
+    def disconnected(self):
+        readable, _, _ = select.select([self.connection], [], [], 0)
+        if not readable: return False
+        try: return not self.connection.recv(1, socket.MSG_PEEK | socket.MSG_DONTWAIT)
+        except BlockingIOError: return False
+        except OSError: return True
 
 
 if __name__ == "__main__":
