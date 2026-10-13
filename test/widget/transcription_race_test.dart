@@ -160,12 +160,15 @@ void main() {
           tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
           isTrue,
         );
-        if (failure == 'oversize')
+        if (failure == 'oversize') {
           old.lengthWait!.complete(4 * 1024 * 1024 + 1);
-        if (failure == 'length')
+        }
+        if (failure == 'length') {
           old.lengthWait!.completeError(StateError('synthetic length'));
-        if (failure == 'read')
+        }
+        if (failure == 'read') {
           old.readWait!.completeError(StateError('synthetic read'));
+        }
         if (failure == 'cleanup') old.cleanupWait!.complete();
         await pumpSteps(tester);
         expect(
@@ -200,8 +203,9 @@ void main() {
       addTearDown(h.dispose);
       final selection = ControlledImage();
       if (outcome == 'oversize') selection.size = 4 * 1024 * 1024 + 1;
-      if (outcome == 'cleanup error')
+      if (outcome == 'cleanup error') {
         selection.cleanupError = StateError('synthetic');
+      }
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: h.container,
@@ -216,10 +220,12 @@ void main() {
       await pumpSteps(tester);
       expect(selection.cleaned, 1);
       if (outcome == 'success') expect(find.byType(Image), findsOneWidget);
-      if (outcome == 'oversize')
+      if (outcome == 'oversize') {
         expect(find.text(StudyStrings.tooLarge), findsOneWidget);
-      if (outcome == 'cleanup error')
+      }
+      if (outcome == 'cleanup error') {
         expect(find.text(StudyStrings.cacheCleanupFailed), findsOneWidget);
+      }
       expect(tester.takeException(), isNull);
       await h.unmount(tester);
     });

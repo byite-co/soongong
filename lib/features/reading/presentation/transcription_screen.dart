@@ -49,8 +49,9 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
   Future<void> _pick(ImageSource source) async {
     if (_busy ||
         (source == ImageSource.camera &&
-            ref.read(measureControllerProvider).isLive))
+            ref.read(measureControllerProvider).isLive)) {
       return;
+    }
     final operation = ++_operation;
     final owner = ref.read(currentUserIdProvider);
     final writer = ref.read(syncWriterProvider);
@@ -70,8 +71,9 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
     try {
       generation = await writer.refreshPurgeGeneration();
       final purge = await LocalPurge.readState(writer.db);
-      if (!current() || purge.inProgress || purge.generation != generation)
+      if (!current() || purge.inProgress || purge.generation != generation) {
         return;
+      }
       _generation = generation;
       // No picker resize/compression: it may leave an undisclosed original copy.
       // ImagePicker-created app cache files are removed below. A user's
@@ -151,14 +153,16 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       final result = await engine.transcribe(_image!, _kind, epoch: epoch);
       if (!mounted ||
           op != _operation ||
-          ref.read(currentUserIdProvider) != owner)
+          ref.read(currentUserIdProvider) != owner) {
         return;
+      }
       final state = await LocalPurge.readState(writer.db);
       if (!mounted ||
           ref.read(currentUserIdProvider) != owner ||
           state.inProgress ||
-          state.generation != generation)
+          state.generation != generation) {
         return;
+      }
       setState(() {
         _generation = generation;
         _transcription = result;
@@ -166,8 +170,9 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
         _saved = null;
       });
     } on Object {
-      if (mounted && op == _operation)
+      if (mounted && op == _operation) {
         setState(() => _message = StudyStrings.error);
+      }
     } finally {
       if (mounted && op == _operation) setState(() => _busy = false);
     }
