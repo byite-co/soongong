@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../core/contracts/transcription_engine.dart';
 import '../../../core/contracts/study_restore.dart';
+import '../../../core/contracts/transcription_engine.dart';
 import '../../../core/strings/study_strings.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../data/auth/auth_gate.dart';

@@ -292,6 +292,16 @@ class HttpTests(unittest.TestCase):
         self.assertTrue(worker.SLOT.acquire(timeout=2))
         worker.SLOT.release()
 
+    def test_v2_rejects_legacy_unknown_fields_and_paid_unbounded_adapter(self):
+        self.assertIn(b"503", self.normal(b'{"schema_version":1,"operation":"ocr","kind":"text"}'))
+        envelope={"version":2,"attempt_id":"11111111-1111-4111-8111-111111111111","provider":"local","model":"fixture","limits":{"max_input_tokens":100,"max_output_tokens":100,"max_attempts":1},"input":{"schema_version":1,"operation":"ocr","kind":"text","image":"YQ==","purge_epoch":0,"consent_version":"study-2026-10-13"}}
+        import copy
+        for change in [{"version":1},{"paid":True},{"provider":"unconfigured-paid"},{"model":"different"},{"limits":{"max_input_tokens":1,"max_output_tokens":1,"max_attempts":0}}]:
+            bad=copy.deepcopy(envelope);bad.update(change)
+            self.assertIn(b"503",self.normal(json.dumps(bad).encode()));self.assert_free()
+        self.assertEqual(self.received,[])
+        self.assertIn(b"200",self.normal(json.dumps(envelope).encode()))
+
     def test_actual_handler_drip_deadline_and_slot_recovery(self):
         with self.connect(100) as slow:
             slow.sendall(b" ")

@@ -58,6 +58,15 @@ jobs:
       - name: PL/pgSQL static diagnostics (test database only)
         run: psql -d soongong_test -v ON_ERROR_STOP=1 -f supabase/tests/local/plpgsql_diagnostics.sql
 
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Foundation Edge pipeline against actual PostgreSQL (synthetic provider only)
+        env:
+          PGDATABASE: soongong_test
+        run: deno test -A --config supabase/functions/deno.json supabase/functions/_db_tests/
+
       - name: Server log (on failure)
         if: failure()
         run: sudo tail -n 200 "$PGDATA_DIR/pg.log" || true

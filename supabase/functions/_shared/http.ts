@@ -75,6 +75,13 @@ const sqlStatus: Record<string, number> = {
   invalid_request: 400,
   invalid_outcome: 400,
   entry_id_reused: 409,
+  invalid_payload: 400, invalid_engine_result: 502, invalid_cost: 400,
+  request_conflict: 409, revision_conflict: 409, document_deleted: 409,
+  quote_unavailable: 409, policy_unavailable: 503, ledger_unavailable: 503,
+  study_access_denied: 403, body_unavailable: 404, asset_unavailable: 410,
+  job_unavailable: 404, points_insufficient: 409,
+  budget_unavailable: 503, budget_exceeded: 429,
+
 };
 
 export function statusForSqlError(message: string): number {

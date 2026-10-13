@@ -3,13 +3,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/contracts/problem_solver.dart';
-import '../../../core/contracts/transcription_engine.dart';
 import '../../../core/contracts/study_restore.dart';
+import '../../../core/contracts/transcription_engine.dart';
 import '../../../data/engines/transcription/remote_problem_solver.dart';
 import '../../../data/engines/transcription/remote_transcription_engine.dart';
+import '../../../data/repositories/remote_study_restore.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../data/repositories/study_repository.dart';
-import '../../../data/repositories/remote_study_restore.dart';
 
 final transcriptionEngineProvider = Provider<TranscriptionEngine?>(
   (ref) => AppConfig.hasBackendConfig
@@ -29,7 +29,9 @@ final studyRepositoryProvider = Provider<StudyRepository>((ref) {
 
 final studyRestoreProvider = Provider<StudyRestore?>((ref) {
   ref.watch(currentUserIdProvider);
-  if (!AppConfig.hasBackendConfig) return null;
+  if (!AppConfig.hasBackendConfig) {
+    return null;
+  }
   final remote = RemoteStudyRestore(Supabase.instance.client);
   ref.onDispose(remote.close);
   return remote;

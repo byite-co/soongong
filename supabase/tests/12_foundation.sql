@@ -27,6 +27,17 @@ select ok(not has_table_privilege('authenticated','public.study_bodies','SELECT'
 select ok((select bool_and(relrowsecurity) from pg_class where relnamespace='public'::regnamespace and relname in ('study_documents','study_bodies','study_photo_assets','ai_jobs','ai_point_lots','ai_costs')),'FD-03 new exposed tables enable RLS');
 select throws_ok($$select public.ai_quote('aaaaaaaa-0000-4000-8000-000000000101',0,'ocr_text')$$,'P0001','policy_unavailable','FD-01 missing policy closed');
 
+-- Exercise actual database roles in addition to catalog privilege assertions.
+set local role authenticated;
+select is(public.study_body_v1(0,'10000000-0000-4000-8000-000000000101',1)->>'text','private fixture','FD-03 authenticated A allowed own RPC');
+select throws_ok($$select * from public.study_bodies$$,'42501',null,'FD-03 direct table forbidden with actual role');
+select throws_ok($$select public.ai_grant('aaaaaaaa-0000-4000-8000-000000000101','purchase','forged',500,null)$$,'42501',null,'FD-14 authenticated cannot grant');
+reset role;
+set local role anon;
+select throws_ok($$select public.study_body_v1(0,'10000000-0000-4000-8000-000000000101',1)$$,'42501',null,'FD-03 actual anon body RPC forbidden');
+reset role;
+select ok(not public.study_valid_transcription(jsonb_set(pg_temp.tr(),'{schema_version}','"1"'),'text'),'FD-02 string version not numeric v1');
+
 -- Explicit synthetic terms/prices. No policy/grant is shipped in migrations.
 insert into public.ai_policies(id,operation,enabled,provider,model,points,terms_version,charge_order,result_ttl_seconds,max_input_tokens,max_output_tokens,max_attempts,input_price,output_price,fixed_price,currency,price_version,fx_version,fx_at,krw_per_currency,lease_seconds)
 values('20000000-0000-4000-8000-000000000101','ocr_text',true,'test-only','fixture',3,'test-terms','earliest_expiry',3600,100,50,1,.001,.002,0,'USD','test-price','test-fx',now(),1000,60),

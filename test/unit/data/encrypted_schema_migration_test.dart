@@ -19,6 +19,9 @@ class _LegacyDatabase extends AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
+      if (version >= 3) {
+        await customStatement(createStudyDocuments);
+      }
       if (version >= 2) {
         for (final sql in AppDatabase.partialUniqueIndexes) {
           await customStatement(sql);
@@ -59,7 +62,9 @@ class _FaultDatabase extends AppDatabase {
       return;
     }
     await super.customStatement(statement, args);
-    if (fault == _Fault.afterDdl && statement == createStudyDocuments) {
+    if (fault == _Fault.afterDdl &&
+        (statement == createStudyDocuments ||
+            statement == createStudyMetadata)) {
       throw StateError('injected_after_ddl');
     }
   }
@@ -327,6 +332,95 @@ void main() {
       );
     }
   }
+
+  for (final fault in <_Fault?>[
+    null,
+    _Fault.afterDdl,
+    _Fault.beforeVersion,
+    _Fault.versionWrite,
+    _Fault.afterVersion,
+    _Fault.afterCommit,
+    _Fault.afterPolicy,
+  ]) {
+    test(
+      'FD-09/10 real encrypted v3 preserves all body fields; fault $fault retry',
+      () async {
+        await seed(3);
+        final raw = sqlite.sqlite3.open(file.path);
+        configureDatabaseCipher(raw, key);
+        raw.execute("INSERT INTO study_documents VALUES(?,?,?,?,?,?,?,?,?,?)", [
+          'doc',
+          'synthetic-owner',
+          2,
+          9,
+          'math',
+          '  title\nrest  ',
+          '{"schema_version":1}',
+          '{"answer":"x"}',
+          'planner-link',
+          '2026-10-13',
+        ]);
+        final before = raw.select('SELECT * FROM study_documents').single;
+        raw.close();
+        if (fault != null) {
+          await expectLater(
+            requireReadyDatabase(_FaultDatabase(executor(), fault)),
+            throwsA(isA<DatabaseProtectionException>()),
+          );
+          if (![_Fault.afterCommit, _Fault.afterPolicy].contains(fault)) {
+            expect(inspect((d) => d.userVersion), 3);
+          }
+          expect(
+            inspect((d) => d.select('SELECT * FROM study_documents').single),
+            before,
+          );
+        }
+        for (var i = 0; i < 2; i++) {
+          final db = AppDatabase(executor());
+          await assertReady(db);
+          expect(
+            (await db.customSelect('SELECT * FROM study_documents').getSingle())
+                .data,
+            before,
+          );
+          final m = await db
+              .customSelect('SELECT * FROM study_metadata')
+              .getSingle();
+          expect(m.read<String>('title'), 'title rest');
+          expect(m.read<int>('revision'), 9);
+          expect(m.read<int>('purge_epoch'), 2);
+          expect(m.read<String>('cache_state'), 'available');
+          await db.close();
+        }
+      },
+    );
+  }
+  test(
+    'FD-05 reopen turns abandoned loading into missing without fabricating body',
+    () async {
+      await seed(3);
+      var db = AppDatabase(executor());
+      await assertReady(db);
+      await db.customStatement(
+        "INSERT INTO study_metadata(id,user_id,purge_epoch,revision,kind,title,has_body,has_solution,has_photo,cache_state,updated_at) VALUES('uncached','synthetic-owner',0,1,'text','title',1,0,0,'loading','2026')",
+      );
+      await db.close();
+      db = AppDatabase(executor());
+      await assertReady(db);
+      expect(
+        (await db
+                .customSelect('SELECT cache_state FROM study_metadata')
+                .getSingle())
+            .read<String>('cache_state'),
+        'missing',
+      );
+      expect(
+        await db.customSelect('SELECT * FROM study_documents').get(),
+        isEmpty,
+      );
+      await db.close();
+    },
+  );
 
   test(
     'MIG-05 known partial v2 plus exact study table recovers without changing rows',

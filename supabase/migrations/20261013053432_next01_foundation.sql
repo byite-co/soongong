@@ -56,7 +56,7 @@ declare b jsonb; total integer:=0; x numeric; a numeric[];
 begin
  if (p is null or jsonb_typeof(p)<>'object' or octet_length(p::text)>256000
  or (select array_agg(k order by k) from jsonb_object_keys(p) k)<>array['blocks','engine','kind','schema_version']
- or p->>'schema_version'<>'1' or p->>'kind'<>p_kind or jsonb_typeof(p->'engine')<>'string'
+ or p->'schema_version'<>'1'::jsonb or p->>'kind'<>p_kind or jsonb_typeof(p->'engine')<>'string'
  or length(p->>'engine') not between 1 and 200 or jsonb_typeof(p->'blocks')<>'array'
  or jsonb_array_length(p->'blocks')>500) is not false then return false; end if;
  for b in select value from jsonb_array_elements(p->'blocks') loop
@@ -77,7 +77,7 @@ create function public.study_valid_solution(p jsonb,p_id uuid,p_rev integer) ret
 set search_path='' as $$
  select coalesce(jsonb_typeof(p)='object' and octet_length(p::text)<=256000
  and (select array_agg(k order by k) from jsonb_object_keys(p) k)=array['answer','document_id','explanation','model','reference_provided','revision','schema_version','verification']
- and p->>'schema_version'='1' and p->>'document_id'=p_id::text and p->>'revision'=p_rev::text
+ and p->'schema_version'='1'::jsonb and p->>'document_id'=p_id::text and p->'revision'=to_jsonb(p_rev)
  and jsonb_typeof(p->'answer')='string' and length(p->>'answer')<=200
  and jsonb_typeof(p->'explanation')='string' and length(p->>'explanation')<=16000
  and jsonb_typeof(p->'model')='string' and length(p->>'model') between 1 and 200
@@ -219,7 +219,7 @@ $$;
 -- No seed pricing, grants or enabled policies. Commercial terms are NOT defaults.
 create table public.ai_policies (
  id uuid primary key default gen_random_uuid(), operation text not null check(operation in ('ocr_text','ocr_math','solve')),
- enabled boolean not null default false, provider text not null, model text not null,
+ enabled boolean not null default false, provider text not null check(length(provider) between 1 and 80), model text not null check(length(model) between 1 and 200),
  points integer not null check(points>0), terms_version text not null check(length(terms_version)>0),
  charge_order text not null check(charge_order='earliest_expiry'),
  result_ttl_seconds integer not null check(result_ttl_seconds between 60 and 604800),
@@ -353,7 +353,7 @@ declare j public.ai_jobs; p public.ai_policies; b public.ai_budgets; lot public.
  amount numeric(20,8); mon date; needed integer; take integer; available bigint;
 begin
  perform public.user_lock(p_user); perform public.ai_profile(p_user,p_epoch);
- if p_request is null or p_digest is null or p_digest !~ '^[a-f0-9]{64}$' or p_operation not in ('ocr_text','ocr_math','solve') then raise exception 'invalid_payload'; end if;
+ if p_request is null or p_digest is null or p_digest !~ '^[a-f0-9]{64}$' or p_operation is null or p_quote is null or p_operation not in ('ocr_text','ocr_math','solve') then raise exception 'invalid_payload'; end if;
  select * into j from public.ai_jobs where user_id=p_user and request_id=p_request;
  if found then
   if j.purge_epoch<>p_epoch or j.operation<>p_operation or j.input_digest<>p_digest or j.policy_id<>p_quote

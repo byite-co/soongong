@@ -30,8 +30,9 @@ class RemoteTranscriptionEngine implements TranscriptionEngine {
       'consent_version': 'study-2026-10-13',
     });
     final result = DocumentTranscription.fromJson(response);
-    if (result.kind != kind)
+    if (result.kind != kind) {
       throw const StudyEngineException('invalid_transcription');
+    }
     return result;
   }
 }

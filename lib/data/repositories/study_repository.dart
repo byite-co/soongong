@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '../../core/contracts/problem_solver.dart';
-import '../../core/contracts/transcription_engine.dart';
 import '../../core/contracts/study_restore.dart';
+import '../../core/contracts/transcription_engine.dart';
 import '../db/app_database.dart';
 import 'local_purge.dart';
 import 'sync_writer.dart';
@@ -30,7 +30,9 @@ class StudyRepository {
   final SyncWriter writer;
   final bool Function()? alive;
   void _guard() {
-    if (alive != null && !alive!()) throw StateError('study_owner_changed');
+    if (alive != null && !alive!()) {
+      throw StateError('study_owner_changed');
+    }
   }
 
   static String titleFor(String text) => String.fromCharCodes(
@@ -65,13 +67,16 @@ class StudyRepository {
                       p.pendingDeleteUntil.isNull(),
                 ))
                 .getSingleOrNull();
-        if (item == null) throw StateError('planner_item_unavailable');
+        if (item == null) {
+          throw StateError('planner_item_unavailable');
+        }
       }
       final documentId = id ?? writer.ctx.newId();
       final revision = (existing?.revision ?? 0) + 1;
       if (existing == null) {
-        if (await _summary(documentId) != null)
+        if (await _summary(documentId) != null) {
           throw StateError('document_changed');
+        }
         // A generated ID is a new row, never permission to overwrite a row
         // that happens to have the same ID (including another account's row).
         await db.customStatement(
@@ -220,34 +225,35 @@ class StudyRepository {
     int generation,
   ) => writer.runOwnedTransaction(
     () async {
-      if ((await LocalPurge.readState(db)).epoch != page.epoch)
+      if ((await LocalPurge.readState(db)).epoch != page.epoch) {
         throw StateError('stale_epoch');
+      }
       for (final m in page.rows) {
         if (m.epoch != page.epoch ||
             m.revision < 1 ||
             m.title.runes.length > 80 ||
-            m.serverSeq == null)
+            m.serverSeq == null) {
           throw const FormatException('invalid_metadata');
+        }
         final old = await _summary(m.id);
         if (old != null &&
             (old.deleted ||
                 old.serverSeq == null ||
-                old.serverSeq! >= m.serverSeq!))
+                old.serverSeq! >= m.serverSeq!)) {
           continue;
-        final keep =
-            old?.revision == m.revision &&
-            old?.cache == StudyCacheState.available &&
-            !m.deleted;
-        if (!keep)
-          await db.customStatement(
-            'DELETE FROM study_documents WHERE id=? AND user_id=?',
-            [m.id, writer.ctx.userId],
-          );
-        if (old != null)
+        }
+        // A newer server sequence may contain a new solution at the SAME
+        // document revision. Invalidate its body cache as one unit.
+        await db.customStatement(
+          'DELETE FROM study_documents WHERE id=? AND user_id=?',
+          [m.id, writer.ctx.userId],
+        );
+        if (old != null) {
           await db.customStatement(
             'DELETE FROM study_metadata WHERE id=? AND user_id=?',
             [m.id, writer.ctx.userId],
           );
+        }
         await db.customStatement(
           'INSERT INTO study_metadata(id,user_id,purge_epoch,revision,kind,title,has_body,has_solution,has_photo,cache_state,deleted,server_seq,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
           [
@@ -260,7 +266,7 @@ class StudyRepository {
             m.hasBody ? 1 : 0,
             m.hasSolution ? 1 : 0,
             m.hasPhoto ? 1 : 0,
-            keep ? 'available' : 'missing',
+            'missing',
             m.deleted ? 1 : 0,
             m.serverSeq,
             m.updatedAt,
@@ -288,14 +294,18 @@ class StudyRepository {
     bool online = true,
   }) async {
     final cached = await get(id);
-    if (cached != null || !online) return cached;
+    if (cached != null || !online) {
+      return cached;
+    }
     final captured = await writer.runOwnedTransaction(
       () async {
         final m = await _summary(id);
-        if (m == null || m.deleted || !m.hasBody)
+        if (m == null || m.deleted || !m.hasBody) {
           throw StateError('document_unavailable');
-        if (m.cache == StudyCacheState.loading)
+        }
+        if (m.cache == StudyCacheState.loading) {
           throw StateError('body_loading');
+        }
         await db.customStatement(
           "UPDATE study_metadata SET cache_state='loading' WHERE id=? AND user_id=?",
           [id, writer.ctx.userId],
@@ -312,8 +322,9 @@ class StudyRepository {
           current.deleted ||
           current.revision != captured.revision ||
           current.serverSeq != captured.serverSeq ||
-          (await LocalPurge.readState(db)).epoch != captured.epoch)
+          (await LocalPurge.readState(db)).epoch != captured.epoch) {
         throw StateError('stale_body');
+      }
     }
 
     try {
@@ -331,20 +342,23 @@ class StudyRepository {
               body['purge_epoch'] != captured.epoch ||
               body['text'] is! String ||
               (body['text'] as String).trim().isEmpty ||
-              (body['text'] as String).length > 20000)
+              (body['text'] as String).length > 20000) {
             throw const FormatException('invalid_body');
+          }
           final tr = DocumentTranscription.fromJson(
             Map<String, dynamic>.from(body['transcription'] as Map),
           );
-          if (tr.kind != captured.kind)
+          if (tr.kind != captured.kind) {
             throw const FormatException('invalid_body');
+          }
           final raw = body['solution'];
           if (raw != null) {
             final s = ProblemSolution.fromJson(
               Map<String, dynamic>.from(raw as Map),
             );
-            if (s.documentId != id || s.revision != captured.revision)
+            if (s.documentId != id || s.revision != captured.revision) {
               throw const FormatException('invalid_solution');
+            }
           }
           await db.customStatement(
             'INSERT INTO study_documents(id,user_id,purge_epoch,revision,kind,text,transcription_json,solution_json,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',
@@ -369,7 +383,7 @@ class StudyRepository {
         generation: generation,
         alive: alive,
       );
-      return get(id);
+      return await get(id);
     } on Object {
       await writer.runOwnedTransaction(
         () async {

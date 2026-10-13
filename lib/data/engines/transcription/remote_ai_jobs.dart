@@ -67,8 +67,9 @@ class RemoteAiJobs {
       'quote_id': approval.quoteId,
       'input': input,
     });
-    if (!identical(session(), owner))
+    if (!identical(session(), owner)) {
       throw const StudyEngineException('account_changed');
+    }
     if (job['version'] != 2 ||
         job['request_id'] != approval.requestId ||
         job['job_id'] is! String ||
@@ -85,15 +86,18 @@ class RemoteAiJobs {
 
   Future<Map<String, dynamic>> status(int epoch, String requestId) async {
     final owner = session();
-    if (owner == null) throw const StudyEngineException('account_changed');
+    if (owner == null) {
+      throw const StudyEngineException('account_changed');
+    }
     final result = await invoke('study-job', {
       'version': 2,
       'action': 'status',
       'purge_epoch': epoch,
       'request_id': requestId,
     });
-    if (!identical(session(), owner))
+    if (!identical(session(), owner)) {
       throw const StudyEngineException('account_changed');
+    }
     return result;
   }
 

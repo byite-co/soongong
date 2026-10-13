@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../core/contracts/study_restore.dart';
 import '../../core/contracts/transcription_engine.dart';
 
@@ -9,12 +10,15 @@ class RemoteStudyRestore implements StudyRestore {
   void close() => _closed = true;
   Future<dynamic> _call(String name, Map<String, dynamic> args) async {
     final session = client.auth.currentSession;
-    if (_closed || session == null) throw StateError('study_owner_changed');
+    if (_closed || session == null) {
+      throw StateError('study_owner_changed');
+    }
     final value = await client
         .rpc(name, params: args)
         .timeout(const Duration(seconds: 30));
-    if (_closed || !identical(session, client.auth.currentSession))
+    if (_closed || !identical(session, client.auth.currentSession)) {
       throw StateError('study_owner_changed');
+    }
     return value;
   }
 
@@ -36,8 +40,9 @@ class RemoteStudyRestore implements StudyRestore {
         raw['purge_epoch'] != epoch ||
         raw['rows'] is! List ||
         raw['next_seq'] is! int ||
-        (raw['next_seq'] as int) < since)
+        (raw['next_seq'] as int) < since) {
       throw const FormatException('invalid_metadata');
+    }
     var previous = since;
     final rows = <StudySummary>[];
     for (final item in raw['rows'] as List) {
@@ -49,8 +54,9 @@ class RemoteStudyRestore implements StudyRestore {
           (m['server_seq'] as int) <= previous ||
           (m['title'] != null &&
               (m['title'] is! String ||
-                  (m['title'] as String).runes.length > 80)))
+                  (m['title'] as String).runes.length > 80))) {
         throw const FormatException('invalid_metadata');
+      }
       previous = m['server_seq'] as int;
       rows.add(
         StudySummary(
@@ -68,8 +74,9 @@ class RemoteStudyRestore implements StudyRestore {
         ),
       );
     }
-    if (rows.length > limit || previous != raw['next_seq'])
+    if (rows.length > limit || previous != raw['next_seq']) {
       throw const FormatException('invalid_cursor');
+    }
     return StudyMetadataPage(List.unmodifiable(rows), previous, epoch);
   }
 
@@ -109,8 +116,9 @@ class RemoteStudyRestore implements StudyRestore {
     );
     if (raw['version'] != 1 ||
         raw['id'] != id ||
-        raw['revision'] != (expectedRevision ?? 0) + 1)
+        raw['revision'] != (expectedRevision ?? 0) + 1) {
       throw const FormatException('invalid_revision');
+    }
     return raw['revision'] as int;
   }
 
