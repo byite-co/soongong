@@ -204,7 +204,8 @@ public final class OwnedImageStore {
   private static Lease checkedOwner() throws IOException {
     Lease owner = callbackOwner.get();
     if (owner == null) owner = current;
-    if (owner == null || owner.cancelled || owner.recovered) throw new IOException("owner_unavailable");
+    if (owner == null || owner != current || owner.finished || owner.cancelled || owner.recovered)
+      throw new IOException("owner_unavailable");
     payload(app, owner.scope, owner.task, "picker");
     return owner;
   }
@@ -262,13 +263,27 @@ public final class OwnedImageStore {
   }
 
   static void run(Lease owner, Runnable action) {
-    callbackOwner.set(owner);
-    try { action.run(); } finally { callbackOwner.remove(); }
+    Lease previous = callbackOwner.get(); callbackOwner.set(owner);
+    try { action.run(); } finally { if (previous == null) callbackOwner.remove(); else callbackOwner.set(previous); }
+  }
+
+  static synchronized Lease captureOwner() {
+    Lease owner = callbackOwner.get(); return owner != null ? owner : current;
+  }
+
+  static void runCallback(Lease owner, Runnable action) {
+    synchronized (OwnedImageStore.class) {
+      if (app != null) {
+        if (owner == null || owner != current || owner.finished) return;
+        owner.writers++; // Pin the original owner through callback completion.
+      }
+    }
+    try { run(owner, action); } finally { endWrite(owner, null); }
   }
 
   static synchronized boolean allowed(Lease owner) {
     if (app == null) return true;
-    if (owner == null || owner.cancelled || owner.recovered) return false;
+    if (owner == null || owner != current || owner.finished || owner.cancelled || owner.recovered) return false;
     try { payload(app, owner.scope, owner.task, "picker"); return true; }
     catch (IOException error) { return false; }
   }

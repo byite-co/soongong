@@ -142,6 +142,17 @@ public class OwnedImageStoreTest {
     assertTrue(OwnedImageStore.recover().get("active"));
     assertFalse(new File(payload.getParentFile(), ".delete").exists());
   }
+  @Test public void delayedResolverCallbackCannotAcquireANewOwner() throws Exception {
+    OwnedImageStore.prepare(scope, task); OwnedImageStore.started();
+    OwnedImageStore.Lease oldOwner = OwnedImageStore.captureOwner();
+    OwnedImageStore.finished(); OwnedImageStore.release(scope, task);
+    String next = UUID.randomUUID().toString(); createTask(scope, next, "picker");
+    OwnedImageStore.prepare(scope, next); OwnedImageStore.started();
+    AtomicBoolean called = new AtomicBoolean();
+    OwnedImageStore.runCallback(oldOwner, () -> called.set(true));
+    assertFalse(called.get()); assertTrue(OwnedImageStore.status(scope, next).get("active"));
+    OwnedImageStore.run(oldOwner, () -> assertThrows(IOException.class, () -> OwnedImageStore.cacheDir(context)));
+  }
   @Test public void blockedProviderCloseDoesNotBlockCancelOrPretendWriterStopped() throws Exception {
     OwnedImageStore.prepare(scope, task); OwnedImageStore.started();
     CountDownLatch closing = new CountDownLatch(1), unblock = new CountDownLatch(1);

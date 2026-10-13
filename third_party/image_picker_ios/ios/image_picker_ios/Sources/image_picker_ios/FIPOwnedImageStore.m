@@ -3,8 +3,8 @@
 #include <unistd.h>
 
 @interface FIPOwnedTask ()
-@property(nonatomic, readwrite) NSString *scope;
-@property(nonatomic, readwrite) NSString *task;
+@property(nonatomic, copy, readwrite) NSString *scope;
+@property(nonatomic, copy, readwrite) NSString *task;
 @property(nonatomic) BOOL started;
 @property(nonatomic) BOOL finished;
 @property(nonatomic) BOOL cancelled;

@@ -12,7 +12,6 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.hardware.camera2.CameraCharacteristics;
-import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.MediaStore;
@@ -186,11 +185,9 @@ public class ImagePickerDelegate
 
           @Override
           public void getFullImagePath(final Uri imageUri, final OnPathReadyListener listener) {
-            MediaScannerConnection.scanFile(
-                activity,
-                new String[] {(imageUri != null) ? imageUri.getPath() : ""},
-                null,
-                (path, uri) -> listener.onPathReady(path));
+            // This is our existing private camera output, not a gallery original.
+            // Resolving it does not require publishing it to the media index.
+            listener.onPathReady(imageUri != null ? imageUri.getPath() : "");
           }
         },
         new FileUtils(),
@@ -912,12 +909,18 @@ public class ImagePickerDelegate
   private void handleCaptureImageResult(int resultCode) {
     if (resultCode == Activity.RESULT_OK) {
       final Uri localPendingCameraMediaUri = pendingCameraMediaUri;
+      final OwnedImageStore.Lease owner = OwnedImageStore.captureOwner();
 
       fileUriResolver.getFullImagePath(
           localPendingCameraMediaUri != null
               ? localPendingCameraMediaUri
               : Uri.parse(cache.retrievePendingCameraMediaUriPath()),
-          path -> handleImageResult(path, true));
+          path -> OwnedImageStore.runCallback(owner, () -> {
+            if (!OwnedImageStore.allowed(owner)) {
+              finishWithError("selection_interrupted", "Selection interrupted."); return;
+            }
+            handleImageResult(path, true);
+          }));
       return;
     }
 
@@ -928,11 +931,17 @@ public class ImagePickerDelegate
   private void handleCaptureVideoResult(int resultCode) {
     if (resultCode == Activity.RESULT_OK) {
       final Uri localPendingCameraMediaUrl = pendingCameraMediaUri;
+      final OwnedImageStore.Lease owner = OwnedImageStore.captureOwner();
       fileUriResolver.getFullImagePath(
           localPendingCameraMediaUrl != null
               ? localPendingCameraMediaUrl
               : Uri.parse(cache.retrievePendingCameraMediaUriPath()),
-          this::finishWithSuccess);
+          path -> OwnedImageStore.runCallback(owner, () -> {
+            if (!OwnedImageStore.allowed(owner)) {
+              finishWithError("selection_interrupted", "Selection interrupted."); return;
+            }
+            finishWithSuccess(path);
+          }));
       return;
     }
 

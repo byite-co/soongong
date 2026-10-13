@@ -3,8 +3,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 @interface FIPOwnedTask : NSObject
-@property(nonatomic, readonly) NSString *scope;
-@property(nonatomic, readonly) NSString *task;
+@property(nonatomic, copy, readonly) NSString *scope;
+@property(nonatomic, copy, readonly) NSString *task;
 @end
 
 @interface FIPOwnedImageStore : NSObject
