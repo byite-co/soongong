@@ -14,6 +14,7 @@ import '../../../core/domain/ids.dart';
 import '../../../core/domain/local_date.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/platform/sleep_aware_clock.dart';
+import '../../../data/engines/seat_engine_impl.dart';
 import '../../../data/repositories/planner_repository.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../data/repositories/session_repository.dart';
@@ -371,9 +372,10 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     // stop() must invalidate an opening camera immediately (S04c). Waiting
     // for start() to resolve would keep the camera open in the background.
     final next = engine.stop();
-    _engineWork = Future.wait([?_engineWork, next])
-        .then<void>((_) {})
-        .catchError((Object _) {});
+    _engineWork = Future.wait([
+      ?_engineWork,
+      next,
+    ]).then<void>((_) {}).catchError((Object _) {});
     return _engineWork!;
   }
 
@@ -422,7 +424,15 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
           !_background &&
           !_disposed &&
           !cameraLost) {
-        _timeline!.resume(now);
+        // The real engine also completes start() after a handled failure.
+        // Its asynchronous SeatError can arrive after this continuation, so
+        // readiness must hold before any seated interval starts.
+        final currentEngine = engine;
+        if (currentEngine is SeatEngineImpl && !currentEngine.isRunning) {
+          cameraLost = true;
+        } else {
+          _timeline!.resume(now);
+        }
       }
     } on Object {
       if (token == _generation) {
@@ -593,7 +603,9 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       // wall clock is never consulted (D23: device time changes are ignored).
       _clock?.advance(shift);
       if (shift > const Duration(seconds: 1)) {
-        appLog.i('measure · session clock advanced by sleep ${shift.inSeconds}s');
+        appLog.i(
+          'measure · session clock advanced by sleep ${shift.inSeconds}s',
+        );
       }
     }
     await _wake(true);

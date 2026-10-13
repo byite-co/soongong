@@ -4,8 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/core/contracts/seat_engine.dart';
 import 'package:soongong/core/domain/clock.dart';
 import 'package:soongong/core/domain/enums.dart';
+import 'package:soongong/data/engines/engines.dart';
 import 'package:soongong/features/measure/application/measure_controller.dart';
 
+import '../../helpers/fake_seat_sources.dart';
 import '../../helpers/measure_fakes.dart';
 import '../data/db_test_helpers.dart';
 
@@ -14,6 +16,7 @@ void main() {
   late FakeMonotonicClock mono;
   late TestMeasureEngine engine;
   late MeasureController controller;
+  _DelayedEventsSeatEngine? realEngine;
 
   Future<void> flush() async {
     for (var i = 0; i < 30; i++) {
@@ -25,6 +28,7 @@ void main() {
     h = TestHarness();
     mono = FakeMonotonicClock();
     engine = TestMeasureEngine();
+    realEngine = null;
     controller = MeasureController(
       engine: engine,
       sessions: h.sessions,
@@ -41,6 +45,7 @@ void main() {
     controller.dispose();
     await flush();
     await engine.close();
+    await realEngine?.dispose();
     await h.close();
   });
 
@@ -121,4 +126,88 @@ void main() {
     mono.advance(const Duration(seconds: 4));
     expect(controller.seated, const Duration(seconds: 9));
   });
+
+  test(
+    'real engine failed readiness stays paused before delayed SeatError',
+    () async {
+      controller.dispose();
+      await flush();
+      final source = FakeSeatFrameSource(
+        openError: const SeatFrameSourceException('camera_busy'),
+      );
+      final actual = _DelayedEventsSeatEngine(source, mono);
+      realEngine = actual;
+      controller = MeasureController(
+        engine: actual,
+        sessions: h.sessions,
+        settings: h.settings,
+        planner: h.planner,
+        wall: h.clock,
+        monotonic: mono,
+        device: TestMeasureDevice(),
+        automaticTicks: false,
+      );
+
+      expect(await controller.start(mode: SessionMode.camera), isTrue);
+      await flush();
+      expect(actual.isRunning, isFalse);
+      expect(actual.pending.single, isA<SeatError>());
+      // The engine's real start() has returned, but its failure event has
+      // deliberately not reached the controller yet.
+      expect(controller.paused, isTrue);
+      expect(controller.cameraLost, isTrue);
+      mono.advance(const Duration(seconds: 1));
+      expect(controller.seated, Duration.zero);
+      expect((await h.sessions.readSnapshot())!.openKind, SegmentKind.paused);
+
+      actual.deliverPending();
+      await flush();
+      expect(controller.paused, isTrue);
+      expect(controller.seated, Duration.zero);
+
+      // A later real successful acquisition still follows the existing
+      // policy: seated time begins as soon as the engine is running.
+      source.openError = null;
+      await controller.resume();
+      expect(actual.isRunning, isTrue);
+      expect(controller.paused, isFalse);
+      mono.advance(const Duration(seconds: 5));
+      expect(controller.seated, const Duration(seconds: 5));
+    },
+  );
+}
+
+/// Keep the real engine's start/failure/readiness behavior and delay only
+/// delivery of its asynchronous events to make the ordering deterministic.
+class _DelayedEventsSeatEngine extends SeatEngineImpl {
+  _DelayedEventsSeatEngine(FakeSeatFrameSource source, MonotonicClock monotonic)
+    : super(
+        source: source,
+        detectorFactory: FakePresenceDetector.new,
+        permission: FakeCameraPermissionGateway(),
+        monotonic: monotonic,
+      ) {
+    _original = super.events.listen(pending.add);
+  }
+
+  final List<SeatEngineEvent> pending = [];
+  final _delayed = StreamController<SeatEngineEvent>.broadcast();
+  late final StreamSubscription<SeatEngineEvent> _original;
+
+  @override
+  Stream<SeatEngineEvent> get events => _delayed.stream;
+
+  void deliverPending() {
+    for (final event in pending) {
+      _delayed.add(event);
+    }
+    pending.clear();
+  }
+
+  @override
+  Future<void> dispose() async {
+    await _original.cancel();
+    await super.dispose();
+    await _delayed.close();
+  }
 }

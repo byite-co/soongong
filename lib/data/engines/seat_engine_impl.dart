@@ -409,7 +409,7 @@ class SeatEngineImpl implements SeatEngine {
   /// Set once the stop sequence completed.
   SeatStopReport? get lastStopReport => _lastStop;
 
-  /// Last camera fault description (plugin text, no frame data).
+  /// Last camera fault category; platform descriptions are not retained.
   String? get lastFault => _lastFault;
 
   /// Why the last [checkAvailability] answered `unavailable` (`timeout`, or
