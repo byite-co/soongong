@@ -40,6 +40,8 @@ pre-RC picker/export가 남긴 소유자 없는 legacy cache를 v1의 완전 정
 - 공유 success/dismissed/unavailable/throw/timeout은 외부 읽기 완료 증거가 아니다. `.shared`를 호출 전에 기록하고 일반 반환 직후 삭제하지 않는다. 마지막 동기 account/generation guard와 OS 호출 사이에는 await가 없다. OS 대기 동안 DB transaction을 잡지 않는다.
 - Android lost-data는 앱 한 곳에서 소비한다. 결과 없음·복수·예외·이전 계정·삭제 이전 세대를 구분하고, 중단된 입력은 새 입력으로 되살리지 않는다. native 상태가 unknown이면 복구와 기능을 막고 다음 기회에 재시도한다.
 - prepare 직후 취소나 callback release 실패로 남은 native 예약은 cancel 후 unknown=false·active=false를 확인한 뒤 해당 scope/task만 release한다. 실패한 정리는 다음 선택 전 sweep에서도 재시도한다. 다른 owner의 예약을 해제하지 않는다. camera 준비/재연결 실패 시간은 순공시간에 추가하지 않도록 준비 동안 timeline을 paused로 유지하고 같은 run의 성공 뒤 재개한다.
+- 기존 PhotoRetention의 재시도·전체 삭제·개별 읽기/삭제·만료/cache 정리는 provider 수명·계정·임시파일 epoch·purge 세대를 고정한다. DB snapshot/marker는 owned transaction으로 보호하고 실제 파일 변경 직전에도 같은 token을 확인한다. 늦은 A의 글로벌 sweep 또는 marker 쓰기가 B나 A→B→A의 새 A 자료에 닿지 않게 한다.
+- 정상 picker 완료 후 화면 종료의 bytes 0, 새 선택 이후 오래된 정상 응답, 현재 읽기 실패 이유, 실제 OCR/공유 대기와 로그아웃 모달의 실패·재시도 연결을 추가로 검사한다. 카메라 오류의 원문은 화면·로그·진단 CSV에 전달하지 않는다. 새로운 테스트 작성과 실제 CI 성공은 별도로 기록한다.
 - 서버 계정 삭제와 최초 로컬 영수증 기록은 분산 원자 transaction이 아니다. 서버 응답 직후 최초 영수증 전 process kill에서는 ‘정확히 한 번’ 재시도를 보장하지 않는다. 이미 영수증이 남은 재시도/계정 변경은 로컬 정리만 수행하며 새 B 자료를 지우지 않는다.
 - 파일 flush·논리적 crash fixture·macOS child process exit는 실제 기기 전원 손실이나 parent-directory fsync 보장이 아니다. 물리 내구성은 DEVICE-09/ENC-12에 남긴다.
 

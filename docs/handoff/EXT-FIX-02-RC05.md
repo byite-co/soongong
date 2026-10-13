@@ -65,3 +65,14 @@ RC02/03 담당자의 작업 중 소스를 독립 검토하여 두 문제와 보�
 - MediaScanner 비동기 callback의 owner 전달/중복 callback 방어와 private capture 미디어 인덱싱 제외는 native 담당자가 후속 강화 중이다. 완료 여부는 최종 소스/CI로 기록한다. RC05 baseline의 8개 원인에 더하지 않는다.
 
 기기 검증은 [DEVICE-01~12 실행 절차](EXT-FIX-02-DEVICE.md)를 따른다. iOS Foundation의 실제 자식 프로세스 종료나 Android Robolectric 계약 테스트는 iPhone/Android 기기의 picker kill, OS 수신 앱, 파일 보호 상태 검증과 구분한다.
+
+## 최종 통합에서 추가 확인한 경계
+
+- [사진 정리 수정 전 실행 38344045730](https://github.com/byite-co/soongong/actions/runs/38344045730), tests-only `b554858d5b3859d3cc386fb9c8dac29209cacc76`: 실제 A provider의 작업을 filesystem root await에서 지연하고 B의 binding·파일·행·pending marker 생성 완료 뒤 A를 재개했다. `late A pending photo sweep`은 B 파일 존재 기대 true/실제 false, `late A wipe after temporary sweep`은 B marker 기대 true/실제 false로 실패했다. 두 제품 경합이 재현됐으며 timeout/fixture 예외로 집계하지 않았다.
+- 이 수정 전 전체 실행은 **890 PASS / 5 FAIL**이다. 추가 세 실패는 camera readiness 순공시간 884µs(0 기대)와 overlap fixture 두 경우다. 이 수치를 수정 HEAD 성공으로 사용하지 않는다. 사진 관련 11개 후속 회귀는 읽기·삭제·expired·cache·count·A→B→A·동일 계정 임시/purge 세대를 검사한다. snapshot/marker는 owned transaction으로, 최종 filesystem 변경은 root await 뒤 같은 작업 token으로 보호한다.
+- 실제 SeatEngineImpl은 시작 실패를 이벤트로 통지하면서 start Future는 완료할 수 있다. MeasureController는 비동기 실패 이벤트 도착 전에도 `isRunning`을 확인하고 준비되지 않은 구간을 paused로 유지한다. 지연된 실제 엔진 이벤트 회귀는 정확한 0과 성공 재연결 뒤 기존 집계를 함께 단언한다. 시간 오차 허용으로 0 기대값을 바꾸지 않았다.
+- overlap 테스트의 callback 내부 Flutter expect는 store의 오류 처리에 포획될 수 있다. callback은 관측값과 진입 gate만 기록하고 동일 scope/task/revoke 검사는 본문에서 수행하도록 변경했다. physical scan 1회·삭제 1회·같은 Future·새 B bytes 보존 단언은 유지했다. 이 fixture 보정을 새 제품 결함 수로 세지 않는다.
+- 카메라/Seat Lab 로그의 임의 exception code/detail/error/stackTrace와 fault description은 개인정보를 포함할 수 있어 고정 코드 또는 오류 종류로 제한했다. 원문을 넣은 합성 오류의 화면·실제 진단 CSV·LogEvent를 검사한다. 실제 기기 로그·산출물은 DEVICE 미실행 범위다. 최종 자동 산출물은 별도 hash/redaction 검사 원장을 함께 전달한다.
+- [native 중간 실행 38342839052](https://github.com/byite-co/soongong/actions/runs/38342839052): Android dev Debug APK, picker 13/13, iPhone ARM64 dev Release/no-codesign 및 Foundation 54 assertions는 성공. app share 3개는 관련 없는 Amazon IAP receiver의 JVM VerifyError로 @Before 전에 실패했다. 공유 suite만 classpath의 최소 manifest를 사용하도록 격리했으며 production manifest·실제 bridge/FileProvider·compiled XML resource·모든 assertion은 유지한다. 최종 성공 판정에는 재실행이 필요하다.
+
+최종 PR HEAD와 그 CI checkout/tree, 신규 40개 각 판정은 PR 본문 및 최종 전달 보고서가 기록한다. 위 기록은 실패를 숨기지 않기 위한 중간 증거이고 최종 CI 대체물이 아니다.
