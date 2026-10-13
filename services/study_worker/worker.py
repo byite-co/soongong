@@ -19,8 +19,10 @@ import select
 import socket
 import threading
 import time
+import warnings
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from process_ipc import ResultReader, send_result
+import diagnostics as diagnostic
 
 MAX_BYTES = 4 * 1024 * 1024
 MAX_BODY = 5_600_000
@@ -35,21 +37,56 @@ class ProcessCleanupFailed(RuntimeError):
     """Fail closed: do not admit another request over an unreaped worker."""
 
 
+class ImageInputRejected(ValueError):
+    """Private fixed reason; the existing public invalid_image contract stays."""
+    def __init__(self, reason):
+        diagnostic.rejected(reason)
+        self.reason = reason
+        super().__init__('invalid_image')
+
+
+def validate_image_bytes(raw):
+    """Byte admission only: passing this check does not make an image valid."""
+    if len(raw) > MAX_BYTES:
+        raise ImageInputRejected('byte_limit')
+    if not raw:
+        raise ImageInputRejected('empty')
+
+
 def decode_image(encoded):
     from PIL import Image, ImageOps
-    if not isinstance(encoded, str) or len(encoded) > 5_592_408:
-        raise ValueError("invalid_image")
-    raw = base64.b64decode(encoded, validate=True)
-    if not raw or len(raw) > MAX_BYTES:
-        raise ValueError("invalid_image")
+    diagnostic.stage('decode')
+    if not isinstance(encoded, str):
+        raise ImageInputRejected('base64')
+    if len(encoded) > 5_592_408:
+        raise ImageInputRejected('byte_limit')
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (ValueError, base64.binascii.Error):
+        raise ImageInputRejected('base64') from None
+    validate_image_bytes(raw)
     Image.MAX_IMAGE_PIXELS = 12_000_000
-    with Image.open(io.BytesIO(raw)) as image:
-        if image.format not in {"JPEG", "PNG", "WEBP"} or image.width * image.height > 12_000_000:
-            raise ValueError("invalid_image")
-        if getattr(image, "n_frames", 1) != 1:
-            raise ValueError("invalid_image")
-        image.load()
-        return ImageOps.exif_transpose(image).convert("RGB")
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(raw)) as image:
+                if getattr(image, 'n_frames', 1) != 1:
+                    raise ImageInputRejected('frames')
+                if image.format not in {'JPEG', 'PNG', 'WEBP'}:
+                    raise ImageInputRejected('format')
+                if image.width * image.height > 12_000_000:
+                    raise ImageInputRejected('pixels')
+                image.load()
+                result = ImageOps.exif_transpose(image)
+                if result.width * result.height > 12_000_000:
+                    raise ImageInputRejected('pixels')
+                return result.convert('RGB')
+    except ImageInputRejected:
+        raise
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning):
+        raise ImageInputRejected('pixels') from None
+    except (OSError, ValueError, SyntaxError):
+        raise ImageInputRejected('corrupt') from None
 
 
 def checked_models():
@@ -76,19 +113,29 @@ def checked_models():
 
 def infer_ocr(body):
     image = decode_image(body["image"])
+    diagnostic.stage('model_validation')
     root, revision = checked_models()
     if os.environ.get('WORKER_MODEL_ID') and os.environ['WORKER_MODEL_ID'] != revision:
         raise ValueError('model_id_mismatch')
     kind = body.get("kind", "text")
     if kind == "text":
         from paddle_adapter import load, recognize, grading
-        blocks = recognize(image, load(root))
+        diagnostic.stage('model_load')
+        engine = load(root)
+        diagnostic.stage('detect_recognize')
+        # Paddle's public predict combines these stages. Do not invent a
+        # separate detection/recognition boundary that was not observed.
+        blocks = recognize(image, engine)
         if body['operation'] == 'reading':
+            diagnostic.stage('grading')
             return {'schema_version': 2, 'pages': [grading(image, blocks, body['page_index'])]}
         name = "paddleocr-3.7.0"
     elif kind == "math":
-        from unimernet_adapter import recognize
-        blocks = [{"text": recognize(image, root), "confidence": None, "box": [0., 0., 1., 1.]}]
+        from unimernet_adapter import load, recognize
+        diagnostic.stage('model_load')
+        engine = load(root)
+        diagnostic.stage('recognize')
+        blocks = [{"text": recognize(image, root, engine), "confidence": None, "box": [0., 0., 1., 1.]}]
         name = "unimernet-0.2.3"
     else:
         raise ValueError("invalid_kind")
@@ -116,16 +163,38 @@ def child(body, connection):
             result = solve(body)
         else:
             result = infer_ocr(body)
-        send_result(connection, {"ok": result})
-    except BaseException:
-        try: send_result(connection, {"error": "inference_failed"})
+        diagnostic.stage('serialize')
+        send_result(connection, {"ok": result}, maximum=MAX_RESPONSE + 64,
+                    before_send=lambda: diagnostic.stage('ipc'))
+    except BaseException as error:
+        if isinstance(error, ImageInputRejected):
+            diagnostic.failure('input_rejected')
+        elif isinstance(error, InterruptedError):
+            diagnostic.failure('cancelled')
+        else:
+            diagnostic.failure('python_exception')
+        try: send_result(connection, {"error": "inference_failed"}, maximum=MAX_RESPONSE + 64)
         except (BrokenPipeError, EOFError, OSError): pass
     finally:
+        diagnostic.stage('child_cleanup')
         connection.close()
 
 
-def execute(body, timeout=REQUEST_SECONDS, *, cancelled=lambda: False, _target=None, _clock=None):
+def traced_child(body, connection, trace, target):
+    diagnostic.set_current(trace)
+    try:
+        target(body, connection)
+    finally:
+        trace.sample(complete=True)
+        diagnostic.set_current(None)
+
+
+def execute(body, timeout=REQUEST_SECONDS, *, cancelled=lambda: False, _target=None, _clock=None, diagnostics=None):
     now = _clock or time.monotonic
+    if diagnostics is not None:
+        diagnostics.clear()
+        diagnostics.update({'version': 1, 'result_received': False, 'parent_outcome': 'not_started',
+                            'parent_signals': [], 'exit_cause': 'unknown', 'child': None})
     if timeout <= 0 or cancelled():
         raise TimeoutError("inference_timeout")
     deadline = now() + timeout
@@ -139,7 +208,12 @@ def execute(body, timeout=REQUEST_SECONDS, *, cancelled=lambda: False, _target=N
     cleanup = min(PROCESS_CLEANUP_SECONDS, timeout / 2)
     context = mp.get_context("spawn")
     parent, remote = context.Pipe(duplex=False)
-    process = context.Process(target=_target or child, args=(body, remote))
+    trace = diagnostic.ChildTrace(context) if diagnostics is not None else None
+    if trace is not None:
+        process = context.Process(target=traced_child, args=(body, remote, trace, _target or child))
+    else:
+        process = context.Process(target=_target or child, args=(body, remote))
+    outcome = 'unknown'
     started = False
     reader = None
     try:
@@ -147,32 +221,53 @@ def execute(body, timeout=REQUEST_SECONDS, *, cancelled=lambda: False, _target=N
         reader = ResultReader(parent, MAX_RESPONSE + 64)
         while True:
             remaining = deadline - cleanup - now()
-            if remaining <= 0 or cancelled():
+            is_cancelled = cancelled()
+            if remaining <= 0 or is_cancelled:
+                outcome = 'cancelled' if is_cancelled else 'deadline'
                 raise TimeoutError("inference_timeout")
             if reader.done.wait(min(remaining, 0.05)): break
+        if diagnostics is not None:
+            diagnostics['result_received'] = reader.error is None
+        if reader.error is not None:
+            outcome = 'ipc_eof' if isinstance(reader.error, EOFError) else 'ipc_error'
         result = reader.result()
         if cancelled() or now() >= deadline:
+            outcome = 'cancelled_or_deadline'
             raise TimeoutError("inference_timeout")
-        if "ok" not in result:
+        if not isinstance(result, dict) or "ok" not in result:
+            outcome = 'child_reported_error'
             raise ValueError("inference_failed")
+        outcome = 'result'
         return result["ok"]
     finally:
         cleanup_failed = False
         if started:
+            if diagnostics is not None:
+                diagnostics['exit_before_parent_cleanup'] = diagnostic.observe_exit_without_reaping(process.pid)
+            def send_cleanup(target, signum, group=False):
+                event = {'signal': signal.Signals(signum).name, 'target': 'group' if group else 'child',
+                         'reason': outcome, 'monotonic_seconds': time.monotonic()}
+                try:
+                    (os.killpg if group else os.kill)(target, signum)
+                    event['sent'] = True
+                except ProcessLookupError:
+                    event['sent'] = False
+                if diagnostics is not None:
+                    diagnostics['parent_signals'].append(event)
+                return event['sent']
             # SIGTERM interrupts the worker's Python wait, allowing bounded_cas
             # to kill AND reap its child before the worker exits. All request
             # descendants share this worker's group for the hard fallback.
             # Do not reap the group leader until killpg: its unreaped PID
             # prevents that group ID from being recycled for another request.
-            try: os.kill(process.pid, signal.SIGTERM)
-            except ProcessLookupError: pass
+            send_cleanup(process.pid, signal.SIGTERM)
             wait([process.sentinel], timeout=max(0, min(cleanup * 0.75, deadline - now())))
-            try: os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                try: os.kill(process.pid, signal.SIGKILL)
-                except ProcessLookupError: pass
+            if not send_cleanup(process.pid, signal.SIGKILL, group=True):
+                send_cleanup(process.pid, signal.SIGKILL)
             process.join(timeout=max(0, deadline - now()))
             cleanup_failed = process.is_alive()
+            if diagnostics is not None:
+                diagnostics['exitcode_after_parent_cleanup'] = process.exitcode
             if not cleanup_failed:
                 while True:
                     try: pid, _ = os.waitpid(-process.pid, os.WNOHANG)
@@ -186,6 +281,10 @@ def execute(body, timeout=REQUEST_SECONDS, *, cancelled=lambda: False, _target=N
         if reader is not None and not reader.close(deadline - now()):
             cleanup_failed = True
         remote.close(); parent.close()
+        if diagnostics is not None:
+            diagnostics['parent_outcome'] = outcome
+            diagnostics['cleanup_failed'] = cleanup_failed
+            diagnostics['child'] = trace.snapshot()
         if cleanup_failed: raise ProcessCleanupFailed("inference_cleanup_failed")
 
 

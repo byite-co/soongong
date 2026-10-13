@@ -3,8 +3,13 @@ import json
 import threading
 
 
-def send_result(connection, result):
-    connection.send_bytes(json.dumps(result, ensure_ascii=False, allow_nan=False).encode())
+def send_result(connection, result, *, maximum=None, before_send=None):
+    payload = json.dumps(result, ensure_ascii=False, allow_nan=False).encode()
+    if maximum is not None and len(payload) > maximum:
+        raise ValueError('result_too_large')
+    if before_send is not None:
+        before_send()
+    connection.send_bytes(payload)
 
 
 class ResultReader:

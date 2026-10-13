@@ -10,9 +10,10 @@ import json
 import math
 import os
 from pathlib import Path
-import resource
+import platform
 import time
 import unicodedata
+from diagnostics import parent_children_usage
 
 
 def normalize(text, spaces=True):
@@ -66,13 +67,19 @@ def grading_metrics(rows):
 def summarize(rows,kind):
     labeled=[r for r in rows if isinstance(r.get('ground_truth'),str)]
     times=[r['seconds'] for r in rows]
+    resources=[((r.get('diagnostics') or {}).get('child') or {}).get('resource', {}) for r in rows]
     out={'attempts':len(rows),'valid':sum(r.get('valid',False) for r in rows),
          'failures':sum(r.get('error') is not None for r in rows),'empty':sum(r.get('prediction')=='' for r in rows),
          'labeled':len(labeled),'p50_seconds':quantile(times,.5),'p95_seconds':quantile(times,.95),
-         'max_child_rss_kib':max((r.get('child_rss_kib',0) for r in rows),default=0),
+         'max_reported_request_self_rss_bytes': max((r['max_rss_bytes'] for r in resources
+             if r.get('max_rss_bytes') is not None), default=None),
+         'request_resource_samples':sum(r.get('max_rss_bytes') is not None for r in resources),
+         'complete_target_resource_samples':sum(r.get('complete_target_lifetime',False) for r in resources),
          'external_api_calls':0,'external_api_cost_krw':0,'infrastructure_cost_krw':None,
          'confirmed_documents':None,'human_correction_time':None}
     out['timeouts']=sum(r.get('error')=='TimeoutError' for r in rows)
+    out['resource_scope'] = 'request_child_RUSAGE_SELF_excludes_descendants; inspect per-row completeness'
+    out['legacy_rss_scope'] = 'child_rss_kib in old reports is parent RUSAGE_CHILDREN cumulative high-water, not request RSS'
     out['sequential_attempts_per_hour']=3600*len(rows)/sum(times) if times and sum(times)>0 else None
     out['valid_rate']=out['valid']/len(rows) if rows else None
     if kind=='reading':
@@ -109,16 +116,21 @@ def run(args):
     # Protocol is recorded and hashed before any quality prediction.
     protocol=args.protocol.read_bytes();json.loads(protocol)
     report={'model':revision,'manifest_sha256':hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
-      'protocol_sha256':hashlib.sha256(protocol).hexdigest(),'mode':'cold isolated child per attempt','rows':[]}
+      'protocol_sha256':hashlib.sha256(protocol).hexdigest(),'mode':'cold isolated child per attempt',
+      'runtime': {'python': platform.python_version(), 'system': platform.system(), 'machine': platform.machine()},
+      'resource_protocol': {'request': 'child RUSAGE_SELF sampled at stages and target return; excludes descendants',
+        'parent': 'RUSAGE_CHILDREN cumulative waited-for children; CPU delta may include other children; RSS never differenced',
+        'gpu': 'unmeasured'}, 'rows':[]}
     for row in rows:
         path=row['path']
         if os.name!='nt' and path.startswith('C:\\'):path='/mnt/c/'+path[3:].replace('\\','/')
         raw=Path(path).read_bytes()
         if hashlib.sha256(raw).hexdigest()!=row['sha256']:raise ValueError('input_hash_mismatch')
         entry=dict(row);start=time.perf_counter()
+        diagnostics={}; usage_before=parent_children_usage()
         try:
             body={'operation':'reading','page_index':row.get('page_index',0)} if args.kind=='reading' else {'operation':'ocr','kind':args.kind}
-            result=execute({**body,'image':base64.b64encode(raw).decode()},timeout=50)
+            result=execute({**body,'image':base64.b64encode(raw).decode()},timeout=50,diagnostics=diagnostics)
             if args.kind=='reading':
                 entry['prediction']=[{'page_index':p['index'],**item} for p in result['pages'] for item in p['items']]
             else:entry['prediction']='\n'.join(b['text'] for b in result['blocks'])
@@ -126,7 +138,13 @@ def run(args):
         except Exception as error:
             entry['prediction']=None;entry['valid']=False;entry['error']=type(error).__name__
         entry['seconds']=time.perf_counter()-start
-        entry['child_rss_kib']=resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+        entry['diagnostics']=diagnostics
+        usage_after=parent_children_usage()
+        entry['parent_children_usage']={'scope':'all_terminated_reaped_children_of_evaluator',
+          'user_cpu_delta_seconds':usage_after['user_cpu_seconds']-usage_before['user_cpu_seconds'],
+          'system_cpu_delta_seconds':usage_after['system_cpu_seconds']-usage_before['system_cpu_seconds'],
+          'cumulative_max_rss_bytes':usage_after['max_rss_bytes'],
+          'request_attribution':False}
         report['rows'].append(entry);report['summary']=summarize(report['rows'],args.kind)
         args.output.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
         print(f"{len(report['rows'])}/{len(rows)} valid={entry['valid']} seconds={entry['seconds']:.2f}",flush=True)

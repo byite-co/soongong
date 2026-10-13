@@ -361,5 +361,13 @@ class HttpTests(unittest.TestCase):
                 self.assertIn(status, self.normal())
             self.assert_free()
 
+    def test_cleanup_failure_keeps_admission_closed(self):
+        def failed_cleanup(*_args, **_kwargs):
+            raise worker.ProcessCleanupFailed('inference_cleanup_failed')
+        self.handler.execute = staticmethod(failed_cleanup)
+        self.assertIn(b'503', self.normal())
+        self.assertFalse(worker.SLOT.acquire(blocking=False))
+        self.assertIn(b'429', self.normal())
+
 
 if __name__ == "__main__": unittest.main()
