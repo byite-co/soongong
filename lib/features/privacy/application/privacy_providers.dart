@@ -46,8 +46,8 @@ import '../../../data/auth/auth_gate.dart';
 import '../../../data/auth/auth_mode.dart';
 import '../../../data/auth/auth_models.dart';
 import '../../../data/auth/auth_providers.dart';
-import '../../../data/export/export_service.dart';
 import '../../../data/export/export_guard.dart';
+import '../../../data/export/export_service.dart';
 import '../../../data/export/share_export.dart';
 import '../../../data/repositories/local_purge.dart';
 import '../../../data/repositories/repository_providers.dart';
@@ -369,16 +369,18 @@ class PrivacyActions {
     try {
       if (_disposed) return DeleteAllFailed(StateError('account changed'));
       var current = await purge.state();
-      if (current.stage == PurgeStage.pending)
+      if (current.stage == PurgeStage.pending) {
         return await _completeLocal(current.pendingEpoch!);
+      }
       if (current.stage == PurgeStage.requested) {
         final settled = await _settleRequested(current, resend: true);
         if (settled != null) return settled;
         current = await purge
             .state(); // refused → cleared → a new request below
       }
-      if (await sessions.readSnapshot() != null)
+      if (await sessions.readSnapshot() != null) {
         return const DeleteAllBlocked();
+      }
       if (!serverPurge) {
         final epoch = await writer.runOwnedTransaction(
           () => purge.markPending(current.epoch + 1),
@@ -410,16 +412,18 @@ class PrivacyActions {
         purgeWork: true,
       );
       final answer = await _call(id, expected);
-      if (_disposed)
+      if (_disposed) {
         return DeleteAllFailed(
           StateError('account changed'),
         ); // the call record keeps the answer
+      }
       switch (answer) {
         case PurgeServed(:final epoch, :final superseded):
-          if (superseded)
+          if (superseded) {
             appLog.i(
               'purge-all: superseded by a newer purge · converging to epoch $epoch',
             );
+          }
           return await _confirmServed(epoch);
         case PurgeRefused(:final error):
           await writer.runOwnedTransaction(
@@ -494,8 +498,9 @@ class PrivacyActions {
         },
       );
       final epoch = res['epoch'];
-      if (epoch is! num)
+      if (epoch is! num) {
         return PurgeUnknown(StateError('purge-all answered without an epoch'));
+      }
       return PurgeServed(
         epoch.toInt(),
         replayed: res['replayed'] == true,
@@ -504,8 +509,9 @@ class PrivacyActions {
     } on EdgeFunctionException catch (e) {
       // 4xx = the server answered and did not purge (401/403 no profile,
       // 400 bad request, 429 limit) — except a request timeout.
-      if (e.status >= 400 && e.status < 500 && e.status != 408)
+      if (e.status >= 400 && e.status < 500 && e.status != 408) {
         return PurgeRefused(e);
+      }
       return PurgeUnknown(e);
     } on Object catch (e) {
       return PurgeUnknown(e);
@@ -545,8 +551,9 @@ class PrivacyActions {
     if (_disposed) return DeleteAllFailed(StateError('account changed'));
     if (profile != null) {
       final since = s.expectedEpoch ?? s.epoch;
-      if (profile.purgeRequestId == id || profile.purgeEpoch > since)
+      if (profile.purgeRequestId == id || profile.purgeEpoch > since) {
         return await _confirmServed(profile.purgeEpoch);
+      }
     }
     if (!resend) return const DeleteAllUnconfirmed();
     final again = await _call(id, s.expectedEpoch);
@@ -604,8 +611,9 @@ class PrivacyActions {
   Future<DeleteAllOutcome> _completeLocal(int epoch) async {
     final photoResult = await writer.runOwnedTransaction(
       () async {
-        if ((await purge.state()).pendingEpoch != epoch)
+        if ((await purge.state()).pendingEpoch != epoch) {
           return null; // finished by another caller
+        }
         if (await sessions.readSnapshot() != null) throw const _MeasuringNow();
         final r = await photos.wipeAll(alive: _alive);
         if (_disposed) throw StateError('account changed');

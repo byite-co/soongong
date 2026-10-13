@@ -7,8 +7,8 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import 'export_service.dart';
 import 'export_guard.dart';
+import 'export_service.dart';
 
 Future<void> shareExportFile(
   ExportFile file, {

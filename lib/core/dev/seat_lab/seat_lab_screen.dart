@@ -24,6 +24,7 @@ import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
 
 import '../../../data/engines/engines.dart';
+import '../../../data/export/export_guard.dart';
 import '../../../data/export/export_service.dart';
 import '../../../data/export/share_export.dart';
 import '../../contracts/seat_engine.dart';
@@ -403,7 +404,16 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
       mimeType: 'text/csv',
     );
     try {
-      await (widget.share ?? shareExportFile)(file);
+      final share = widget.share;
+      if (share != null) {
+        await share(file);
+      } else {
+        // This CSV contains this route's in-memory diagnostics, not account
+        // records. Disposal still cancels before any OS handoff.
+        await shareExportFile(file, guard: ExportGuard(
+          validate: () async {}, isCurrent: () => mounted,
+        ));
+      }
       if (mounted) showAppToast(context, message: SeatLabStrings.exported);
     } catch (e, st) {
       appLog.w('seat lab: export failed', error: e, stackTrace: st);
