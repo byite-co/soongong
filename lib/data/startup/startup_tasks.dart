@@ -94,8 +94,9 @@ class UserStartupTasks {
           .purgeExpired();
       final recovery = _ref.read(purgeRecoveryProvider)..start();
       final pendingPurge = await recovery.resume();
-      if (pendingPurge != null)
+      if (pendingPurge != null) {
         appLog.i('startup · pending local purge → ${pendingPurge.runtimeType}');
+      }
       _ref.read(notificationSchedulerProvider).start();
       final today = LocalDate.of(_ref.read(appClockProvider).now());
       final created = await _ref.read(activityRepositoryProvider).touch(today);
@@ -136,10 +137,11 @@ Future<void> runStartupTasks(ProviderContainer container) async {
   // Recovery precedes any new picker, including before login. An unavailable
   // store blocks the picker itself and is retried on foreground/privacy entry.
   final temporary = await recoverTemporaryFilesAtStartup(container);
-  if (!temporary.complete)
+  if (!temporary.complete) {
     appLog.w(
       'temporary cleanup pending (unknown=${temporary.unknown}, tasks=${temporary.remaining})',
     );
+  }
   if (AppConfig.isDev) {
     try {
       await container.read(devSeederProvider).seedSubjects();

@@ -350,8 +350,9 @@ class _CameraSession implements SeatCameraHandle {
     _controller.removeListener(_reportFault);
     Future<CloseResult> release() async {
       try {
-        if (_controller.value.isStreamingImages)
+        if (_controller.value.isStreamingImages) {
           await _controller.stopImageStream();
+        }
       } catch (_) {
         // Already stopped or the camera is gone — dispose still decides.
       }

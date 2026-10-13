@@ -68,7 +68,7 @@ void main() {
       final planner = await h.planner.createItem(
         kind: PlannerKind.study,
         title: 'math',
-        date: LocalDate(2026, 10, 13),
+        date: const LocalDate(2026, 10, 13),
       );
       final generation = await h.writer.refreshPurgeGeneration();
       await h.planner.softDeleteItem(planner.id);

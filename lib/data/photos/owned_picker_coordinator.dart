@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -57,8 +56,9 @@ class OwnedPickerCoordinator {
           native['active'] != false) {
         return PickerRecoveryState.unavailable;
       }
-      if (!(await store.sweep()).complete)
+      if (!(await store.sweep()).complete) {
         return PickerRecoveryState.unavailable;
+      }
       return found ? PickerRecoveryState.reselect : PickerRecoveryState.none;
     } on Object {
       return PickerRecoveryState.unavailable;
@@ -70,8 +70,9 @@ class OwnedPickerCoordinator {
     required Future<OwnedTempTask> Function() createTask,
   }) async {
     if (_picking) throw StateError('picker busy');
-    if (await recover() == PickerRecoveryState.unavailable)
+    if (await recover() == PickerRecoveryState.unavailable) {
       throw const TempStoreUnavailable();
+    }
     if (_picking) throw StateError('picker busy');
     _picking = true;
     OwnedTempTask? task;

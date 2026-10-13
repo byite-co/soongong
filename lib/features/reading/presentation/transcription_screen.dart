@@ -9,12 +9,12 @@ import '../../../core/contracts/transcription_engine.dart';
 import '../../../core/strings/study_strings.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../data/auth/auth_gate.dart';
-import '../../../data/photos/study_image_picker.dart';
 import '../../../data/photos/owned_picker_coordinator.dart';
-import '../../../data/temp/temp_providers.dart';
+import '../../../data/photos/study_image_picker.dart';
 import '../../../data/repositories/local_purge.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../data/repositories/study_repository.dart';
+import '../../../data/temp/temp_providers.dart';
 import '../../measure/application/measure_controller.dart';
 import '../application/study_providers.dart';
 
@@ -252,7 +252,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       // Capture ownership before displaying the dialog. Confirmation cannot
       // adopt the account/generation that replaced the document underneath it.
       final generation = await repo.writer.refreshPurgeGeneration();
-      if (!current()) return;
+      if (!mounted || !current()) return;
       _generation = generation;
       final confirmed = await showDialog<bool>(
         context: context,
@@ -336,6 +336,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
         padding: const EdgeInsets.all(20),
         children: [
           const Text(StudyStrings.localOnly),
+          const Text(StudyStrings.interruptedPicker),
           const SizedBox(height: 16),
           AppButton.secondary(
             label: StudyStrings.select,

@@ -118,8 +118,9 @@ void main() {
       final file = payload(task, 'owned');
       var unavailable = true;
       final restarting = OwnedTempStore(() async {
-        if (unavailable)
+        if (unavailable) {
           throw const FileSystemException('synthetic-root-failure');
+        }
         return root;
       }, now: () => now);
       final failed = await restarting.sweep();

@@ -68,7 +68,7 @@ class OwnedTempStore {
   static bool validId(String value) => _uuid.hasMatch(value);
   Future<T> _serial<T>(FutureOr<T> Function() work) {
     final result = _tail.then((_) => work());
-    _tail = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _tail = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return result;
   }
 
@@ -185,8 +185,9 @@ class OwnedTempStore {
       _serial(() async {
         var result = const TempCleanupResult();
         try {
-          if (!validId(scope) || !{'picker', 'export'}.contains(kind))
+          if (!validId(scope) || !{'picker', 'export'}.contains(kind)) {
             throw const TempStoreUnavailable();
+          }
           final base = await _root();
           final owner = Directory(p.join(base.path, scope));
           _safe(base, owner.path, missing: true);
@@ -195,14 +196,16 @@ class OwnedTempStore {
             final task = p.basename(entry.path);
             if (task == '.revoked') continue;
             _safe(base, entry.path);
-            if (!validId(task) || entry is! Directory)
+            if (!validId(task) || entry is! Directory) {
               throw const TempStoreUnavailable();
+            }
             final marker = File(p.join(entry.path, 'marker.json'));
             _safe(base, marker.path);
             final data =
                 jsonDecode(marker.readAsStringSync()) as Map<String, dynamic>;
-            if (data['scope'] != scope || data['task'] != task)
+            if (data['scope'] != scope || data['task'] != task) {
               throw const TempStoreUnavailable();
+            }
             if (data['kind'] == kind)
               result = result.plus(await _deleteTask(base, scope, task, entry));
           }
@@ -222,7 +225,7 @@ class OwnedTempStore {
         _safe(base, owner.path, missing: true);
         owner.createSync();
         _mark(base, p.join(owner.path, '.revoked'));
-        return _cleanScope(base, owner, force: true, clockBad: false);
+        return await _cleanScope(base, owner, force: true, clockBad: false);
       } on Object {
         return const TempCleanupResult(unknown: true);
       }
@@ -331,7 +334,6 @@ class OwnedTempStore {
             !deletion &&
             !clockBad &&
             valid &&
-            expires is int &&
             now().toUtc().millisecondsSinceEpoch < expires &&
             (_ages[key] == null || _ages[key]!.elapsed < policy.shareGrace);
         if (retain) continue;
@@ -424,8 +426,9 @@ class OwnedTempTask {
 
   File file(String name) {
     check();
-    if (p.basename(name) != name || name == '.' || name == '..')
+    if (p.basename(name) != name || name == '.' || name == '..') {
       throw const TempStoreUnavailable();
+    }
     final path = p.join(payloadPath, name);
     store._safe(base, path, missing: true);
     return File(path);

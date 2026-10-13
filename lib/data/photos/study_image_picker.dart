@@ -14,8 +14,8 @@ abstract class StudyPickedImage {
 /// Claims are ordered when requests start, not when the picker completes.
 /// A late result may never delete a path reused by a newer selection.
 class StudyImagePicker {
-  StudyImagePicker({this.pickFile, this.temporaryDirectory});
-  final Future<XFile?> Function(ImageSource)? pickFile;
+  StudyImagePicker({required this.pickFile, this.temporaryDirectory});
+  final Future<XFile?> Function(ImageSource) pickFile;
   final Future<Directory> Function()? temporaryDirectory;
   // Shared across route recreation/account switches, while any older picker
   // can still return. Forget paths when every outstanding selection is done.
@@ -34,9 +34,8 @@ class StudyImagePicker {
     }
 
     try {
-      final file = await (pickFile == null
-          ? ImagePicker().pickImage(source: source, requestFullMetadata: false)
-          : pickFile!(source));
+      // Explicit regression seam. Product selection uses OwnedPickerCoordinator.
+      final file = await pickFile(source);
       if (file == null) {
         release();
         return null;

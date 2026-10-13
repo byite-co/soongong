@@ -222,7 +222,7 @@ void main() {
       });
       final engine = SeatEngineImpl(
         source: measureSource,
-        detectorFactory: () => FakePresenceDetector(),
+        detectorFactory: FakePresenceDetector.new,
         permission: FakeCameraPermissionGateway(),
         lifecycle: FakeLifecycleSource(),
       );

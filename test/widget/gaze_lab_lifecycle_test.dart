@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:camera/camera.dart';
-import 'package:soongong/data/engines/seat/camera_lease.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +8,7 @@ import 'package:soongong/core/dev/gaze_lab_screen.dart';
 import 'package:soongong/core/strings/gaze_strings.dart';
 import 'package:soongong/data/engines/gaze/native_gaze.dart';
 import 'package:soongong/data/engines/seat/camera_frame_source.dart';
+import 'package:soongong/data/engines/seat/camera_lease.dart';
 import 'package:soongong/data/engines/seat/camera_permission.dart';
 import 'package:soongong/data/engines/seat/seat_availability.dart';
 import 'package:soongong/data/engines/seat/seat_frame_source.dart';

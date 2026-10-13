@@ -17,6 +17,7 @@ Future<void> shareExportFile(
   Future<Directory> Function()? temporaryDirectory,
   Future<void> Function(File, List<int>)? writeFile,
   Future<void> Function(ShareParams)? shareFile,
+  Duration handoffTimeout = const Duration(seconds: 30),
   MethodChannel channel = const MethodChannel('co.byite.soongong/owned_share'),
 }) async {
   OwnedTempTask? task;
@@ -70,12 +71,13 @@ Future<void> shareExportFile(
             'name': p.basename(file.name),
             'mimeType': file.mimeType,
           });
-    await call.timeout(const Duration(seconds: 30));
+    await call.timeout(handoffTimeout);
   } finally {
     if (task != null) {
       task.release();
-      if (!attempted && !(await task.cleanup()).complete)
+      if (!attempted && !(await task.cleanup()).complete) {
         throw const TempStoreUnavailable();
+      }
     }
   }
 }

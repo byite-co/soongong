@@ -4,15 +4,15 @@
 // The launch itself is counted by the startup tasks. Errors are logged only.
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/auth/auth_gate.dart';
+import '../../data/photos/owned_picker_coordinator.dart';
 import '../../data/repositories/repositories.dart';
 import '../../data/temp/temp_providers.dart';
-import '../../data/photos/owned_picker_coordinator.dart';
-import 'dart:io';
 import '../../features/privacy/application/photo_retention.dart';
 import '../../features/privacy/application/purge_recovery.dart';
 import '../../features/settings/application/notification_scheduler.dart';

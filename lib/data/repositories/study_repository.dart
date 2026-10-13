@@ -36,8 +36,9 @@ class StudyRepository {
     int? expectedRevision,
     String? plannerItemId,
   }) => writer.runOwnedTransaction(() async {
-    if (text.trim().isEmpty || text.length > 20000)
+    if (text.trim().isEmpty || text.length > 20000) {
       throw ArgumentError('invalid_text');
+    }
     final epoch = (await LocalPurge.readState(db)).epoch;
     final existing = id == null ? null : await get(id);
     if (id != null &&
@@ -136,13 +137,15 @@ class StudyRepository {
     int generation,
   ) => writer.runOwnedTransaction(() async {
     final current = await get(id);
-    if (current == null || current.revision != revision)
+    if (current == null || current.revision != revision) {
       throw StateError('document_changed');
+    }
     final parsed = ProblemSolution.fromJson(
       Map<String, dynamic>.from(solution),
     );
-    if (parsed.documentId != id || parsed.revision != revision)
+    if (parsed.documentId != id || parsed.revision != revision) {
       throw StateError('solution_document_mismatch');
+    }
     await db.customStatement(
       'UPDATE study_documents SET solution_json=? WHERE id=? AND user_id=?',
       [jsonEncode(parsed.toJson()), id, writer.ctx.userId],

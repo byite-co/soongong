@@ -82,11 +82,13 @@ class _ProblemSolverScreenState extends ConsumerState<ProblemSolverScreen> {
       if (!_current(op, owner)) return;
       if (purge.inProgress ||
           purge.generation != generation ||
-          current?.revision != document.revision)
+          current?.revision != document.revision) {
         throw StateError('stale_result');
+      }
       if (result.documentId != document.id ||
-          result.revision != document.revision)
+          result.revision != document.revision) {
         throw StateError('stale_result');
+      }
       setState(() {
         _generation = generation;
         _document = document;
@@ -182,8 +184,9 @@ class _ProblemSolverScreenState extends ConsumerState<ProblemSolverScreen> {
     });
     ProblemSolution? stored;
     try {
-      if (document?.solution != null)
+      if (document?.solution != null) {
         stored = ProblemSolution.fromJson(document!.solution!);
+      }
     } on Object {
       stored = null;
     }
