@@ -158,6 +158,55 @@ void main() {
   );
 
   test(
+    'TMP-03 recovery uncertainty blocks sweep before deletion or clock mutation',
+    () async {
+      final task = await store().create(_scopeA, 'picker');
+      final file = payload(task, 'await-native-recovery');
+      final clock = File(p.join(root.path, '.clock'));
+      clock.writeAsStringSync('123', flush: true);
+      final before = clock.readAsBytesSync();
+      var ready = false;
+      var rootReads = 0;
+      final restarting = OwnedTempStore(() async {
+        rootReads++;
+        return root;
+      }, now: () => now)..recoveryReady = () => ready;
+      final blocked = await restarting.sweep();
+      expect(blocked.complete, isFalse);
+      expect(blocked.unknown, isTrue);
+      expect(rootReads, 0);
+      expect(clock.readAsBytesSync(), before);
+      expect(file.readAsStringSync(), 'await-native-recovery');
+      ready = true;
+      expect((await restarting.sweep()).complete, isTrue);
+      expect(rootReads, greaterThan(0));
+      expect(file.existsSync(), isFalse);
+    },
+  );
+
+  test(
+    'TMP-02 broken task symlink is unknown, never treated as absent',
+    () async {
+      final ledger = store();
+      final task = await ledger.create(_scopeA, 'picker');
+      final external = File(p.join(sandbox.path, 'external-original.bin'))
+        ..writeAsStringSync('external-original');
+      final missing = p.join(sandbox.path, 'missing-external-directory');
+      task.directory.deleteSync(recursive: true);
+      final link = Link(task.directory.path)..createSync(missing);
+      expect(task.directory.existsSync(), isFalse, reason: 'broken target');
+      final result = await task.cleanup();
+      expect(result.complete, isFalse);
+      expect(result.unknown, isTrue);
+      expect(link.existsSync(), isTrue);
+      expect(external.readAsStringSync(), 'external-original');
+      expect(Directory(missing).existsSync(), isFalse);
+      link.deleteSync();
+      expect((await task.cleanup()).complete, isTrue);
+    },
+  );
+
+  test(
     'TMP-04 failed deletion leaves evidence and joined retries converge',
     () async {
       var fail = true;

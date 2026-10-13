@@ -307,8 +307,9 @@ void main() {
       await tester.tap(find.text(SettingsStrings.deleteAccountConfirm).last);
       await tester.pumpAndSettle();
       expect(find.text(SettingsStrings.deleteAccountTitle), findsOneWidget, reason: 'kept open');
+      expect(find.text(CommonStrings.retry), findsOneWidget);
       h.backend.responses.remove('delete-account');
-      await tester.tap(find.text(SettingsStrings.deleteAccountConfirm).last);
+      await tester.tap(find.text(CommonStrings.retry));
       await tester.pumpAndSettle();
       expect(h.backend.callNames, containsAllInOrder(<String>['delete-account', 'signOut']));
       expect(find.text(AuthStrings.ageGateTitle), findsOneWidget);
