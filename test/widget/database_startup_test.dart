@@ -26,70 +26,76 @@ void main() {
           addTearDown(tester.platformDispatcher.clearAllTestValues);
           var databaseReads = 0;
           final semantics = tester.ensureSemantics();
-          addTearDown(semantics.dispose);
-          await tester.pumpWidget(
-            ProviderScope(
-              overrides: [
-                appDatabaseProvider.overrideWith((ref) {
-                  databaseReads++;
-                  throw StateError('startup must not read DB');
-                }),
-              ],
-              child: blocked
-                  ? DatabaseBlockedApp(retry: () async {})
-                  : const DatabasePreparingApp(),
-            ),
-          );
-          await tester.pumpAndSettle();
-          final text = find.text(
-            blocked ? DatabaseStrings.title : DatabaseStrings.preparing,
-          );
-          final context = tester.element(text);
-          expect(Theme.of(context).brightness, brightness);
-          expect(Localizations.localeOf(context).languageCode, 'ko');
-          expect(MaterialLocalizations.of(context).okButtonLabel, '확인');
-          expect(
-            Theme.of(context).textTheme.bodyMedium!.fontFamily,
-            'Pretendard',
-          );
-          expect(databaseReads, 0);
-          expect(find.byType(CircularProgressIndicator), findsNothing);
-          expect(tester.takeException(), isNull);
-          final colors = context.colors;
-          double contrast(Color a, Color b) {
-            final aa = a.computeLuminance();
-            final bb = b.computeLuminance();
-            return aa > bb ? (aa + .05) / (bb + .05) : (bb + .05) / (aa + .05);
-          }
-
-          expect(contrast(colors.tx, colors.bg), greaterThanOrEqualTo(4.5));
-          if (blocked) {
-            for (final label in [
-              DatabaseStrings.description,
-              DatabaseStrings.detail,
-              DatabaseStrings.retry,
-            ]) {
-              await tester.ensureVisible(find.text(label));
-              await tester.pumpAndSettle();
-              expect(tester.takeException(), isNull);
+          try {
+            await tester.pumpWidget(
+              ProviderScope(
+                overrides: [
+                  appDatabaseProvider.overrideWith((ref) {
+                    databaseReads++;
+                    throw StateError('startup must not read DB');
+                  }),
+                ],
+                child: blocked
+                    ? DatabaseBlockedApp(retry: () async {})
+                    : const DatabasePreparingApp(),
+              ),
+            );
+            await tester.pumpAndSettle();
+            final text = find.text(
+              blocked ? DatabaseStrings.title : DatabaseStrings.preparing,
+            );
+            final context = tester.element(text);
+            expect(Theme.of(context).brightness, brightness);
+            expect(Localizations.localeOf(context).languageCode, 'ko');
+            expect(MaterialLocalizations.of(context).okButtonLabel, '확인');
+            expect(
+              Theme.of(context).textTheme.bodyMedium!.fontFamily,
+              'Pretendard',
+            );
+            expect(databaseReads, 0);
+            expect(find.byType(CircularProgressIndicator), findsNothing);
+            expect(tester.takeException(), isNull);
+            final colors = context.colors;
+            double contrast(Color a, Color b) {
+              final aa = a.computeLuminance();
+              final bb = b.computeLuminance();
+              return aa > bb
+                  ? (aa + .05) / (bb + .05)
+                  : (bb + .05) / (aa + .05);
             }
-            final button = find.byType(AppButton);
-            final size = tester.getSize(button);
-            expect(size.height, greaterThanOrEqualTo(44));
-            expect(size.width, greaterThanOrEqualTo(44));
-            expect(
-              contrast(colors.onPri, colors.pri),
-              greaterThanOrEqualTo(4.5),
-            );
-            final node = tester.getSemantics(button);
-            expect(
-              node.getSemanticsData().label,
-              contains(DatabaseStrings.retry),
-            );
-            expect(
-              node.getSemanticsData().hasAction(SemanticsAction.tap),
-              isTrue,
-            );
+
+            expect(contrast(colors.tx, colors.bg), greaterThanOrEqualTo(4.5));
+            if (blocked) {
+              for (final label in [
+                DatabaseStrings.description,
+                DatabaseStrings.detail,
+                DatabaseStrings.retry,
+              ]) {
+                await tester.ensureVisible(find.text(label));
+                await tester.pumpAndSettle();
+                expect(tester.takeException(), isNull);
+              }
+              final button = find.byType(AppButton);
+              final size = tester.getSize(button);
+              expect(size.height, greaterThanOrEqualTo(44));
+              expect(size.width, greaterThanOrEqualTo(44));
+              expect(
+                contrast(colors.onPri, colors.pri),
+                greaterThanOrEqualTo(4.5),
+              );
+              final node = tester.getSemantics(button);
+              expect(
+                node.getSemanticsData().label,
+                contains(DatabaseStrings.retry),
+              );
+              expect(
+                node.getSemanticsData().hasAction(SemanticsAction.tap),
+                isTrue,
+              );
+            }
+          } finally {
+            // WidgetTester verifies handles before package:test tearDown.
+            semantics.dispose();
           }
         },
       );
