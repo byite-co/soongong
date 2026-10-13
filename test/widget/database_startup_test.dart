@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -98,6 +99,9 @@ void main() {
   testWidgets(
     'UI-04 retry joins taps, recovers after error, ignores disposal',
     (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(tester.platformDispatcher.clearAllTestValues);
       var calls = 0;
       var result = Completer<void>();
       await tester.pumpWidget(
@@ -111,6 +115,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text(DatabaseStrings.retry));
       await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byIcon(Icons.hourglass_empty), findsOneWidget);
+      expect(
+        tester.widget<AnimatedScale>(find.byType(AnimatedScale)).duration,
+        Duration.zero,
+      );
       await tester.tap(find.text(DatabaseStrings.retry));
       expect(calls, 1);
       result.completeError(StateError('synthetic'));
