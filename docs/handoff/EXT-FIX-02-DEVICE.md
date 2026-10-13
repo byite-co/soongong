@@ -46,7 +46,7 @@
 
 - 자원/사전조건: 실제 A/B 시험 계정, 격리 backend, 응답을 지연할 수 있는 시험 network, A picker/export의 단계별 breakpoint. 확정 서버 삭제 뒤 local 실패를 만들 수 있는 별도 사례.
 - 절차: 파일 write/encoder/OS 직전/OS sheet 인계 후 각각 A 로그아웃·A→B·전체 삭제·계정 삭제를 시작한다. B 문서/파일을 만든 뒤 A 지연 callback을 완료한다. server 성공/local cleanup 실패 뒤 local retry도 실행한다.
-- 기대값: barrier 전 A 결과의 새 저장·노출·OS 인계 0; OS 직전 무효화된 export는 공유 호출0. B 자료 불변. 명시 종료 시 A 앱 소유 공유 파일은 유예 없이 정리. server 완료/local 잔여 구분, local 재시도에서 delete-account/purge-all 새 요청0. 외부 수신본 회수 주장은 없음.
+- 기대값: barrier 이후 이전 A 결과의 새 저장·노출·OS 인계 0; OS 직전 무효화된 export는 공유 호출0. B 자료 불변. 명시 종료 시 A 앱 소유 공유 파일은 유예 없이 정리. server 완료/local 잔여 구분, durable receipt/settlement 이후 local 재시도에서 delete-account/purge-all 새 요청0. 서버 응답과 최초 durable receipt 사이 kill은 분산 원자성을 보장하지 않는 별도 경계로 기록하며 이 재시도 기대값을 적용하지 않는다. 외부 수신본 회수 주장은 없음.
 - 증거: 계정은 A/B 익명 표기, generation/task 상태, 요청 endpoint별 개수·멱등성 ID의 비가역 식별자, 파일 hash 및 화면. 실제값: 미수집. 판정: UNVERIFIED.
 
 ## DEVICE-06 — 저장소 부족·보호 상태와 재시도
@@ -55,6 +55,7 @@
 - 절차: marker 작성, payload 쓰기, revoke/delete 표시, unlink 각각에서 공간 부족/권한·보호 상태로 실패시킨다. 로그아웃·전체 삭제·privacy 진입/중복 재시도를 실행한 뒤 환경을 정상화하고 재시도한다. mapping이 없는 root 접근 불가도 확인한다.
 - 기대값: 부분/unknown/계정 변경을 구분; 미확인 count를 0으로 표시하지 않음. 완료 toast 없음. durable 의무와 원본 mapping 보존, 복구 뒤 앱 소유 파일만 제거, 중복 삭제·공유 재호출0.
 - 증거: OS 오류 분류, 남은 task/bytes, marker/DB mapping 보존, 전후 UI. 실제값: 미수집. 판정: UNVERIFIED.
+- 업그레이드 하위 사례: pre-RC 빌드가 남긴 export/cache 이름 공간과 현재 v1 owned task를 함께 준비하고, 계정 B의 신규 파일 및 gallery/외부 원본을 구분해 hash를 기록한다. 업그레이드 후 legacy 항목의 계정·세대를 증명할 수 없다면 unknown 유지, 신규 export·명시 정리 완료 차단, legacy 자동 삭제·현 계정 귀속 0을 확인한다. 환경 복구 후 일반 retry만으로 소유권이 생겼다고 간주하지 않는다. 소유권 확인·별도 이전이 필요한 상태와 현재 v1 항목의 정상 정리를 따로 기록한다.
 
 ## DEVICE-07 — Release codec·키 잠금·재부팅
 
