@@ -288,7 +288,13 @@ void main() {
       expect(transcriber.inputs, hasLength(1));
       expect(transcriber.inputs.single, displayed);
       expect(transcriber.epochs, [after.epoch]);
-      expect(find.text(_freshText), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is TextField && widget.controller?.text == _freshText,
+        ),
+        findsOneWidget,
+      );
       await pressStudy(tester, StudyStrings.confirm);
       expect(find.text(StudyStrings.saved), findsOneWidget);
       final saved = await completeWidgetFuture(

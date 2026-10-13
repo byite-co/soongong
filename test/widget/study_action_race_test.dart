@@ -226,6 +226,12 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(await completeStudy(tester, rig.repo.list()), isEmpty);
     expect(find.text('LaTeX 원문 · 자동 실행이나 수학적 검증을 하지 않습니다.'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byType(TextField),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await pumpStudy(tester);
     await tester.enterText(find.byType(TextField), 'x^{2}');
     await pressStudy(tester, StudyStrings.confirm);
     final documents = await completeStudy(tester, rig.repo.list());

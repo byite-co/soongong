@@ -119,7 +119,7 @@ void main() {
           (await app.customSelect('PRAGMA user_version').getSingle()).read<int>(
             'user_version',
           ),
-          4,
+          5,
         );
       } finally {
         await app.close();
@@ -201,7 +201,7 @@ void main() {
         expect(
           (await restored.customSelect('PRAGMA user_version').getSingle())
               .read<int>('user_version'),
-          4,
+          5,
         );
         await restored.close();
       },

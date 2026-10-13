@@ -173,7 +173,7 @@ void main() {
       (await db.customSelect('PRAGMA user_version').getSingle()).read<int>(
         'user_version',
       ),
-      4,
+      5,
     );
     expect(
       (await db.customSelect('PRAGMA journal_mode').getSingle()).read<String>(
@@ -304,7 +304,7 @@ void main() {
   for (final version in [0, 1, 2]) {
     for (final fault in [_Fault.afterCommit, _Fault.afterPolicy]) {
       test(
-        'MIG-03 v$version $fault leaves completed v4 and retries without duplicate mutation',
+        'MIG-03 v$version $fault leaves completed v5 and retries without duplicate mutation',
         () async {
           if (version == 0) {
             DatabaseProtection(file, key).prepare();

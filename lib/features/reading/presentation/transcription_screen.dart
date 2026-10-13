@@ -671,7 +671,12 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
             Text('엔진: ${_transcription!.engine}'),
             if (_kind == TranscriptionKind.math)
               const Text('LaTeX 원문 · 자동 실행이나 수학적 검증을 하지 않습니다.'),
-            SelectableText(_transcription!.text),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 180),
+              child: SingleChildScrollView(
+                child: SelectableText(_transcription!.text),
+              ),
+            ),
             TextField(
               controller: _text,
               enabled: !_busy,

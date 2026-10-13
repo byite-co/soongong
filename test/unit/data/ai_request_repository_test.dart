@@ -130,6 +130,7 @@ void main() {
       await LocalPurge(h.db, h.ctx).markPending(1);
       await LocalPurge(h.db, h.ctx).run(epoch: 1);
       await expectLater(repo.record(id, response()), throwsStateError);
+      await LocalPurge(h.db, h.ctx).clearPending();
       expect(await repo.list(), isEmpty);
     },
   );

@@ -164,7 +164,11 @@ void main() {
         await pumpSteps(tester);
         expect(picks, 2);
         expect(find.byType(Image), findsOneWidget);
-        await tester.ensureVisible(find.byType(CheckboxListTile));
+        await tester.scrollUntilVisible(
+          find.byType(CheckboxListTile),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
         await tester.tap(find.byType(CheckboxListTile));
         await tester.pump();
         expect(
