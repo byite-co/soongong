@@ -323,7 +323,7 @@ void main() {
   );
 
   test(
-    'FD-23 longer share grace does not extend picker lease; restore asset outside owned temp is untouched',
+    'FD-23 longer share grace does not retain a released picker; restore asset outside owned temp is untouched',
     () async {
       final ledger = store(
         policy: const TempRetentionPolicy(shareGrace: Duration(days: 2)),
@@ -334,6 +334,7 @@ void main() {
       share.release();
       final picker = await ledger.create(_scopeA, 'picker');
       final picked = payload(picker, 'picker');
+      picker.release();
       final restored = File(p.join(sandbox.path, 'restore-asset.bin'))
         ..writeAsStringSync('separate photo');
       now = now.add(const Duration(minutes: 11));
