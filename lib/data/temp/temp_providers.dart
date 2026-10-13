@@ -15,9 +15,15 @@ final ownedTempStoreProvider = Provider<OwnedTempStore>(
   }),
 );
 
-final tempOwnershipProvider = Provider<TempOwnership>(
-  (ref) => TempOwnership(
+final tempOwnershipProvider = Provider<TempOwnership>((ref) {
+  final ownership = TempOwnership(
     ref.watch(appDatabaseProvider),
     ref.watch(ownedTempStoreProvider),
-  ),
+  );
+  ref.onDispose(ownership.dispose);
+  return ownership;
+});
+
+final tempInvalidationProvider = StreamProvider<String>(
+  (ref) => ref.watch(tempOwnershipProvider).invalidations,
 );

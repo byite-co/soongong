@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import '../../core/domain/ids.dart';
 import '../db/app_database.dart';
@@ -14,10 +15,14 @@ class TempOwnership {
   static const key = 'owned_temporary_scope_v1';
   final Map<String, int> _epochs = {};
   final Map<String, Set<String>> _known = {};
+  final _invalidations = StreamController<String>.broadcast(sync: true);
+  Stream<String> get invalidations => _invalidations.stream;
+  void dispose() => _invalidations.close();
 
   int epoch(String userId) => _epochs[userId] ?? 0;
   void invalidate(String userId) {
     _epochs[userId] = epoch(userId) + 1;
+    _invalidations.add(userId);
     for (final scope in _known[userId] ?? <String>{}) {
       store.invalidate(scope);
     }

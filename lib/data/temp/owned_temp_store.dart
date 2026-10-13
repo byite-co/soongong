@@ -289,6 +289,7 @@ class OwnedTempStore {
             data?['task'] == id &&
             {'picker', 'export'}.contains(data?['kind']) &&
             created is int &&
+            created <= now().toUtc().millisecondsSinceEpoch &&
             expires is int &&
             expires >= created &&
             expires - created <= policy.shareGrace.inMilliseconds;
