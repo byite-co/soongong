@@ -58,4 +58,4 @@ final class AccountControllerProvider
   }
 }
 
-String _$accountControllerHash() => r'c5ca4506df325992f170480f839568e8d528d632';
+String _$accountControllerHash() => r'4c5f368cd392dfed0886e3f79894e7aa92d8bc6d';

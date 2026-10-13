@@ -48,4 +48,4 @@ final class AccountBindingProvider
   }
 }
 
-String _$accountBindingHash() => r'4de745c9d58e235409c11175c82b6aa1b921f9bc';
+String _$accountBindingHash() => r'e6bd0cef4089c1ec701c1ccab689b8671c3446e6';
