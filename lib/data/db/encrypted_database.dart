@@ -60,22 +60,39 @@ Future<PreparedDatabase> _prepare(String name) async {
         'co.byite.soongong/storage',
       ).invokeMethod<void>('excludeDocumentsFromBackup');
     }
-    final file = File(path);
-    final protectedData =
-        (file.existsSync() && !isPlainDatabase(file)) ||
-        File('$path.encrypting').existsSync() ||
-        File('$path.plaintext').existsSync();
-    final key = await requireDatabaseKey(
+    return await prepareDatabaseFile(
+      File(path),
       PlatformDatabaseKeyStore(name),
-      encryptedDataExists: protectedData,
     );
-    await Isolate.run(() => DatabaseProtection(File(path), key).prepare());
-    return PreparedDatabase(path, key);
   } on DatabaseProtectionException {
     rethrow;
   } catch (_) {
     throw const DatabaseProtectionException('storage_unavailable');
   }
+}
+
+/// The production preparation boundary, injectable only at key storage and
+/// file location for synthetic codec tests. No plugin or codec is substituted.
+Future<PreparedDatabase> prepareDatabaseFile(
+  File file,
+  DatabaseKeyStore store,
+) async {
+  if (file.existsSync() && file.lengthSync() == 0) {
+    throw const DatabaseProtectionException('empty_existing_database');
+  }
+  final path = file.path;
+  final protectedData =
+      (file.existsSync() && !isPlainDatabase(file)) ||
+      File('$path.encrypting').existsSync() ||
+      File('$path.plaintext').existsSync() ||
+      File('$path.encryption.json').existsSync() ||
+      File('$path.encryption.json.tmp').existsSync();
+  final key = await requireDatabaseKey(
+    store,
+    encryptedDataExists: protectedData,
+  );
+  await Isolate.run(() => DatabaseProtection(File(path), key).prepare());
+  return PreparedDatabase(path, key);
 }
 
 QueryExecutor encryptedDatabase(String name) => LazyDatabase(() async {

@@ -125,6 +125,14 @@ class DatabaseProtection {
   }
 
   void _prepare() {
+    // An empty existing file has no trustworthy creation provenance. It may
+    // be a damaged database: preserve it, even when a valid key still exists.
+    if (file.existsSync() && file.lengthSync() == 0) {
+      throw const DatabaseProtectionException('empty_existing_database');
+    }
+    if (File('${marker.path}.tmp').existsSync()) {
+      throw const DatabaseProtectionException('incomplete_marker');
+    }
     if (marker.existsSync()) {
       final record = jsonDecode(marker.readAsStringSync()) as Map<String, dynamic>;
       if (record['version'] != 1) throw const DatabaseProtectionException('unknown_migration');
@@ -136,11 +144,19 @@ class DatabaseProtection {
     } else if (backup.existsSync() || candidate.existsSync()) {
       throw const DatabaseProtectionException('orphaned_migration');
     }
-    if (!file.existsSync() || file.lengthSync() == 0) {
+    if (!file.existsSync()) {
+      checkpoint?.call('creating');
       final db = sqlite3.open(file.path);
-      try { configureDatabaseCipher(db, key); db.execute('VACUUM'); _integrity(db); }
+      try {
+        checkpoint?.call('created_empty');
+        configureDatabaseCipher(db, key);
+        db.execute('VACUUM');
+        _integrity(db);
+        checkpoint?.call('created_encrypted');
+      }
       finally { db.close(); }
       _verify(file);
+      checkpoint?.call('creation_verified');
       return;
     }
     if (!isPlainDatabase(file)) { _verify(file, full: false); return; }
