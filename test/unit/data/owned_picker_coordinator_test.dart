@@ -252,9 +252,83 @@ void main() {
       coordinator.pick(ImageSource.camera, createTask: create),
       throwsA(isA<TempStoreUnavailable>()),
     );
-    expect(methods, isNot(contains('release')));
+    expect(methods.indexOf('release'), greaterThan(methods.indexOf('cancel')));
     expect(current.directory.existsSync(), isFalse);
   });
+
+  test(
+    'PICK prepare-time revocation releases the exact inactive reservation',
+    () async {
+      var reserved = false;
+      var first = true;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(_channel, (call) async {
+            if (call.method == 'prepare') {
+              if (reserved) throw PlatformException(code: 'picker_busy');
+              reserved = true;
+              if (first) {
+                first = false;
+                store.invalidate(current.scope);
+              }
+            }
+            if (call.method == 'release') reserved = false;
+            return {'active': false, 'unknown': false};
+          });
+      await expectLater(
+        coordinator.pick(ImageSource.gallery, createTask: create),
+        throwsA(isA<TempStoreUnavailable>()),
+      );
+      expect(reserved, isFalse);
+      expect(picker.picks, 0);
+      picker.select = () async =>
+          XFile((current.file('photo.jpg')..writeAsBytesSync([6])).path);
+      final fresh = (await coordinator.pick(
+        ImageSource.gallery,
+        createTask: () async => current = await store.create(_scopeA, 'picker'),
+      ))!;
+      expect(await fresh.readAsBytes(), [6]);
+      expect(picker.lostCalls, 1);
+      await fresh.cleanup();
+    },
+  );
+
+  test(
+    'PICK next selection retries a failed native release after cached recovery',
+    () async {
+      var reserved = false;
+      var failRelease = true;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(_channel, (call) async {
+            if (call.method == 'prepare') {
+              if (reserved) throw PlatformException(code: 'picker_busy');
+              reserved = true;
+            }
+            if (call.method == 'release') {
+              if (failRelease) throw PlatformException(code: 'unavailable');
+              reserved = false;
+            }
+            return {'active': false, 'unknown': false};
+          });
+      picker.select = () async =>
+          XFile((current.file('photo.jpg')..writeAsBytesSync([7])).path);
+      await expectLater(
+        coordinator.pick(ImageSource.gallery, createTask: create),
+        throwsA(isA<TempStoreUnavailable>()),
+      );
+      final old = current;
+      expect(reserved, isTrue);
+      expect(old.directory.existsSync(), isTrue);
+      failRelease = false;
+      final fresh = (await coordinator.pick(
+        ImageSource.gallery,
+        createTask: create,
+      ))!;
+      expect(old.directory.existsSync(), isFalse);
+      expect(await fresh.readAsBytes(), [7]);
+      expect(picker.lostCalls, 1);
+      await fresh.cleanup();
+    },
+  );
 
   test(
     'PICK-10 out-of-scope original cannot become OCR input or be deleted',

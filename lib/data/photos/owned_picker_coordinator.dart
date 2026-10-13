@@ -30,7 +30,14 @@ class OwnedPickerCoordinator {
       if (state == null || state['unknown'] != false) {
         throw const TempStoreUnavailable();
       }
-      return state['active'] == false;
+      if (state['active'] != false) return false;
+      // Cancellation can happen after prepare but before the plugin starts.
+      // Quiescence alone does not release that reservation on either platform.
+      // Release only this exact owner; native ignores nonmatching owners.
+      await channel
+          .invokeMethod<void>('release', {'scope': scope, 'task': task})
+          .timeout(const Duration(seconds: 5));
+      return true;
     };
   }
   final OwnedTempStore store;
@@ -108,6 +115,9 @@ class OwnedPickerCoordinator {
     if (await recover() == PickerRecoveryState.unavailable) {
       throw const TempStoreUnavailable();
     }
+    // Successful lost-data recovery is cached, but failed release/cleanup must
+    // be retried after a native writer eventually finishes, even without resume.
+    if (!(await store.sweep()).complete) throw const TempStoreUnavailable();
     if (_picking) throw StateError('picker busy');
     _picking = true;
     OwnedTempTask? task;
