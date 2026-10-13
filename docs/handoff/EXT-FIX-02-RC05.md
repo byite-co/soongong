@@ -39,7 +39,11 @@
 
 `test/widget/camera_ownership_test.dart` 7개는 신규 lease 주입 API를 사용하므로 baseline 14개와 구분한다. pending open의 상호 배제, 반복 close 합류, stop/dispose 각각 timeout 뒤 늦은 완료, initialize timeout, probe 해제 실패, 실제 GazeLabScreen+MeasureController+SeatEngine 공통 획득 경계를 검사한다. 종료 실패/timeout latch를 늦은 성공으로 풀지 않는다. 공통 SeatFrameSource의 close 설명을 명확히 했으나 method signature/시간 집계 계약은 변경하지 않았다.
 
-최종 확인란(통합 담당자가 실제 결과로 채움):
+후속 통합 CI [38341188635](https://github.com/byite-co/soongong/actions/runs/38341188635), HEAD `82b2fd5`에서 실제 Flutter **860 PASS / 3 FAIL**이었다. 보정 baseline의 study repository/solver/dialog 실패는 재발하지 않았다. 새 camera 통합 검사에서 native 획득 실패 전 51.364ms가 순공시간에 쌓이는 실제 결함을 추가 확인했다. MeasureController를 camera 준비/재개 완료까지 paused로 유지하도록 수정하고 deterministic clock 회귀 4개를 추가했다. 두 account 실패는 teardown의 강제 revoke와 fixture 삭제 경합, modal reverse animation 대기 부족으로 구분해 기존 제품 기대값을 유지하며 보정했다. 이 실행을 후속 수정 HEAD의 성공 증거로 사용하지 않는다.
+
+마지막 독립 검토에서 prepare 직후 취소/failed release의 native 예약 잔존도 확인했다. `e2cc863`은 cancel→정확한 inactive owner release→삭제와 다음 pick의 cleanup 재시도를 연결했고 두 자동 회귀를 추가했다. legacy export namespace 누락은 별도 unknown probe로 보완했다. 이는 원래 baseline의 8개 원인을 다시 세는 항목이 아니다.
+
+최종 결과는 이 문서의 중간 실행과 구분해 최신 PR 본문 및 RC 검토 산출물의 HEAD/checkout/tree·40개 결과표에 기록한다. 아래는 작성 시점의 확인란이다.
 
 | 항목 | 현재 기록 |
 |---|---|

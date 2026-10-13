@@ -30,7 +30,7 @@
 | DB·키·암호화 marker/candidate/predecessor/lock | 암호화 계층 전용 | 없음 | temp scanner 대상 아님. DB를 열 수 없으면 reset하지 않고 bootstrap을 차단. 파일 정리를 위해 DB를 초기화하지 않음. |
 | 수신 앱/OS가 보관한 사본·이미 열린 외부 FD | 앱 통제 밖 | 사용자 인계 결과 | 앱 사본 unlink나 revoke로 회수 보장 불가. 물리적 보안 소거 증거 아님. |
 
-pre-RC picker/export가 남긴 소유자 없는 legacy cache를 v1의 완전 정리 증거로 포함하지 않는다. Android의 모호한 lost-data 상태는 unknown으로 보존하며, 임의 절대경로/앱 tmp 전체를 삭제하지 않는다. 업그레이드 fixture와 실제 OS cache 확인은 기기 절차에 포함한다.
+pre-RC picker/export가 남긴 소유자 없는 legacy cache를 v1의 완전 정리 증거로 포함하지 않는다. `LegacyTempProbe`는 canonical platform cache의 즉시 자식만 no-follow로 검사한다. `soongong-export-*`, 과거 직접 export 이름 `soongong-YYYYMMDD-HHmm.json/zip`, `seat_lab_*.csv`, Android의 정확한 `share_plus`를 발견하거나 열거/stat가 실패하면 unknown이다. 파일·디렉터리·symlink 종류와 무관하며 빈 legacy 디렉터리도 포함한다. 이름만으로 삭제하거나 현재 B 계정에 귀속하지 않는다. 이때 v1 소유 파일의 정리는 계속하지만 새 공유/명시적 정리 완료는 차단된다. 일반 재시도는 소유권을 새로 증명하거나 legacy bytes를 제거하지 않는다. 별도의 소유권 확인·마이그레이션 또는 사용자가 이해한 앱 데이터 제거가 필요하고, 동기화가 미구현이므로 앱 데이터 제거를 무손실 복구 방법으로 제시하지 않는다. Android의 모호한 lost-data도 unknown으로 보존하며 임의 절대경로/앱 tmp 전체를 삭제하지 않는다. 업그레이드 fixture와 실제 OS cache 확인은 기기 절차에 포함한다.
 
 ## 정책과 실패 처리
 
@@ -39,6 +39,7 @@ pre-RC picker/export가 남긴 소유자 없는 legacy cache를 v1의 완전 정
 - `remaining`은 임시 task 수다. 기존 PhotoStore 잔여와 합친 UI는 ‘정리 N건’으로 표시하며 실제 payload 파일 수를 단정하지 않는다. unknown을 0건으로 바꾸지 않는다.
 - 공유 success/dismissed/unavailable/throw/timeout은 외부 읽기 완료 증거가 아니다. `.shared`를 호출 전에 기록하고 일반 반환 직후 삭제하지 않는다. 마지막 동기 account/generation guard와 OS 호출 사이에는 await가 없다. OS 대기 동안 DB transaction을 잡지 않는다.
 - Android lost-data는 앱 한 곳에서 소비한다. 결과 없음·복수·예외·이전 계정·삭제 이전 세대를 구분하고, 중단된 입력은 새 입력으로 되살리지 않는다. native 상태가 unknown이면 복구와 기능을 막고 다음 기회에 재시도한다.
+- prepare 직후 취소나 callback release 실패로 남은 native 예약은 cancel 후 unknown=false·active=false를 확인한 뒤 해당 scope/task만 release한다. 실패한 정리는 다음 선택 전 sweep에서도 재시도한다. 다른 owner의 예약을 해제하지 않는다. camera 준비/재연결 실패 시간은 순공시간에 추가하지 않도록 준비 동안 timeline을 paused로 유지하고 같은 run의 성공 뒤 재개한다.
 - 서버 계정 삭제와 최초 로컬 영수증 기록은 분산 원자 transaction이 아니다. 서버 응답 직후 최초 영수증 전 process kill에서는 ‘정확히 한 번’ 재시도를 보장하지 않는다. 이미 영수증이 남은 재시도/계정 변경은 로컬 정리만 수행하며 새 B 자료를 지우지 않는다.
 - 파일 flush·논리적 crash fixture·macOS child process exit는 실제 기기 전원 손실이나 parent-directory fsync 보장이 아니다. 물리 내구성은 DEVICE-09/ENC-12에 남긴다.
 
@@ -48,6 +49,8 @@ pre-RC picker/export가 남긴 소유자 없는 legacy cache를 v1의 완전 정
 
 - [RC05 기준 재현과 수정 경계](EXT-FIX-02-RC05.md)
 - [TMP/DEL/REG 증거 대조](rc-temp-account-evidence.md)
+- [PICK/EXP/REG 증거 대조](rc-picker-export-evidence.md)
+- REG-03: `test/widget/temporary_privacy_accessibility_test.dart`의 실제 개인정보 오류/재시도 390×844·200%·light/dark, 44dp 영역·button semantics·overflow 검사. 실제 화면읽기는 DEVICE-12로 분리한다.
 - [DEVICE-01~12 절차·자원·미검증](EXT-FIX-02-DEVICE.md)
 - 전체 gate: analyze-test(codegen clean/analyze/문구/전체 Flutter), server-tests(pgTAP/Deno/typecheck), study-worker(Python), native-check(Android dev Debug, iPhone ARM64 dev Release/no-codesign 및 native 소유권 검사).
 
