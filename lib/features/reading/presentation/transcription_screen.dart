@@ -44,10 +44,14 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
   int? _generation;
   String? _requestId;
   void Function()? _releaseApproval;
+  void _invalidateApproval() {
+    _releaseApproval?.call();
+    _releaseApproval = null;
+  }
 
   @override
   void dispose() {
-    _releaseApproval?.call();
+    _invalidateApproval();
     _operation++;
     _image?.fillRange(0, _image!.length, 0);
     _text.dispose();
@@ -169,6 +173,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       _busy = true;
       _message = null;
     });
+    void Function()? release;
     try {
       final generation = await writer.refreshPurgeGeneration();
       final before = await LocalPurge.readState(writer.db);
@@ -191,7 +196,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       }
 
       _requestId = null;
-      _releaseApproval = approvals.bind(
+      release = approvals.bind(
         valid: valid,
         generation: generation,
         present: (quote) async {
@@ -218,9 +223,10 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
               false;
         },
       );
+      _releaseApproval = release;
       final result = await engine.transcribe(_image!, _kind, epoch: epoch);
-      _requestId = approvals.requestId;
       if (!valid()) return;
+      _requestId = approvals.requestId;
       if (!mounted ||
           op != _operation ||
           ref.read(currentUserIdProvider) != owner) {
@@ -248,8 +254,8 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
         _requestId ??= ref.read(aiApprovalControllerProvider).requestId;
         ref.invalidate(aiRequestsProvider);
       }
-      _releaseApproval?.call();
-      _releaseApproval = null;
+      release?.call();
+      if (identical(_releaseApproval, release)) _releaseApproval = null;
       if (mounted && op == _operation) setState(() => _busy = false);
     }
   }
@@ -343,6 +349,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       await repo.delete(document.id, generation);
       if (current() && repo.writer.purgeGeneration == generation) {
         ref.invalidate(studyDocumentsProvider);
+        ref.invalidate(aiRequestsProvider);
         if (_saved?.id == document.id) setState(() => _saved = null);
       }
     } on Object {
@@ -500,7 +507,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
           next.profile?.readingConsentActive == true) {
         return;
       }
-      _releaseApproval?.call();
+      _invalidateApproval();
       _operation++;
       _image?.fillRange(0, _image!.length, 0);
       setState(() {
@@ -515,6 +522,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
     });
     ref.listen(tempInvalidationProvider, (_, next) {
       if (next.asData?.value != ref.read(currentUserIdProvider)) return;
+      _invalidateApproval();
       _operation++;
       _image?.fillRange(0, _image!.length, 0);
       setState(() {
@@ -532,6 +540,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       if (_generation != null &&
           generation != null &&
           generation != _generation) {
+        _invalidateApproval();
         _operation++;
         _image?.fillRange(0, _image!.length, 0);
         setState(() {
@@ -548,6 +557,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
     });
     final measuring = ref.watch(measureControllerProvider).isLive;
     ref.listen(currentUserIdProvider, (_, _) {
+      _invalidateApproval();
       _operation++;
       _image?.fillRange(0, _image!.length, 0);
       setState(() {

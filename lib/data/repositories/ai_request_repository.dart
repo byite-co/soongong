@@ -30,13 +30,16 @@ class PendingAiRequest {
 
 /// Uses the same encrypted file and transaction barrier as confirmed documents.
 class AiRequestRepository {
-  AiRequestRepository(this.documents);
+  AiRequestRepository(this.documents, {this.accessAllowed});
   final StudyRepository documents;
+  final bool Function()? accessAllowed;
   Future<T> _owned<T>(int? generation, Future<T> Function() action) =>
       documents.writer.runOwnedTransaction(
         action,
         generation: generation,
-        alive: documents.alive,
+        alive: () =>
+            (documents.alive?.call() ?? true) &&
+            (accessAllowed?.call() ?? true),
       );
 
   Future<void> prepare(
@@ -99,6 +102,10 @@ class AiRequestRepository {
     final old = await get(id);
     if (old == null) throw StateError('request_unavailable');
     await _owned(old.generation, () async {
+      if (old.documentId != null &&
+          await documents.get(old.documentId!) == null) {
+        throw StateError('document_deleted');
+      }
       if (job['version'] != 2 ||
           job['request_id'] != id ||
           !{

@@ -210,4 +210,28 @@ void main() {
       }
     },
   );
+  test('A10 revoked consent rejects late persistence and recovery', () async {
+    var allowed = true;
+    repo = AiRequestRepository(repo.documents, accessAllowed: () => allowed);
+    await prepare();
+    allowed = false;
+    await expectLater(repo.record(id, response()), throwsStateError);
+    await expectLater(repo.list(), throwsStateError);
+    allowed = true;
+    expect((await repo.get(id))!.transcription, isNull);
+  });
+  test(
+    'A10 document deletion erases duplicate body and fences late replay',
+    () async {
+      await prepare();
+      await repo.record(id, response());
+      final document = await repo.confirm(id, 'corrected private body', 0);
+      await repo.documents.delete(document.id, 0);
+      final pending = (await repo.get(id))!;
+      expect(pending.transcription, isNull);
+      expect(pending.correction, isNull);
+      await expectLater(repo.record(id, response()), throwsStateError);
+      expect(await repo.documents.list(), isEmpty);
+    },
+  );
 }

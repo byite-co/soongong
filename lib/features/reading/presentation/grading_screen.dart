@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -24,6 +26,7 @@ final _subjects = StreamProvider.autoDispose(
 );
 final _readingRequests = StreamProvider.autoDispose(
   (ref) => ref.watch(readingRepositoryProvider).watchByStatus({
+    ReadingRequestStatus.sending,
     ReadingRequestStatus.processing,
     ReadingRequestStatus.takingLong,
     ReadingRequestStatus.doneUnsaved,
@@ -205,6 +208,7 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
         ref.read(currentUserIdProvider) == owner &&
         repo.writer.purgeGeneration == generation;
     setState(() => busy = true);
+    OwnedTempTask? sendingTask;
     try {
       generation = await repo.writer.refreshPurgeGeneration();
       quota = await engine.quota();
@@ -222,7 +226,7 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
         alive: current,
       );
       id = draft.requestId;
-      task = await ref
+      sendingTask = await ref
           .read(tempOwnershipProvider)
           .create(
             repo.writer,
@@ -230,9 +234,24 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
             generation: generation!,
             alive: current,
           );
-      final file = task!.file('page.jpg');
+      task = sendingTask;
+      final file = sendingTask.file('page.jpg');
       await file.writeAsBytes(image!, flush: true);
-      task!.check();
+      sendingTask.check();
+      await repo.writer.runOwnedTransaction(
+        () => repo.setLocalSending(
+          id!,
+          payloadHash: sha256
+              .convert(
+                utf8.encode(
+                  '$subject|${range.text.trim()}|${sha256.convert(image!)}',
+                ),
+              )
+              .toString(),
+        ),
+        generation: generation,
+        alive: current,
+      );
       final outcome = await engine.submit(
         ReadingJob(
           requestId: id!,
@@ -265,8 +284,8 @@ class _GradingScreenState extends ConsumerState<GradingScreen> {
         setState(() => message = '판독을 시작하지 못했습니다. 개발 설정과 이용 권한을 확인해 주세요.');
       }
     } finally {
-      await task?.cleanup();
-      task = null;
+      await sendingTask?.cleanup();
+      if (identical(task, sendingTask)) task = null;
       if (current()) setState(() => busy = false);
     }
   }

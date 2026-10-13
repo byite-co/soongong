@@ -180,6 +180,10 @@ class StudyRepository {
         "UPDATE study_metadata SET deleted=1,title='',has_body=0,has_solution=0,has_photo=0,cache_state='missing' WHERE id=? AND user_id=?",
         [id, writer.ctx.userId],
       );
+      await db.customStatement(
+        'UPDATE study_ai_requests SET result_json=NULL,corrected_text=NULL,result_expired=1 WHERE document_id=? AND user_id=?',
+        [id, writer.ctx.userId],
+      );
       _guard();
     },
     generation: generation,

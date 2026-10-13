@@ -56,17 +56,29 @@ class RemoteReadingEngine implements ReadingEngine {
       if (bytes.isEmpty || bytes.length > 4194304) {
         throw const FormatException('image_too_large');
       }
-      await client.storage
-          .from('reading-photos')
-          .uploadBinary(
-            path,
-            bytes,
-            retryAttempts: 0,
-            fileOptions: const FileOptions(
-              contentType: 'image/jpeg',
-              upsert: false,
-            ),
-          );
+      try {
+        if (!await ownsFile(file) ||
+            !alive() ||
+            client.auth.currentUser?.id != reading.ctx.userId) {
+          throw StateError('image_not_owned');
+        }
+        await client.storage
+            .from('reading-photos')
+            .uploadBinary(
+              path,
+              bytes,
+              retryAttempts: 0,
+              fileOptions: FileOptions(
+                contentType:
+                    bytes.length > 4 && bytes[0] == 137 && bytes[1] == 80
+                    ? 'image/png'
+                    : 'image/jpeg',
+                upsert: false,
+              ),
+            );
+      } finally {
+        bytes.fillRange(0, bytes.length, 0);
+      }
     },
   );
   final StudyInvoke invoke;

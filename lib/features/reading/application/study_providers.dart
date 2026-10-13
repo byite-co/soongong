@@ -8,6 +8,7 @@ import '../../../core/contracts/transcription_engine.dart';
 import '../../../data/engines/transcription/remote_ai_jobs.dart';
 import '../../../data/engines/transcription/remote_problem_solver.dart';
 import '../../../data/engines/transcription/remote_transcription_engine.dart';
+import '../../../data/auth/auth_gate.dart';
 import '../../../data/repositories/ai_request_repository.dart';
 import '../../../data/repositories/remote_study_restore.dart';
 import '../../../data/repositories/repository_providers.dart';
@@ -20,11 +21,21 @@ final aiApprovalControllerProvider = Provider<AiApprovalController>((ref) {
   ref.onDispose(controller.close);
   return controller;
 });
-final aiRequestRepositoryProvider = Provider<AiRequestRepository>(
-  (ref) => AiRequestRepository(ref.watch(studyRepositoryProvider)),
-);
+final aiRequestRepositoryProvider = Provider<AiRequestRepository>((ref) {
+  final owner = ref.watch(currentUserIdProvider);
+  return AiRequestRepository(
+    ref.watch(studyRepositoryProvider),
+    accessAllowed: () {
+      final gate = ref.read(authGateProvider);
+      return gate is AuthGateSignedIn &&
+          gate.userId == owner &&
+          gate.profile?.readingConsentActive == true;
+    },
+  );
+});
 final aiRequestsProvider = FutureProvider.autoDispose((ref) {
   ref.watch(studyGenerationProvider);
+  ref.watch(authGateProvider);
   return ref.watch(aiRequestRepositoryProvider).list();
 });
 final remoteAiJobsProvider = Provider<RemoteAiJobs?>((ref) {
