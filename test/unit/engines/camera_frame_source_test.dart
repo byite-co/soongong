@@ -5,7 +5,9 @@ import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logger/logger.dart';
 import 'package:soongong/data/engines/engines.dart';
+import 'package:soongong/data/engines/seat/camera_lease.dart';
 
 const CameraDescription _front = CameraDescription(
   name: 'front',
@@ -16,7 +18,7 @@ const CameraDescription _front = CameraDescription(
 /// A controller that never touches the platform.
 class _FakeController extends CameraController {
   _FakeController(CameraDescription camera, {this.onDispose})
-      : super(camera, ResolutionPreset.low, enableAudio: false);
+    : super(camera, ResolutionPreset.low, enableAudio: false);
 
   final Future<void> Function()? onDispose;
   int disposeCalls = 0;
@@ -40,12 +42,17 @@ class _FakeController extends CameraController {
   }
 }
 
-CameraFrameSource _source(_FakeController controller, {Duration disposeTimeout = const Duration(seconds: 2)}) =>
-    CameraFrameSource(
-      listCameras: () async => <CameraDescription>[_front],
-      controllerFactory: (camera, {required int fps, ImageFormatGroup? imageFormatGroup}) => controller,
-      disposeTimeout: disposeTimeout,
-    );
+CameraFrameSource _source(
+  _FakeController controller, {
+  Duration disposeTimeout = const Duration(seconds: 2),
+}) => CameraFrameSource(
+  lease: CameraLease(),
+  listCameras: () async => <CameraDescription>[_front],
+  controllerFactory:
+      (camera, {required int fps, ImageFormatGroup? imageFormatGroup}) =>
+          controller,
+  disposeTimeout: disposeTimeout,
+);
 
 const SeatFrameSourceConfig _cfg = SeatFrameSourceConfig(lowPower: false);
 
@@ -66,7 +73,12 @@ void main() {
   });
 
   test('a dispose that throws is returned as failed with the error', () async {
-    final boom = CameraException('disposeFailed', 'native release failed');
+    const private = '/private/REG04-photo.jpg REG04-secret-token';
+    final logs = <LogEvent>[];
+    void record(LogEvent event) => logs.add(event);
+    Logger.addLogListener(record);
+    addTearDown(() => Logger.removeLogListener(record));
+    final boom = CameraException('disposeFailed', private);
     final c = _FakeController(_front, onDispose: () async => throw boom);
     final src = _source(c);
     final h = await src.open(_cfg, onFrame: (_) {}, onFault: (_, _) {});
@@ -75,28 +87,51 @@ void main() {
     expect(r.error, same(boom));
     expect(h.isOpen, isFalse, reason: 'the session is over either way');
     expect(src.hasOpenSession, isFalse);
+    final failures = logs.where(
+      (e) => '${e.message}'.contains('dispose failed'),
+    );
+    expect(failures, hasLength(1));
+    expect(failures.single.error, isNull);
+    expect(failures.single.stackTrace, isNull);
+    expect('${failures.single.message}', isNot(contains('REG04-photo.jpg')));
+    expect('${failures.single.message}', isNot(contains('REG04-secret-token')));
   });
 
-  test('a dispose that throws synchronously is returned as failed too', () async {
-    final c = _FakeController(_front, onDispose: () => throw StateError('sync'));
-    final src = _source(c);
-    final h = await src.open(_cfg, onFrame: (_) {}, onFault: (_, _) {});
-    final r = await h.close();
-    expect(r.outcome, CloseOutcome.failed);
-    expect(r.error, isA<StateError>());
-  });
+  test(
+    'a dispose that throws synchronously is returned as failed too',
+    () async {
+      final c = _FakeController(
+        _front,
+        onDispose: () => throw StateError('sync'),
+      );
+      final src = _source(c);
+      final h = await src.open(_cfg, onFrame: (_) {}, onFault: (_, _) {});
+      final r = await h.close();
+      expect(r.outcome, CloseOutcome.failed);
+      expect(r.error, isA<StateError>());
+    },
+  );
 
-  test('a dispose that never completes is returned as timeout after disposeTimeout', () async {
-    final c = _FakeController(_front, onDispose: () => Completer<void>().future);
-    final src = _source(c, disposeTimeout: const Duration(milliseconds: 50));
-    final h = await src.open(_cfg, onFrame: (_) {}, onFault: (_, _) {});
-    final sw = Stopwatch()..start();
-    final r = await h.close();
-    expect(r.outcome, CloseOutcome.timeout);
-    expect(r.waited, const Duration(milliseconds: 50));
-    expect(sw.elapsed, greaterThanOrEqualTo(const Duration(milliseconds: 45)));
-    expect(h.isOpen, isFalse);
-  });
+  test(
+    'a dispose that never completes is returned as timeout after disposeTimeout',
+    () async {
+      final c = _FakeController(
+        _front,
+        onDispose: () => Completer<void>().future,
+      );
+      final src = _source(c, disposeTimeout: const Duration(milliseconds: 50));
+      final h = await src.open(_cfg, onFrame: (_) {}, onFault: (_, _) {});
+      final sw = Stopwatch()..start();
+      final r = await h.close();
+      expect(r.outcome, CloseOutcome.timeout);
+      expect(r.waited, const Duration(milliseconds: 50));
+      expect(
+        sw.elapsed,
+        greaterThanOrEqualTo(const Duration(milliseconds: 45)),
+      );
+      expect(h.isOpen, isFalse);
+    },
+  );
 
   test('a late dispose completing after the timeout changes nothing', () async {
     final late = Completer<void>();
@@ -108,6 +143,6 @@ void main() {
     late.complete();
     await Future<void>.delayed(Duration.zero);
     expect(c.disposeCalls, 1);
-    expect((await h.close()).isOk, isTrue);
+    expect((await h.close()).outcome, CloseOutcome.timeout);
   });
 }

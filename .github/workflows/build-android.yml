@@ -35,6 +35,9 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Fetch verified on-device model
+        run: python3 tool/fetch_gaze_model.py
+
       - name: Pub get
         run: flutter pub get
 

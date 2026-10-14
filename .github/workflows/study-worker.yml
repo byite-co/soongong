@@ -1,0 +1,17 @@
+name: study-worker
+on:
+  pull_request:
+    paths: ['services/study_worker/**', '.github/workflows/study-worker.yml']
+  workflow_dispatch:
+jobs:
+  boundary-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install Pillow==12.3.0
+      - run: python -m pip install --require-hashes -r services/study_worker/requirements-solver.lock
+      - run: python -m unittest discover -s services/study_worker -v

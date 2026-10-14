@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:soongong/core/domain/enums.dart';
 import 'package:soongong/core/domain/local_date.dart';
 import 'package:soongong/data/export/export_service.dart';
+import 'package:soongong/data/repositories/repositories.dart';
 import 'package:soongong/features/measure/domain/segment.dart';
 
 import 'db_test_helpers.dart';
@@ -75,6 +76,25 @@ void main() {
     final photo = (tables['photos'] as List<dynamic>).single as Map<String, dynamic>;
     expect(photo.keys, isNot(contains('local_path')));
     expect(photo['page_index'], 0);
+  });
+
+  test('JSON and CSV never export another account in the same local database', () async {
+    await h.planner.createItem(kind: PlannerKind.study, title: 'my-plan', date: LocalDate.of(kT0));
+    final otherWriter = SyncWriter(h.db, WriteContext(
+      userId: 'other-account', deviceId: 'other-device', clock: h.clock, newId: () => 'other-plan',
+    ));
+    await PlannerRepository(h.db, otherWriter).createItem(
+      kind: PlannerKind.study, title: 'private-other-plan', date: LocalDate.of(kT0),
+    );
+    final jsonFile = await svc.buildJson();
+    final json = utf8.decode(jsonFile.bytes);
+    expect(json, contains('my-plan'));
+    expect(json, isNot(contains('private-other-plan')));
+    expect(json, isNot(contains('other-account')));
+    final zip = ZipDecoder().decodeBytes((await svc.buildCsvZip()).bytes);
+    final csv = utf8.decode(zip.firstWhere((f) => f.name == 'planner.csv').readBytes()!);
+    expect(csv, contains('my-plan'));
+    expect(csv, isNot(contains('private-other-plan')));
   });
 
   test('CSV zip: three files, BOM, header, escaping, subject names', () async {

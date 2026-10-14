@@ -1,0 +1,127 @@
+{
+  "version": 2,
+  "source_instruction": "NEXT-02b resume v2, 2026-10-14 KST",
+  "declared_before_new_quality_execution": true,
+  "baseline_commit": "c345c7335058affbc2c8a0adf7c31f186d241aab",
+  "baseline_files_sha256": {
+    "datasets.json": "e0a48a8ea231cbccb91471f9bba300f165ea469089d9911fc3496538f6c7cb25",
+    "environment-math.json": "75db4c0b526106cd3d06a3dcf107ade1c76e45fa4e36f1192af50b84d8600fde",
+    "environment-paddle.json": "2936b9c48efe81e8bba10915cd8e2bffbc5c2edc00861339d350f98ec4392148",
+    "metrics.json": "73d2fd1ce516a480f8682b97849b67d7b14be08eab13139e453603b2c6f54d6a",
+    "protocol.json": "f61b97845c4a2b29ffae3493589ddd38a90714abed7c22107aeb1ead782e912e"
+  },
+  "historical_observations": {
+    "png_all": {
+      "v3": [
+        7,
+        9
+      ],
+      "v5": [
+        4,
+        9
+      ]
+    },
+    "png_eligible": {
+      "v3": [
+        7,
+        7
+      ],
+      "v5": [
+        4,
+        7
+      ]
+    },
+    "mpo_original_expected_rejections": 18,
+    "math_strict": [
+      12,
+      60
+    ],
+    "rss": "pre-correction parent cumulative RUSAGE_CHILDREN; not per-request RSS"
+  },
+  "stability": {
+    "eligible_inputs": 7,
+    "repetitions": 3,
+    "expected_valid": [
+      21,
+      21
+    ],
+    "oversized_inputs": 2,
+    "oversized_lengths_bytes": [
+      4540191,
+      4207053
+    ],
+    "expected_rejections": [
+      6,
+      6
+    ],
+    "all_attempts": 27,
+    "eligible_classification": "freeze hash and input checks before inference; EOF cannot change eligibility",
+    "does_not_prove": "98% population validity or Korean handwriting CER"
+  },
+  "limits": {
+    "image_bytes": 4194304,
+    "pixels": 12000000,
+    "frames": 1,
+    "worker_cpu_seconds": 45,
+    "worker_wall_seconds": 50,
+    "edge_wall_seconds": 55,
+    "max_response_bytes": 256000,
+    "concurrency": 1
+  },
+  "math": {
+    "diagnostic_regions": 60,
+    "strict_baseline": 0.2,
+    "normalization": "NFC plus whitespace removal only; no algebraic rewrite",
+    "exact_match_min": 0.9,
+    "valid_rate_min": 0.98,
+    "p95_seconds_max": 20,
+    "fresh_regions_target": 60,
+    "handwritten_regions_target": 60,
+    "handwritten_writers_target": 3,
+    "selection": {
+      "archive_sha256": "9bf370b8cac868fee84835f40dec26c477430611253e3feb681356a8149a3a90",
+      "algorithm": "CPython 3.11 Random(seed).shuffle(indices 60..5920), first 60 distinct image hashes excluding old 60",
+      "seed": 20261014,
+      "same_collection_generalization": false
+    },
+    "mismatch_primary_categories": [
+      "notation_only_confirmed",
+      "recognition_symbol",
+      "structure",
+      "reference_data",
+      "pipeline",
+      "undetermined"
+    ],
+    "historical_48_classification_requires_original_raw_hash": true
+  },
+  "korean": {
+    "regions_min": 60,
+    "writers_min": 5,
+    "cer_max": 0.1,
+    "normalization": "NFC; report whitespace included and excluded separately",
+    "existing_9_are_accuracy_data": false
+  },
+  "grading": {
+    "cases_min": 100,
+    "per_mark_min": 20,
+    "macro_f1_min": 0.95,
+    "correct_precision_min": 0.98,
+    "number_link_min": 0.95,
+    "marks": [
+      "correct",
+      "wrong",
+      "partial",
+      "unsolved",
+      "guessed"
+    ],
+    "abstain_and_missing_remain_denominator": true
+  },
+  "evidence": {
+    "raw_outside_repository": true,
+    "overwrite_previous": false,
+    "external_upload": false,
+    "model_selection_before_fresh_evaluation": true,
+    "api_cost_and_infrastructure_separate": true,
+    "os_kill_is_not_oom_evidence": true
+  }
+}

@@ -5,18 +5,26 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' show KakaoSdk;
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart'
+    show KakaoSdk;
 
 import 'app.dart';
 import 'core/config/app_config.dart';
 import 'core/contracts/providers.dart';
+import 'core/legal/third_party_licenses.dart';
 import 'core/logging/app_logger.dart';
 import 'core/utils/device_id.dart';
 import 'data/auth/supabase_init.dart';
+import 'data/db/app_database.dart';
+import 'data/db/database_blocked_app.dart';
+import 'data/db/database_protection.dart';
+import 'data/db/encrypted_database.dart';
+import 'data/repositories/repository_providers.dart' show appDatabaseProvider;
 import 'data/startup/startup_tasks.dart';
 
 Future<void> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerThirdPartyLicenses();
 
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
@@ -31,6 +39,18 @@ Future<void> bootstrap() async {
     return true;
   };
 
+  runApp(const ProviderScope(child: DatabasePreparingApp()));
+  late final AppDatabase database;
+  try {
+    await prepareDeviceDatabase(databaseNameFor(AppConfig.flavor.name));
+    database = await requireReadyDatabase(
+      AppDatabase.open(flavor: AppConfig.flavor.name),
+    );
+  } on DatabaseProtectionException {
+    runApp(const ProviderScope(child: DatabaseBlockedApp(retry: bootstrap)));
+    return;
+  }
+
   final deviceId = await DeviceIdStore().getOrCreate();
   // S03: Supabase client (auth · functions) when the flavor env has the public keys.
   await initSupabaseIfConfigured();
@@ -43,18 +63,25 @@ Future<void> bootstrap() async {
     'bootstrap · flavor=${AppConfig.flavor.name} '
     'devTools=${AppConfig.devToolsEnabled} '
     'backend=${AppConfig.hasBackendConfig} '
-    'mode=${kReleaseMode ? 'release' : kProfileMode ? 'profile' : 'debug'}',
+    'mode=${kReleaseMode
+        ? 'release'
+        : kProfileMode
+        ? 'profile'
+        : 'debug'}',
   );
 
   final container = ProviderContainer(
-    overrides: [deviceIdProvider.overrideWithValue(deviceId)],
+    overrides: [
+      deviceIdProvider.overrideWithValue(deviceId),
+      appDatabaseProvider.overrideWith((ref) {
+        ref.onDispose(database.close);
+        return database;
+      }),
+    ],
   );
   await runStartupTasks(container);
 
   runApp(
-    UncontrolledProviderScope(
-      container: container,
-      child: const SoongongApp(),
-    ),
+    UncontrolledProviderScope(container: container, child: const SoongongApp()),
   );
 }

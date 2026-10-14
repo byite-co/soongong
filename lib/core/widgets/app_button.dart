@@ -108,14 +108,15 @@ class _AppButtonState extends State<AppButton> {
     final base = widget.size == AppButtonSize.small
         ? AppTypography.label
         : AppTypography.body;
-    final style = AppTypography.withWeight(base, 600).copyWith(
-      color: fgColor,
-      height: 1.2,
-    );
+    final style = AppTypography.withWeight(
+      base,
+      600,
+    ).copyWith(color: fgColor, height: 1.2);
     final label = _locked && widget.busyLabel != null
         ? widget.busyLabel!
         : widget.label;
 
+    final reduced = AppMotion.reduced(context);
     final child = Row(
       mainAxisSize: widget.expand ? MainAxisSize.max : MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
@@ -126,10 +127,13 @@ class _AppButtonState extends State<AppButton> {
             child: SizedBox(
               width: AppIcon.sizeSmall,
               height: AppIcon.sizeSmall,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: fgColor,
-              ),
+              child: reduced
+                  ? Icon(
+                      Icons.hourglass_empty,
+                      size: AppIcon.sizeSmall,
+                      color: fgColor,
+                    )
+                  : CircularProgressIndicator(strokeWidth: 2, color: fgColor),
             ),
           )
         else if (widget.icon != null)
@@ -148,7 +152,6 @@ class _AppButtonState extends State<AppButton> {
       ],
     );
 
-    final reduced = AppMotion.reduced(context);
     final visual = AnimatedScale(
       scale: _pressed && !reduced ? 0.97 : 1,
       duration: reduced ? Duration.zero : const Duration(milliseconds: 90),

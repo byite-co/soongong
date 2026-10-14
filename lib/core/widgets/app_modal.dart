@@ -40,6 +40,8 @@ Future<bool> showAppModal(
   String secondaryLabel = CommonStrings.cancel,
   bool destructive = false,
   Future<void> Function()? onConfirm,
+  String? Function(Object error)? errorTextFor,
+  String? retryLabel,
   bool barrierDismissible = true,
   bool useRootNavigator = true,
 }) async {
@@ -56,9 +58,10 @@ Future<bool> showAppModal(
     transitionBuilder: (_, anim, _, child) => FadeTransition(
       opacity: anim,
       child: ScaleTransition(
-        scale: Tween<double>(begin: 0.96, end: 1).animate(
-          CurvedAnimation(parent: anim, curve: AppMotion.sheetCurve),
-        ),
+        scale: Tween<double>(
+          begin: 0.96,
+          end: 1,
+        ).animate(CurvedAnimation(parent: anim, curve: AppMotion.sheetCurve)),
         child: child,
       ),
     ),
@@ -69,6 +72,8 @@ Future<bool> showAppModal(
       secondaryLabel: secondaryLabel,
       destructive: destructive,
       onConfirm: onConfirm,
+      errorTextFor: errorTextFor,
+      retryLabel: retryLabel,
       barrierDismissible: barrierDismissible,
     ),
   );
@@ -83,6 +88,8 @@ class _AppModalPage extends StatefulWidget {
     required this.secondaryLabel,
     required this.destructive,
     required this.onConfirm,
+    required this.errorTextFor,
+    required this.retryLabel,
     required this.barrierDismissible,
   });
 
@@ -92,6 +99,8 @@ class _AppModalPage extends StatefulWidget {
   final String secondaryLabel;
   final bool destructive;
   final Future<void> Function()? onConfirm;
+  final String? Function(Object error)? errorTextFor;
+  final String? retryLabel;
   final bool barrierDismissible;
 
   @override
@@ -121,12 +130,13 @@ class _AppModalPageState extends State<_AppModalPage> {
     try {
       await cb();
       if (mounted) Navigator.of(context).pop(true);
-    } catch (e, st) {
-      appLog.w('AppModal onConfirm failed', error: e, stackTrace: st);
+    } catch (e) {
+      appLog.w('AppModal onConfirm failed (${e.runtimeType})');
       if (mounted) {
         setState(() {
           _running = false;
-          _error = CommonStrings.actionFailedRetry;
+          _error =
+              widget.errorTextFor?.call(e) ?? CommonStrings.actionFailedRetry;
         });
       }
     }
@@ -151,7 +161,9 @@ class _AppModalPageState extends State<_AppModalPage> {
           AppModal(
             title: widget.title,
             body: widget.body,
-            primaryLabel: widget.primaryLabel,
+            primaryLabel: _error == null
+                ? widget.primaryLabel
+                : widget.retryLabel ?? widget.primaryLabel,
             secondaryLabel: widget.secondaryLabel,
             destructive: widget.destructive,
             running: _running,
@@ -201,83 +213,91 @@ class AppModal extends StatelessWidget {
             horizontal: AppLayout.dialogHorizontalInset,
           ),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: AppLayout.dialogMaxWidth),
+            constraints: const BoxConstraints(
+              maxWidth: AppLayout.dialogMaxWidth,
+            ),
             child: Material(
               color: c.surface,
               borderRadius: BorderRadius.circular(AppRadius.dialog),
               clipBehavior: Clip.antiAlias,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.page,
-                  vertical: AppSpacing.s24,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    Semantics(
-                      header: true,
-                      child: Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        style: AppTypography.heading.copyWith(color: c.tx),
-                      ),
-                    ),
-                    if (body != null)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: AppSpacing.s8,
-                          left: AppSpacing.s6,
-                          right: AppSpacing.s6,
-                        ),
+              // Long disclosures and retry errors remain reachable at large
+              // text scales; short dialogs keep their natural content height.
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.page,
+                    vertical: AppSpacing.s24,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      Semantics(
+                        header: true,
                         child: Text(
-                          body!,
+                          title,
                           textAlign: TextAlign.center,
-                          style: AppTypography.label.copyWith(
-                            color: c.tx2,
-                            height: 1.6,
-                          ),
+                          style: AppTypography.heading.copyWith(color: c.tx),
                         ),
                       ),
-                    if (errorText != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.s10),
-                        child: Semantics(
-                          liveRegion: true,
+                      if (body != null)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            top: AppSpacing.s8,
+                            left: AppSpacing.s6,
+                            right: AppSpacing.s6,
+                          ),
                           child: Text(
-                            errorText!,
+                            body!,
                             textAlign: TextAlign.center,
-                            style: AppTypography.withWeight(AppTypography.label, 600)
-                                .copyWith(color: c.accTx),
+                            style: AppTypography.label.copyWith(
+                              color: c.tx2,
+                              height: 1.6,
+                            ),
                           ),
                         ),
+                      if (errorText != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.s10),
+                          child: Semantics(
+                            liveRegion: true,
+                            child: Text(
+                              errorText!,
+                              textAlign: TextAlign.center,
+                              style: AppTypography.withWeight(
+                                AppTypography.label,
+                                600,
+                              ).copyWith(color: c.accTx),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: AppSpacing.s20),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: AppButton.secondary(
+                              label: secondaryLabel,
+                              onPressed: running ? null : onSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.s8),
+                          Expanded(
+                            child: destructive
+                                ? AppButton.destructive(
+                                    label: primaryLabel,
+                                    busy: running,
+                                    onPressed: onPrimary,
+                                  )
+                                : AppButton(
+                                    label: primaryLabel,
+                                    busy: running,
+                                    onPressed: onPrimary,
+                                  ),
+                          ),
+                        ],
                       ),
-                    const SizedBox(height: AppSpacing.s20),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: AppButton.secondary(
-                            label: secondaryLabel,
-                            onPressed: running ? null : onSecondary,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.s8),
-                        Expanded(
-                          child: destructive
-                              ? AppButton.destructive(
-                                  label: primaryLabel,
-                                  busy: running,
-                                  onPressed: onPrimary,
-                                )
-                              : AppButton(
-                                  label: primaryLabel,
-                                  busy: running,
-                                  onPressed: onPrimary,
-                                ),
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

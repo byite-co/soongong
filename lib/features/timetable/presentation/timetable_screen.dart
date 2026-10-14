@@ -33,6 +33,7 @@ import '../../planner/application/planner_providers.dart';
 import '../../planner/domain/planner_draft.dart';
 import '../../planner/presentation/planner_item_sheet.dart';
 import '../application/timetable_providers.dart';
+import '../domain/overlap_layout.dart';
 import '../domain/recurrence_expander.dart';
 import '../domain/week_timetable.dart';
 
@@ -567,17 +568,6 @@ class _DayColumn extends StatelessWidget {
   final ValueChanged<String> onTapBlock;
   final ValueChanged<Recurrence> onTapRecurrence;
 
-  static const double minBlockFraction = 0.02;
-
-  /// Top and height of a block inside the 00–24 column: the minimum height
-  /// never pushes the block past the day's end (a 23:59 session stays
-  /// visible and tappable, [S08b]).
-  static (double, double) place(double startMinutes, double endMinutes, double h) {
-    final height = math.max((endMinutes - startMinutes) / 1440 * h, h * minBlockFraction);
-    final top = math.min(startMinutes / 1440 * h, h - height);
-    return (math.max(0, top), height);
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -587,6 +577,13 @@ class _DayColumn extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final h = constraints.maxHeight;
+          final placements = layoutTimetableIntervals([
+            for (final inst in recurrences)
+              TimetableInterval(inst.start.minutesOfDay.toDouble(), inst.end.minutesOfDay.toDouble()),
+            for (final block in blocks) TimetableInterval(block.startMinutes, block.endMinutes),
+          ]);
+          double left(TimetablePlacement p) => constraints.maxWidth * p.leftFraction + 1;
+          double width(TimetablePlacement p) => math.max(0, constraints.maxWidth * p.widthFraction - 2);
           final nowMinutes = now.hour * 60 + now.minute + now.second / 60;
           return Stack(
             key: TimetableKeys.column(day),
@@ -601,12 +598,12 @@ class _DayColumn extends StatelessWidget {
                 ),
               ),
               Positioned.fill(child: CustomPaint(painter: _HourLinesPainter(color: c.line))),
-              for (final inst in recurrences)
+              for (final (i, inst) in recurrences.indexed)
                 Positioned(
-                  top: place(inst.start.minutesOfDay.toDouble(), inst.end.minutesOfDay.toDouble(), h).$1,
-                  height: place(inst.start.minutesOfDay.toDouble(), inst.end.minutesOfDay.toDouble(), h).$2,
-                  left: 1,
-                  right: 1,
+                  top: placements[i].topFraction * h,
+                  height: placements[i].heightFraction * h,
+                  left: left(placements[i]),
+                  width: width(placements[i]),
                   child: _RecurrenceBlock(
                     key: TimetableKeys.recurrenceBlock(inst.recurrence.id, day),
                     instance: inst,
@@ -616,10 +613,10 @@ class _DayColumn extends StatelessWidget {
                 ),
               for (final (i, b) in blocks.indexed)
                 Positioned(
-                  top: place(b.startMinutes, b.endMinutes, h).$1,
-                  height: place(b.startMinutes, b.endMinutes, h).$2,
-                  left: 2,
-                  right: 2,
+                  top: placements[recurrences.length + i].topFraction * h,
+                  height: placements[recurrences.length + i].heightFraction * h,
+                  left: left(placements[recurrences.length + i]),
+                  width: width(placements[recurrences.length + i]),
                   child: _SessionBlock(
                     key: TimetableKeys.block(b.sessionId, day, i),
                     block: b,

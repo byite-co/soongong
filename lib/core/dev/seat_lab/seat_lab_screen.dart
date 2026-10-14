@@ -22,10 +22,14 @@ import 'dart:async';
 
 import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/engines/engines.dart';
+import '../../../data/export/export_guard.dart';
 import '../../../data/export/export_service.dart';
 import '../../../data/export/share_export.dart';
+import '../../../data/repositories/repository_providers.dart';
+import '../../../data/temp/temp_providers.dart';
 import '../../contracts/seat_engine.dart';
 import '../../domain/clock.dart';
 import '../../logging/app_logger.dart';
@@ -37,16 +41,17 @@ import 'seat_lab_recorder.dart';
 
 const String seatLabPath = '/_seat_lab';
 
-typedef SeatLabEngineBuilder = SeatEngineImpl Function({
-  required double minFaceSize,
-  required MonotonicClock monotonic,
-});
+typedef SeatLabEngineBuilder =
+    SeatEngineImpl Function({
+      required double minFaceSize,
+      required MonotonicClock monotonic,
+    });
 typedef SeatLabBatteryReader = Future<int?> Function();
 typedef SeatLabShare = Future<void> Function(ExportFile file);
 
 enum _LabState { idle, starting, running, lost }
 
-class SeatLabScreen extends StatefulWidget {
+class SeatLabScreen extends ConsumerStatefulWidget {
   const SeatLabScreen({
     super.key,
     this.engineBuilder,
@@ -76,15 +81,16 @@ class SeatLabScreen extends StatefulWidget {
   final Duration batteryPollInterval;
 
   @override
-  State<SeatLabScreen> createState() => _SeatLabScreenState();
+  ConsumerState<SeatLabScreen> createState() => _SeatLabScreenState();
 }
 
-class _SeatLabScreenState extends State<SeatLabScreen> {
+class _SeatLabScreenState extends ConsumerState<SeatLabScreen> {
   static const List<double> _minFaceSizes = <double>[0.1, 0.15, 0.2];
 
   late final SeatLabRecorder _recorder = widget.recorder ?? SeatLabRecorder();
   final List<String> _eventLog = <String>[];
-  late final MonotonicClock _mono = widget.monotonic ?? StopwatchMonotonicClock();
+  late final MonotonicClock _mono =
+      widget.monotonic ?? StopwatchMonotonicClock();
   late final Duration _t0 = _mono.elapsed;
 
   SeatEngineImpl? _engine;
@@ -116,9 +122,13 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
   SeatEngineImpl _ensureEngine() {
     final existing = _engine;
     if (existing != null) return existing;
-    final build = widget.engineBuilder ??
+    final build =
+        widget.engineBuilder ??
         ({required double minFaceSize, required MonotonicClock monotonic}) =>
-            SeatEngineImpl.camera(minFaceSize: minFaceSize, monotonic: monotonic);
+            SeatEngineImpl.camera(
+              minFaceSize: minFaceSize,
+              monotonic: monotonic,
+            );
     final engine = build(minFaceSize: _minFaceSize, monotonic: _mono);
     _diagSub = engine.diagnostics.listen(_onDiagnostic);
     _eventSub = engine.events.listen(_onEvent);
@@ -164,11 +174,13 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
   void _onEvent(SeatEngineEvent e) {
     final lostReason = _engine?.lastLostReason;
     final name = switch (e) {
-      SeatCameraLost() => lostReason == null
-          ? SeatLabStrings.eventCameraLost
-          : '${SeatLabStrings.eventCameraLost} · $lostReason',
+      SeatCameraLost() =>
+        lostReason == null
+            ? SeatLabStrings.eventCameraLost
+            : '${SeatLabStrings.eventCameraLost} · $lostReason',
       SeatCameraRecovered() => SeatLabStrings.eventCameraRecovered,
-      SeatPaused(:final reason) => '${SeatLabStrings.eventPaused} · ${reason.name}',
+      SeatPaused(:final reason) =>
+        '${SeatLabStrings.eventPaused} · ${reason.name}',
       SeatError(:final message) => '${SeatLabStrings.eventError}: $message',
     };
     // A loss or a pause breaks the run's continuity (battery verdict).
@@ -292,8 +304,8 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     _logLine(SeatLabStrings.eventStarted);
     try {
       await engine.start(SeatEngineConfig(lowPower: _lowPower));
-    } catch (e, st) {
-      appLog.w('seat lab: start failed', error: e, stackTrace: st);
+    } catch (e) {
+      appLog.w('seat lab: start failed (${e.runtimeType})');
     }
     if (!mounted) return;
     setState(() {
@@ -306,14 +318,19 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
         setState(() {});
         _checkSelfStop();
       });
-      _batteryTimer ??= Timer.periodic(widget.batteryPollInterval, (_) => _pollBattery());
+      _batteryTimer ??= Timer.periodic(
+        widget.batteryPollInterval,
+        (_) => _pollBattery(),
+      );
     } else {
       // start failed (or the engine paused itself while opening): the
       // segment never ran
       _finishSegment(
         _now,
         end: SeatLabSegmentEnd.abnormal,
-        reason: _lostNow ? SeatLabStrings.reasonBackground : SeatLabStrings.reasonError,
+        reason: _lostNow
+            ? SeatLabStrings.reasonBackground
+            : SeatLabStrings.reasonError,
       );
     }
   }
@@ -333,13 +350,15 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
       final String? abnormal = report != null && report.inferenceTimedOut
           ? SeatLabStrings.reasonInferenceTimeout
           : _lostNow
-              ? SeatLabStrings.reasonLost
-              : _segmentHadError
-                  ? SeatLabStrings.reasonError
-                  : null;
+          ? SeatLabStrings.reasonLost
+          : _segmentHadError
+          ? SeatLabStrings.reasonError
+          : null;
       _finishSegment(
         endedAt,
-        end: abnormal == null ? SeatLabSegmentEnd.normal : SeatLabSegmentEnd.abnormal,
+        end: abnormal == null
+            ? SeatLabSegmentEnd.normal
+            : SeatLabSegmentEnd.abnormal,
         reason: abnormal ?? '',
         batteryEnd: endLevel,
       );
@@ -358,7 +377,7 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     try {
       return await (widget.batteryReader ?? _platformBattery)();
     } catch (e) {
-      appLog.d('seat lab: battery unavailable ($e)');
+      appLog.d('seat lab: battery unavailable (${e.runtimeType})');
       return null;
     }
   }
@@ -377,7 +396,9 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     final a = await engine.checkAvailability();
     if (!mounted) return;
     final reason = engine.lastAvailabilityReason;
-    setState(() => _availability = reason == null ? a.name : '${a.name} ($reason)');
+    setState(
+      () => _availability = reason == null ? a.name : '${a.name} ($reason)',
+    );
   }
 
   Future<void> _requestPermission() async {
@@ -386,7 +407,8 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     setState(() => _permission = r.name);
   }
 
-  Future<void> _openSettings() => _ensureEngine().permissionGateway.openSettings();
+  Future<void> _openSettings() =>
+      _ensureEngine().permissionGateway.openSettings();
 
   Future<void> _export() async {
     final stamp = DateTime.now().toIso8601String().replaceAll(':', '-');
@@ -399,24 +421,64 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     };
     final file = ExportFile(
       name: 'seat_lab_$stamp$suffix.csv',
-      bytes: _recorder.toCsvBytes(scope: _csvScope, segment: segment, caseId: caseId),
+      bytes: _recorder.toCsvBytes(
+        scope: _csvScope,
+        segment: segment,
+        caseId: caseId,
+      ),
       mimeType: 'text/csv',
     );
     try {
-      await (widget.share ?? shareExportFile)(file);
+      final share = widget.share;
+      if (share != null) {
+        await share(file);
+      } else {
+        final writer = ref.read(syncWriterProvider);
+        final ownership = ref.read(tempOwnershipProvider);
+        final owner = writer.ctx.userId;
+        final token = ownership.epoch(owner);
+        final generation = await writer.refreshPurgeGeneration();
+        bool current() =>
+            mounted &&
+            ref.read(currentUserIdProvider) == owner &&
+            ownership.epoch(owner) == token &&
+            writer.purgeGeneration == generation;
+        await ref.read(ownedTempStoreProvider).sweep();
+        await shareExportFile(
+          file,
+          guard: ExportGuard(
+            validate: () => writer.runOwnedTransaction(
+              () async {},
+              alive: current,
+              generation: generation,
+            ),
+            isCurrent: current,
+          ),
+          createTask: () => ownership.create(
+            writer,
+            'export',
+            generation: generation,
+            alive: current,
+          ),
+        );
+      }
       if (mounted) showAppToast(context, message: SeatLabStrings.exported);
-    } catch (e, st) {
-      appLog.w('seat lab: export failed', error: e, stackTrace: st);
+    } catch (e) {
+      appLog.w('seat lab: export failed (${e.runtimeType})');
       if (mounted) showAppToast(context, message: SeatLabStrings.exportFailed);
+    } finally {
+      file.bytes.fillRange(0, file.bytes.length, 0);
     }
   }
 
   void _clearLog() => setState(() {
-        _recorder.clear();
-        _eventLog.clear();
-        _lastDiag = null;
-        if (_running) _recorder.beginSegment(_now); // the run in progress stays tracked
-      });
+    _recorder.clear();
+    _eventLog.clear();
+    _lastDiag = null;
+    if (_running) {
+      _recorder.beginSegment(_now); // the run in progress stays tracked
+    }
+  });
 
   Future<void> _setMinFaceSize(double v) async {
     if (_running || v == _minFaceSize) return;
@@ -427,9 +489,9 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
   void _setTruth(SeatLabTruth t) => setState(() => _recorder.mark(_now, t));
 
   void _setCase(String id) => setState(() {
-        _caseId = id;
-        _recorder.setCase(_now, id);
-      });
+    _caseId = id;
+    _recorder.setCase(_now, id);
+  });
 
   // ── Build ──────────────────────────────────────────────────────────────
 
@@ -455,7 +517,10 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
           AppSpacing.sheetBottom,
         ),
         children: <Widget>[
-          Text(SeatLabStrings.subtitle, style: AppTypography.caption.copyWith(color: c.tx3)),
+          Text(
+            SeatLabStrings.subtitle,
+            style: AppTypography.caption.copyWith(color: c.tx3),
+          ),
           const SizedBox(height: AppSpacing.s12),
           _Card(title: SeatLabStrings.sectionStatus, child: _statusBody(c)),
           _Card(title: SeatLabStrings.sectionNumbers, child: _numbersBody(c)),
@@ -471,14 +536,27 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
   Widget _statusBody(AppColors c) {
     final d = _lastDiag;
     final (IconData icon, String text, Color color) = switch (_state) {
-      _LabState.idle => (LucideIcons.cameraOff, SeatLabStrings.stateIdle, c.tx3),
-      _LabState.starting => (LucideIcons.camera, SeatLabStrings.stateStarting, c.tx2),
-      _LabState.lost => (LucideIcons.cameraOff, SeatLabStrings.stateLost, c.accTx),
-      _LabState.running => d == null
-          ? (LucideIcons.camera, SeatLabStrings.noSampleYet, c.tx2)
-          : d.seated
-              ? (LucideIcons.userCheck, SeatLabStrings.seated, c.priTx)
-              : (LucideIcons.userX, SeatLabStrings.notSeated, c.tx2),
+      _LabState.idle => (
+        LucideIcons.cameraOff,
+        SeatLabStrings.stateIdle,
+        c.tx3,
+      ),
+      _LabState.starting => (
+        LucideIcons.camera,
+        SeatLabStrings.stateStarting,
+        c.tx2,
+      ),
+      _LabState.lost => (
+        LucideIcons.cameraOff,
+        SeatLabStrings.stateLost,
+        c.accTx,
+      ),
+      _LabState.running =>
+        d == null
+            ? (LucideIcons.camera, SeatLabStrings.noSampleYet, c.tx2)
+            : d.seated
+            ? (LucideIcons.userCheck, SeatLabStrings.seated, c.priTx)
+            : (LucideIcons.userX, SeatLabStrings.notSeated, c.tx2),
     };
     return Row(
       children: <Widget>[
@@ -512,7 +590,9 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     final last = _recorder.lastSegment;
     final bStart = last?.batteryStart;
     // Open run: start → latest reading. Closed run: start → end measurement.
-    final bEnd = last == null ? null : (last.isOpen ? last.batteryLatest : last.batteryEnd);
+    final bEnd = last == null
+        ? null
+        : (last.isOpen ? last.batteryLatest : last.batteryEnd);
     final String battery;
     if (bStart == null) {
       battery = SeatLabStrings.batteryUnknown;
@@ -526,7 +606,8 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
     if (verdict == null) {
       batteryValid = SeatLabStrings.noData;
     } else if (verdict.valid) {
-      batteryValid = '${SeatLabStrings.batteryValidYes} (−${verdict.dropPct}%p / ${_fmtElapsed(verdict.duration)})';
+      batteryValid =
+          '${SeatLabStrings.batteryValidYes} (−${verdict.dropPct}%p / ${_fmtElapsed(verdict.duration)})';
     } else {
       final why = switch (verdict.reason) {
         'open' => SeatLabStrings.batteryReasonOpen,
@@ -539,19 +620,26 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
       };
       batteryValid = '${SeatLabStrings.batteryValidNo} · $why';
     }
-    final runAgreement = last == null ? null : _recorder.agreementForRun(last.index);
+    final runAgreement = last == null
+        ? null
+        : _recorder.agreementForRun(last.index);
     final byCase = _recorder.agreementByCase();
     final String lastStop;
     if (last == null || last.isOpen) {
       lastStop = SeatLabStrings.noData;
     } else {
-      final kind = last.isExcluded ? SeatLabStrings.segmentAbnormal : SeatLabStrings.segmentNormal;
+      final kind = last.isExcluded
+          ? SeatLabStrings.segmentAbnormal
+          : SeatLabStrings.segmentNormal;
       final release = switch (last.cameraRelease) {
         SeatLabCameraRelease.ok => '',
-        SeatLabCameraRelease.failed => ' · ${SeatLabStrings.batteryReasonReleaseFailed}',
-        SeatLabCameraRelease.timeout => ' · ${SeatLabStrings.batteryReasonReleaseTimeout}',
+        SeatLabCameraRelease.failed =>
+          ' · ${SeatLabStrings.batteryReasonReleaseFailed}',
+        SeatLabCameraRelease.timeout =>
+          ' · ${SeatLabStrings.batteryReasonReleaseTimeout}',
       };
-      lastStop = (last.reason.isEmpty ? kind : '$kind · ${last.reason}') + release;
+      lastStop =
+          (last.reason.isEmpty ? kind : '$kind · ${last.reason}') + release;
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -559,18 +647,32 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
         _Kv(SeatLabStrings.elapsed, _fmtElapsed(_segmentElapsed), c),
         _Kv(
           SeatLabStrings.framesProcessed,
-          e == null ? SeatLabStrings.noData : '${e.framesProcessed} / ${e.framesDelivered}',
+          e == null
+              ? SeatLabStrings.noData
+              : '${e.framesProcessed} / ${e.framesDelivered}',
           c,
         ),
-        _Kv(SeatLabStrings.framesDropped, e == null ? SeatLabStrings.noData : '${e.framesDropped}', c),
+        _Kv(
+          SeatLabStrings.framesDropped,
+          e == null ? SeatLabStrings.noData : '${e.framesDropped}',
+          c,
+        ),
         _Kv(
           SeatLabStrings.interval,
-          e == null ? SeatLabStrings.noData : '${e.processingInterval.inMilliseconds} ms',
+          e == null
+              ? SeatLabStrings.noData
+              : '${e.processingInterval.inMilliseconds} ms',
           c,
         ),
         _Kv(SeatLabStrings.detectionRate60, _pct(rate), c),
         _Kv(SeatLabStrings.seatedRate60, _pct(seatedRate), c),
-        _Kv(SeatLabStrings.latency60, latency == null ? SeatLabStrings.noData : '${latency.inMilliseconds} ms', c),
+        _Kv(
+          SeatLabStrings.latency60,
+          latency == null
+              ? SeatLabStrings.noData
+              : '${latency.inMilliseconds} ms',
+          c,
+        ),
         _Kv(SeatLabStrings.batteryRun, battery, c),
         _Kv(SeatLabStrings.batteryValid60, batteryValid, c),
         _Kv(SeatLabStrings.events, '${_recorder.eventCount}', c),
@@ -586,18 +688,27 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
         ),
         _Kv(
           SeatLabStrings.runAgreement,
-          runAgreement == null ? SeatLabStrings.noData : _agreementText(runAgreement),
+          runAgreement == null
+              ? SeatLabStrings.noData
+              : _agreementText(runAgreement),
           c,
         ),
         const SizedBox(height: AppSpacing.s4),
-        Text(SeatLabStrings.caseAgreement, style: AppTypography.label.copyWith(color: c.tx2)),
+        Text(
+          SeatLabStrings.caseAgreement,
+          style: AppTypography.label.copyWith(color: c.tx2),
+        ),
         if (byCase.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.s4),
-            child: Text(SeatLabStrings.caseAgreementNone, style: AppTypography.caption.copyWith(color: c.tx3)),
+            child: Text(
+              SeatLabStrings.caseAgreementNone,
+              style: AppTypography.caption.copyWith(color: c.tx3),
+            ),
           )
         else
-          for (final e in byCase.entries) _Kv('  ${e.key}', _agreementText(e.value), c),
+          for (final e in byCase.entries)
+            _Kv('  ${e.key}', _agreementText(e.value), c),
         const SizedBox(height: AppSpacing.s4),
         _Kv(
           SeatLabStrings.segments,
@@ -622,8 +733,14 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
         ),
         _Kv(SeatLabStrings.lastStop, lastStop, c),
         const SizedBox(height: AppSpacing.s6),
-        Text(SeatLabStrings.summaryNote, style: AppTypography.caption.copyWith(color: c.tx3)),
-        Text(SeatLabStrings.batteryNoSum, style: AppTypography.caption.copyWith(color: c.tx3)),
+        Text(
+          SeatLabStrings.summaryNote,
+          style: AppTypography.caption.copyWith(color: c.tx3),
+        ),
+        Text(
+          SeatLabStrings.batteryNoSum,
+          style: AppTypography.caption.copyWith(color: c.tx3),
+        ),
       ],
     );
   }
@@ -633,131 +750,148 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
       '${a.truthAwayAsSeated} / ${a.truthAway} (${_pct(a.awayFalseSeatedRate)})';
 
   Widget _controlsBody(AppColors c) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: <Widget>[
+      Wrap(
+        spacing: AppSpacing.s8,
+        runSpacing: AppSpacing.s8,
         children: <Widget>[
-          Wrap(
-            spacing: AppSpacing.s8,
-            runSpacing: AppSpacing.s8,
-            children: <Widget>[
-              AppButton.secondary(
-                label: SeatLabStrings.checkAvailability,
-                size: AppButtonSize.small,
-                expand: false,
-                onPressed: _checkAvailability,
-              ),
-              AppButton.secondary(
-                label: SeatLabStrings.requestPermission,
-                size: AppButtonSize.small,
-                expand: false,
-                onPressed: _requestPermission,
-              ),
-              AppButton.secondary(
-                label: SeatLabStrings.openSettings,
-                size: AppButtonSize.small,
-                expand: false,
-                onPressed: _openSettings,
-              ),
-              AppButton.secondary(
-                label: SeatLabStrings.exportCsv,
-                size: AppButtonSize.small,
-                expand: false,
-                onPressed: _export,
-              ),
-              AppButton.secondary(
-                label: SeatLabStrings.clearLog,
-                size: AppButtonSize.small,
-                expand: false,
-                onPressed: _clearLog,
-              ),
-            ],
+          AppButton.secondary(
+            label: SeatLabStrings.checkAvailability,
+            size: AppButtonSize.small,
+            expand: false,
+            onPressed: _checkAvailability,
           ),
-          const SizedBox(height: AppSpacing.s8),
-          Text(
-            '${SeatLabStrings.availabilityLabel}: ${_availability ?? SeatLabStrings.noData} · '
-            '${SeatLabStrings.permissionLabel}: ${_permission ?? SeatLabStrings.noData}',
-            style: AppTypography.caption.copyWith(color: c.tx2),
+          AppButton.secondary(
+            label: SeatLabStrings.requestPermission,
+            size: AppButtonSize.small,
+            expand: false,
+            onPressed: _requestPermission,
           ),
-          const SizedBox(height: AppSpacing.s8),
-          Text(SeatLabStrings.csvScope, style: AppTypography.label.copyWith(color: c.tx2)),
-          const SizedBox(height: AppSpacing.s6),
-          _Choices<SeatLabCsvScope>(
-            value: _csvScope,
-            onChanged: (v) => setState(() => _csvScope = v),
-            items: const <(SeatLabCsvScope, String)>[
-              (SeatLabCsvScope.all, SeatLabStrings.csvScopeAll),
-              (SeatLabCsvScope.run, SeatLabStrings.csvScopeRun),
-              (SeatLabCsvScope.caseId, SeatLabStrings.csvScopeCase),
-            ],
+          AppButton.secondary(
+            label: SeatLabStrings.openSettings,
+            size: AppButtonSize.small,
+            expand: false,
+            onPressed: _openSettings,
           ),
-          const SizedBox(height: AppSpacing.s12),
-          AppButton(
-            label: _running ? SeatLabStrings.stop : SeatLabStrings.start,
-            variant: _running ? AppButtonVariant.destructive : AppButtonVariant.primary,
-            busy: _busy,
-            onPressed: _running ? _stop : _start,
+          AppButton.secondary(
+            label: SeatLabStrings.exportCsv,
+            size: AppButtonSize.small,
+            expand: false,
+            onPressed: _export,
+          ),
+          AppButton.secondary(
+            label: SeatLabStrings.clearLog,
+            size: AppButtonSize.small,
+            expand: false,
+            onPressed: _clearLog,
           ),
         ],
-      );
+      ),
+      const SizedBox(height: AppSpacing.s8),
+      Text(
+        '${SeatLabStrings.availabilityLabel}: ${_availability ?? SeatLabStrings.noData} · '
+        '${SeatLabStrings.permissionLabel}: ${_permission ?? SeatLabStrings.noData}',
+        style: AppTypography.caption.copyWith(color: c.tx2),
+      ),
+      const SizedBox(height: AppSpacing.s8),
+      Text(
+        SeatLabStrings.csvScope,
+        style: AppTypography.label.copyWith(color: c.tx2),
+      ),
+      const SizedBox(height: AppSpacing.s6),
+      _Choices<SeatLabCsvScope>(
+        value: _csvScope,
+        onChanged: (v) => setState(() => _csvScope = v),
+        items: const <(SeatLabCsvScope, String)>[
+          (SeatLabCsvScope.all, SeatLabStrings.csvScopeAll),
+          (SeatLabCsvScope.run, SeatLabStrings.csvScopeRun),
+          (SeatLabCsvScope.caseId, SeatLabStrings.csvScopeCase),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.s12),
+      AppButton(
+        label: _running ? SeatLabStrings.stop : SeatLabStrings.start,
+        variant: _running
+            ? AppButtonVariant.destructive
+            : AppButtonVariant.primary,
+        busy: _busy,
+        onPressed: _running ? _stop : _start,
+      ),
+    ],
+  );
 
   Widget _truthBody(AppColors c) => _Choices<SeatLabTruth>(
-        value: _recorder.truth,
-        onChanged: _setTruth,
-        items: const <(SeatLabTruth, String)>[
-          (SeatLabTruth.seated, SeatLabStrings.truthSeated),
-          (SeatLabTruth.away, SeatLabStrings.truthAway),
-          (SeatLabTruth.none, SeatLabStrings.truthNone),
-        ],
-      );
+    value: _recorder.truth,
+    onChanged: _setTruth,
+    items: const <(SeatLabTruth, String)>[
+      (SeatLabTruth.seated, SeatLabStrings.truthSeated),
+      (SeatLabTruth.away, SeatLabStrings.truthAway),
+      (SeatLabTruth.none, SeatLabStrings.truthNone),
+    ],
+  );
 
   Widget _settingsBody(AppColors c) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      Row(
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(SeatLabStrings.lowPower, style: AppTypography.body.copyWith(color: c.tx)),
-              ),
-              Switch.adaptive(
-                value: _lowPower,
-                onChanged: _running ? null : (v) => setState(() => _lowPower = v),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.s8),
-          Text(SeatLabStrings.minFaceSize, style: AppTypography.label.copyWith(color: c.tx2)),
-          const SizedBox(height: AppSpacing.s6),
-          _Choices<double>(
-            value: _minFaceSize,
-            onChanged: _running ? null : _setMinFaceSize,
-            items: <(double, String)>[
-              for (final v in _minFaceSizes) (v, v.toStringAsFixed(2)),
-            ],
-          ),
-          if (_running)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.s6),
-              child: Text(
-                SeatLabStrings.settingsLockedWhileRunning,
-                style: AppTypography.caption.copyWith(color: c.tx3),
-              ),
+          Expanded(
+            child: Text(
+              SeatLabStrings.lowPower,
+              style: AppTypography.body.copyWith(color: c.tx),
             ),
-          const SizedBox(height: AppSpacing.s12),
-          Text(SeatLabStrings.caseLabel, style: AppTypography.label.copyWith(color: c.tx2)),
-          const SizedBox(height: AppSpacing.s6),
-          _Choices<String>(
-            value: _caseId,
-            onChanged: _setCase,
-            items: <(String, String)>[
-              ('', SeatLabStrings.caseNone),
-              for (final (id, name) in SeatLabStrings.cases) (id, '$id $name'),
-            ],
+          ),
+          Switch.adaptive(
+            value: _lowPower,
+            onChanged: _running ? null : (v) => setState(() => _lowPower = v),
           ),
         ],
-      );
+      ),
+      const SizedBox(height: AppSpacing.s8),
+      Text(
+        SeatLabStrings.minFaceSize,
+        style: AppTypography.label.copyWith(color: c.tx2),
+      ),
+      const SizedBox(height: AppSpacing.s6),
+      _Choices<double>(
+        value: _minFaceSize,
+        onChanged: _running ? null : _setMinFaceSize,
+        items: <(double, String)>[
+          for (final v in _minFaceSizes) (v, v.toStringAsFixed(2)),
+        ],
+      ),
+      if (_running)
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.s6),
+          child: Text(
+            SeatLabStrings.settingsLockedWhileRunning,
+            style: AppTypography.caption.copyWith(color: c.tx3),
+          ),
+        ),
+      const SizedBox(height: AppSpacing.s12),
+      Text(
+        SeatLabStrings.caseLabel,
+        style: AppTypography.label.copyWith(color: c.tx2),
+      ),
+      const SizedBox(height: AppSpacing.s6),
+      _Choices<String>(
+        value: _caseId,
+        onChanged: _setCase,
+        items: <(String, String)>[
+          ('', SeatLabStrings.caseNone),
+          for (final (id, name) in SeatLabStrings.cases) (id, '$id $name'),
+        ],
+      ),
+    ],
+  );
 
   Widget _eventsBody(AppColors c) {
     if (_eventLog.isEmpty) {
-      return Text(SeatLabStrings.eventNone, style: AppTypography.caption.copyWith(color: c.tx3));
+      return Text(
+        SeatLabStrings.eventNone,
+        style: AppTypography.caption.copyWith(color: c.tx3),
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -765,14 +899,18 @@ class _SeatLabScreenState extends State<SeatLabScreen> {
         for (final line in _eventLog)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.s2),
-            child: Text(line, style: AppTypography.caption.copyWith(color: c.tx2)),
+            child: Text(
+              line,
+              style: AppTypography.caption.copyWith(color: c.tx2),
+            ),
           ),
       ],
     );
   }
 
-  static String _yesNo(bool? v) =>
-      v == null ? SeatLabStrings.noData : (v ? SeatLabStrings.yes : SeatLabStrings.no);
+  static String _yesNo(bool? v) => v == null
+      ? SeatLabStrings.noData
+      : (v ? SeatLabStrings.yes : SeatLabStrings.no);
 
   static String _pct(double? v) =>
       v == null ? SeatLabStrings.noData : '${(v * 100).toStringAsFixed(0)}%';
@@ -800,7 +938,10 @@ class _Card extends StatelessWidget {
         children: <Widget>[
           Text(
             title,
-            style: AppTypography.withWeight(AppTypography.label, 600).copyWith(color: c.tx3),
+            style: AppTypography.withWeight(
+              AppTypography.label,
+              600,
+            ).copyWith(color: c.tx3),
           ),
           const SizedBox(height: AppSpacing.s8),
           Container(
@@ -829,30 +970,36 @@ class _Kv extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.s4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Expanded(child: Text(label, style: AppTypography.label.copyWith(color: c.tx2))),
-            const SizedBox(width: AppSpacing.s12),
-            Flexible(
-              flex: 2,
-              child: Text(
-                value,
-                textAlign: TextAlign.end,
-                style: AppTypography.label.copyWith(
-                  color: c.tx,
-                  fontFeatures: AppTypography.tabularFigures,
-                ),
-              ),
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: AppSpacing.s4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Expanded(
+          child: Text(label, style: AppTypography.label.copyWith(color: c.tx2)),
         ),
-      );
+        const SizedBox(width: AppSpacing.s12),
+        Flexible(
+          flex: 2,
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: AppTypography.label.copyWith(
+              color: c.tx,
+              fontFeatures: AppTypography.tabularFigures,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _Choices<T> extends StatelessWidget {
-  const _Choices({required this.items, required this.value, required this.onChanged});
+  const _Choices({
+    required this.items,
+    required this.value,
+    required this.onChanged,
+  });
 
   final List<(T, String)> items;
   final T value;
@@ -870,7 +1017,9 @@ class _Choices<T> extends StatelessWidget {
             label: Text(label),
             selected: v == value,
             onSelected: onChanged == null ? null : (_) => onChanged!(v),
-            labelStyle: AppTypography.caption.copyWith(color: v == value ? c.priTx : c.tx2),
+            labelStyle: AppTypography.caption.copyWith(
+              color: v == value ? c.priTx : c.tx2,
+            ),
             selectedColor: c.priWeak,
             backgroundColor: c.sunk,
             side: BorderSide(color: v == value ? c.pri : c.line),

@@ -5,9 +5,9 @@ import { serviceClient } from "./db.ts";
 export const PHOTO_BUCKET = "reading-photos";
 
 /** Deletes objects; returns the paths that were NOT confirmed deleted. */
-export async function deleteObjects(paths: string[]): Promise<string[]> {
+export async function deleteObjects(paths: string[], bucket = PHOTO_BUCKET): Promise<string[]> {
   if (paths.length === 0) return [];
-  const { data, error } = await serviceClient().storage.from(PHOTO_BUCKET).remove(paths);
+  const { data, error } = await serviceClient().storage.from(bucket).remove(paths);
   if (error) return paths;
   const removed = new Set((data ?? []).map((o) => o.name));
   // A missing object is a success for our purpose (nothing left to delete):
@@ -18,7 +18,7 @@ export async function deleteObjects(paths: string[]): Promise<string[]> {
   for (const p of unconfirmed) {
     const dir = p.substring(0, p.lastIndexOf("/"));
     const name = p.substring(p.lastIndexOf("/") + 1);
-    const { data: listed, error: listErr } = await serviceClient().storage.from(PHOTO_BUCKET).list(dir, { search: name, limit: 10 });
+    const { data: listed, error: listErr } = await serviceClient().storage.from(bucket).list(dir, { search: name, limit: 10 });
     if (listErr) { stillThere.push(p); continue; }
     if ((listed ?? []).some((o) => o.name === name)) stillThere.push(p);
   }

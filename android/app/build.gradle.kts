@@ -42,6 +42,8 @@ android {
         }
     }
 
+    testOptions { unitTests.isIncludeAndroidResources = true }
+
     buildTypes {
         release {
             // TODO(S15): release signing config (android/key.properties, gitignored).
@@ -61,6 +63,17 @@ flutter {
     source = "../.."
 }
 
+// The AGP host-test package consumes the Flutter asset directory too. Flutter's
+// APK wiring does not add this dependency to the new AGP 9 host-test task.
+tasks.matching { it.name == "packageDevDebugUnitTestForUnitTest" }.configureEach {
+    dependsOn("copyFlutterAssetsDevDebug")
+}
+
 dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.mockito:mockito-core:5.23.0")
+    testImplementation("androidx.test:core:1.7.0")
+    testImplementation("org.robolectric:robolectric:4.16")
+    implementation("com.google.mediapipe:tasks-vision:1.1.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

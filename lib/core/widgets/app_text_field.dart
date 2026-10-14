@@ -27,6 +27,8 @@ class AppTextField extends StatelessWidget {
     this.inputFormatters,
     this.suffixText,
     this.trailing,
+    this.maxLines = 1,
+    this.minLines,
   });
 
   final TextEditingController controller;
@@ -50,6 +52,10 @@ class AppTextField extends StatelessWidget {
   /// [S07] Right-aligned widget on the label row (e.g. a "12/40" counter).
   final Widget? trailing;
 
+  /// [S09] Multi-line input (문의 내용); null = unbounded.
+  final int? maxLines;
+  final int? minLines;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -72,6 +78,8 @@ class AppTextField extends StatelessWidget {
           maxLength: maxLength,
           inputFormatters: inputFormatters,
           obscureText: obscure,
+          maxLines: obscure ? 1 : maxLines,
+          minLines: minLines,
           keyboardType: keyboardType,
           textInputAction: textInputAction,
           autofillHints: autofillHints,

@@ -1,5 +1,7 @@
 # 데이터 모델 v1 (`docs/data-model.md`) — S02 확정판
 
+> NEXT-01 SCHEMA-CHANGE: 로컬 schema v4는 정확한 v3 study_documents 본문을 보존하면서 study_metadata를 추가한다. 서버는 신규 `20261013053432_next01_foundation.sql`로 metadata/body/사진·삭제의무 및 AI 포인트/비용 원장을 추가한다. 기존 적용된0001~0013은 수정하지 않았다. [실제 구조·복원 계약](study-api.md), [원장과 잠금·설정](ai-usage.md), [검증 인계](handoff/NEXT-01.md)를 참조한다. v1~v3 설명은 역사적 단계이며 새 구조가 자동 S13 공개 연결을 뜻하지 않는다.
+
 로컬 drift 스키마(v1 = S02 테이블, v2 = S02c 부분 유일 인덱스 마이그레이션) = 서버 Postgres DDL(S03)의 출처. 컬럼 이름은 snake_case, 서버와 동일. 컬럼 추가는 새 마이그레이션 파일로만(D27).
 
 ## 0. 표기 규칙
@@ -284,7 +286,7 @@ payload 는 전송 시 현재 행을 읽어 만든다(§1.1 push 컬럼). 승인
 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
-| `key` | TEXT PK | `cursor_next_seq`(단조 증가만) · `last_synced_at` · `purge_epoch` |
+| `key` | TEXT PK | `cursor_next_seq`(단조 증가만) · `last_synced_at` · `purge_epoch` · S09b–S09e: `purge_pending_epoch` · `purge_requested`(요청 id) · `purge_requested_at` · `purge_expected_epoch`(요청이 본 서버 epoch, S09e) · `purge_generation` · `photo_sweep_pending` · `account_user_id`(S05) |
 | `value` | TEXT | |
 
 ### 2.18 `sync_conflicts` — 로컬 전용(dev 메뉴 열람)

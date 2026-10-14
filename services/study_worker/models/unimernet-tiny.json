@@ -1,0 +1,18 @@
+{
+  "revision": "unimernet-tiny-next02",
+  "files": {
+    "model/README.md": "6eb0517fee84a0769e7415cf598080b900b196d6e182aa6496b8bdbd5801bf24",
+    "model/config.json": "f85c55bd4ec5f73f1a59bc0cf133e9d9622941ad9dbc6c78504c75d80b46f267",
+    "model/preprocessor_config.json": "d06c4b87fd6aa74b8b2cdbc4361227d8073ce37e8cfe9e6442802d0bee64da03",
+    "model/tokenizer.json": "02c318d9cfa95bf323371762b8f838a82709530274d36dba6eca880f0add6cc4",
+    "model/tokenizer_config.json": "fd4d94f8b9dbb7deeb3a3ef084ca0e16c43d45774a180730b7e9cfd6359a074b",
+    "model/unimernet_tiny.pth": "6f7608624e2d7549c7f0f05fcfbe073ae521328cf70f1d46374d96f9881d7371"
+  },
+  "sources": [
+    {
+      "repository": "wanderkid/unimernet_tiny",
+      "commit": "3f09ac4b1cd583be47ea20a7d7daef839473028a",
+      "license": "apache-2.0"
+    }
+  ]
+}

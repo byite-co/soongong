@@ -62,3 +62,18 @@ verify_jwt = true
 verify_jwt = true
 [functions.reading-update-marks]
 verify_jwt = true
+
+[functions.study-infer]
+verify_jwt = true
+
+# NEXT-01: user endpoints also verify the caller in code; machine cleanup
+# uses requireJobSecret (no anonymous invocation is accepted by its handler).
+[functions.study-job]
+verify_jwt = true
+[functions.study-photo]
+verify_jwt = true
+[functions.study-maintenance]
+verify_jwt = false
+
+[functions.reading-quota]
+verify_jwt = true

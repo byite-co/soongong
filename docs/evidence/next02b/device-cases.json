@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "status": "UNVERIFIED",
+  "fixture_type": "execution contract, not captured device evidence",
+  "operations": ["text", "math", "grading"],
+  "platforms": ["Android emulator", "Android physical", "iOS physical"],
+  "required_run_fields": ["source_sha", "installed_artifact_sha256", "platform", "os_version", "anonymous_run_id", "request_id_digest", "attempt_ids_digest", "boundary_proof_sha256", "pid_before", "pid_after", "server_state_before", "server_state_after", "model_attempts_before", "model_attempts_after", "point_ledger_before", "point_ledger_after", "reading_quota_before", "reading_quota_after", "provider_receipts", "cost_unknown", "documents_before", "documents_after", "corrected_content_local_digest", "owner_epoch_consent_valid", "result_expiry", "actual", "status"],
+  "cases": [
+    {"id": "K1", "boundary": "durable request and quote saved, before HTTP", "expected": "same ID status first; absent request requires valid prior approval, unexpired quote and retained input or explicit reapproval", "actual": null},
+    {"id": "K2", "boundary": "server reserved/dispatched, before app response", "expected": "pending/unknown stays unknown; no replacement request, duplicate reservation or assumed zero provider cost", "actual": null},
+    {"id": "K3", "boundary": "server succeeded, before app record/UI", "expected": "same ID retrieves existing unexpired result; no additional model call or point debit; expired body is not empty success", "actual": null},
+    {"id": "K4", "boundary": "corrected document transaction committed", "expected": "same document reopened; one document and contract-compliant settlement; no resurrected deleted data", "actual": null}
+  ],
+  "mutations": ["same-owner token refresh", "owner A to B", "consent revoked", "purge epoch changed", "result expired", "original image no longer available"],
+  "synthetic_smoke_is_not_real_quality": true
+}

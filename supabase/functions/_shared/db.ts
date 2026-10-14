@@ -15,8 +15,9 @@ export function serviceClient(): SupabaseClient {
 }
 
 /** Calls a SQL function as service_role; P0001 messages become HttpErrors. */
-export async function rpc<T = unknown>(name: string, args: Record<string, unknown>): Promise<T> {
-  const { data, error } = await serviceClient().rpc(name, args);
+export async function rpc<T = unknown>(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
+  const query = serviceClient().rpc(name, args);
+  const { data, error } = await (signal ? query.abortSignal(signal) : query);
   if (error) {
     const msg = (error.message ?? "").trim();
     const code = /^[a-z_]+$/.test(msg) ? msg : "sql_error";

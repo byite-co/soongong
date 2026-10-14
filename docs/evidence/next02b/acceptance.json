@@ -1,0 +1,219 @@
+{
+  "version": 2,
+  "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+  "snapshot": "before final evidence commit and final SHA CI; post-commit attestation in PR9",
+  "status_counts": {
+    "PASS": 7,
+    "FAIL": 0,
+    "UNVERIFIED": 11
+  },
+  "items": [
+    {
+      "item_id": "B01",
+      "status": "PASS",
+      "scope": "baseline and saved protocol",
+      "expected": "기존 결과와 새 코드/protocol hash 연결",
+      "actual": "next02 원본5개 SHA 동일; 새 protocol/소스 hash와 code SHA 저장",
+      "command": "git diff c345c733 -- docs/evidence/next02; manifest.json",
+      "log_or_ci": "manifest.json",
+      "reason": "원본 파일을 덮어쓰지 않았고 자료 부재를 새 평가로 바꾸지 않음",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B02",
+      "status": "PASS",
+      "scope": "Linux synthetic request diagnostics",
+      "expected": "선종료/부모 정리 구분; 원문/키 미노출; 자원 범위 정확",
+      "actual": "고정 숫자 진단, WNOWAIT, error code, RSS단위/범위 및 불완전 표본 회귀 통과",
+      "command": "python -m unittest discover -s services/study_worker -v",
+      "log_or_ci": "diagnostics-summary.json",
+      "reason": "모델 원인 증명이 아닌 실제 별도 자식 프로세스 안전성 검증",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B03",
+      "status": "UNVERIFIED",
+      "scope": "original Korean PNG9 and v5 EOF3",
+      "expected": "초과2개와 EOF3개를 hash·조건·단계·종료 증거로 재현",
+      "actual": "합성 초과바이트6검사 PASS; 원래 PNG/과거 raw 없음; EOF hash 및 원인 미확정",
+      "command": "python services/study_worker/provision_models.py paddle-v5 /workspace/soongong-models/paddle-v5",
+      "log_or_ci": "environment.json",
+      "reason": "공식 CDN CONNECT403; source card 성공을 실제 파일 성공으로 보지 않음",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B04",
+      "status": "UNVERIFIED",
+      "scope": "frozen candidate actual Korean stability",
+      "expected": "허용7개×3=21/21, 초과2개×3=6/6, 전체27개 기록",
+      "actual": "실제0/27; 사전분류·반복·전수분모·거절사유 기록 도구58회귀 통과",
+      "command": "ocr_evaluation.py --kind text --repetitions 3 --protocol docs/evidence/next02b/protocol-v2.json",
+      "log_or_ci": "metrics.json",
+      "reason": "완전한 모델/이미지 없음. CER 또는98%모집단 유효율 주장 없음",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B05",
+      "status": "PASS",
+      "scope": "Linux worker/CAS process regression",
+      "expected": "CPU/deadline/cancel/IPC/cleanup 회수·입장 차단",
+      "actual": "worker58 통과; cleanup 실패 후 HTTP503→429; 순차 RSS 실제 child 범위",
+      "command": "python -m unittest discover -s services/study_worker -v",
+      "log_or_ci": "test-results.json",
+      "reason": "중간 CPU/wall 경쟁 실패 보존; 단독 재실행 PASS, 제한/기대값 무변경",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B06",
+      "status": "UNVERIFIED",
+      "scope": "official code/config metadata plus missing weight runtime",
+      "expected": "pinned config/checkpoint/tokenizer/transform/generation 실제 대조",
+      "actual": "공식Git·고정wheel·tiny metadata5개 SHA 대조; [192,672]/1536 일치; 실제 weight load 미실행",
+      "command": "source audit against Git5a2c80d and unimernet0.2.3 wheel",
+      "log_or_ci": "unimernet-source-audit.json",
+      "reason": "소스 검토 PASS만 전체 실제 경로 PASS로 승격하지 않음",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B07",
+      "status": "UNVERIFIED",
+      "scope": "historical48 mismatch review",
+      "expected": "원본48 주원인 합계48, 근거/불확실성",
+      "actual": "검토0/48; primary counts 및 합계null, 과거 raw expected hash 보존",
+      "command": "verify raw report SHA before local mismatch review",
+      "log_or_ci": "mismatch-summary.json",
+      "reason": "과거 raw 미확보; 재실행자료도 blocked; 48개를 추정 분류하지 않음",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B08",
+      "status": "PASS",
+      "scope": "metric/protocol honesty",
+      "expected": "strict12/60=20% 유지; 분모와 지표 분리",
+      "actual": "원본 metrics SHA 불변; EOF는 허용층 유지, 거절층 따로 집계; 새 성능수치null",
+      "command": "python -m unittest discover -s services/study_worker -v",
+      "log_or_ci": "metrics.json",
+      "reason": "실측하지 않은 품질·성능·비용을 만들지 않음",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B09",
+      "status": "UNVERIFIED",
+      "scope": "new actual math evaluation",
+      "expected": "기존/새60 동결실행; strict90/valid98/p95≤20 각각 판정",
+      "actual": "기존strict20% FAIL 보존; 새진단/holdout0건; rule/seed만 사전고정",
+      "command": "prepare_next02b_holdout.py --archive /PRIVATE/UniMER-Test.zip --destination /PRIVATE/fresh60",
+      "log_or_ci": "metrics.json",
+      "reason": "이미지/가중치 CDN차단; 실제 손글씨60/3명 미확보",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B10",
+      "status": "UNVERIFIED",
+      "scope": "Korean handwriting quality",
+      "expected": "실제60영역/5명, CER≤10% 공백포함/제외",
+      "actual": "조건 충족자료0, CERnull; 기존9장 정답/작성자 불명 유지",
+      "command": "ocr_evaluation.py --kind text with rights-reviewed labeled manifest",
+      "log_or_ci": "metrics.json",
+      "reason": "자료의 권리·실제필기·정답·작성자 조건 미충족",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B11",
+      "status": "UNVERIFIED",
+      "scope": "real grading-mark quality",
+      "expected": "5종각20 총100; F1≥.95/정답precision≥.98/연결≥.95",
+      "actual": "실제표본0, 모든새지표null; 합성5개를 실제표본에 포함하지 않음",
+      "command": "ocr_evaluation.py --kind reading with 100 real labeled items",
+      "log_or_ci": "metrics.json",
+      "reason": "실제자료/색·펜·배치별 정답 미확보",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B12",
+      "status": "PASS",
+      "scope": "app source contracts and automated Flutter regression",
+      "expected": "사진/Mark/수식 지원과 안내 일치; 명시확정 전 저장0",
+      "actual": "UI1사진, 빨간3종후보/찍음·안품수동, LaTeX원문·정확도미검증 명시;983회귀 통과",
+      "command": "flutter test --no-pub --concurrency=2 --reporter expanded",
+      "log_or_ci": "test-results.json",
+      "reason": "실제 모델/기기 검증은 B13/14 별도",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B13",
+      "status": "UNVERIFIED",
+      "scope": "real text/math/grading app chain",
+      "expected": "같은요청 앱→서버→실제모델→교정→암호화DB/재조회",
+      "actual": "3경로 실제앱실행0; 실행설정/launcher/fixture 준비",
+      "command": "docs/handoff/NEXT-02b-DEVICE.md",
+      "log_or_ci": "device-cases.json",
+      "reason": "기기와 승인된devendpoint/모델 없음",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B14",
+      "status": "UNVERIFIED",
+      "scope": "actual app K1..K4 by platform",
+      "expected": "실제process종료/재시작, 동일ID·attempt/원장/문서 대조",
+      "actual": "실제K1~K4 0; DB재개/계정자동회귀와 분리, PID launcher 준비",
+      "command": "python tool/next02b_device_cycle.py --help",
+      "log_or_ci": "device-cases.json",
+      "reason": "adb·기기·iOS/Xcode·devendpoint 부재; pid-cycle도 미실행",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B15",
+      "status": "PASS",
+      "scope": "existing automated owner/consent/purge protections",
+      "expected": "계정/동의/epoch 변경 후 이전노출·저장·부활0",
+      "actual": "Flutter983, SQL508, Edge53, realDB+Edge14 통과",
+      "command": "test commands in test-results.json",
+      "log_or_ci": "test-results.json",
+      "reason": "실기기 계정전환을 대신하지 않음; 암호화/보존/포인트 정책 변경 없음",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B16",
+      "status": "UNVERIFIED",
+      "scope": "actual model performance and infrastructure cost",
+      "expected": "cold/warm/실패·장비·범위; API0과 전체원가unknown",
+      "actual": "실제새모델0회; API호출0, 전체인프라/CI원가null; 예산/정산 자동회귀PASS",
+      "command": "ocr_evaluation.py with complete frozen models and inputs",
+      "log_or_ci": "metrics.json",
+      "reason": "실패/EOF의 공급자비용0 추정 금지; 실제비용 영수증 없음",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B17",
+      "status": "UNVERIFIED",
+      "scope": "evidence snapshot before final submission CI",
+      "expected": "최종제출SHA의4workflow와push확인",
+      "actual": "코드저장·로컬회귀·3커밋push 확인; 증거커밋후 최종SHA CI는 PR9에서 확정",
+      "command": "gh run list --branch feat/s14-oss-integration; gh pr view 9",
+      "log_or_ci": "https://github.com/byite-co/soongong/pull/9",
+      "reason": "이 파일 커밋후 수행하는 최종CI 결과는 PR본문과 로컬 final-attestation.json에 추가; 이전CI를 최종CI로 대체하지 않음",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    },
+    {
+      "item_id": "B18",
+      "status": "PASS",
+      "scope": "saved handoff and honest disposition",
+      "expected": "완료/원인미해결/품질미달/자원부재 구분, Draft/OFF/NEXT03",
+      "actual": "인계·protocol·manifests·metrics·집계·기기절차 저장; PR Draft OPEN 확인; 병합/배포/유료추론0",
+      "command": "docs/handoff/NEXT-02b.md",
+      "log_or_ci": "manifest.json",
+      "reason": "전체제품완료/모델품질합격 선언 아님",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b"
+    }
+  ],
+  "previous_judgments": {
+    "A24": "PASS24 automated; current Flutter/SQL/Edge regression supports continued automatic scope",
+    "R8": "historical PASS1 FAIL2 UNVERIFIED5 unchanged; v2 denominator reinterpretation separately documented",
+    "FD28": "historical PASS28; this session DBEdge14 rerun is not a new live Supabase Storage test",
+    "original58": "PASS13 UNVERIFIED45 unchanged",
+    "RC40": "historical automatic PASS40; current automatic regressions pass",
+    "DEVICE12": "UNVERIFIED12 unchanged",
+    "native": "historical Android16/iOS54 not claimed as current until hosted CI output verified"
+  }
+}

@@ -50,14 +50,16 @@ class SeatFrameSourceException implements Exception {
   final String? detail;
 
   @override
-  String toString() => 'SeatFrameSourceException($code${detail == null ? '' : ': $detail'})';
+  String toString() =>
+      'SeatFrameSourceException($code${detail == null ? '' : ': $detail'})';
 }
 
 typedef SeatFrameCallback = void Function(SeatFrame frame);
 
 /// Platform fault while the source is open (error description from the
 /// camera plugin, already free of frame data).
-typedef SeatFaultCallback = void Function(CameraFault fault, String description);
+typedef SeatFaultCallback =
+    void Function(CameraFault fault, String description);
 
 enum CloseOutcome { ok, failed, timeout }
 
@@ -65,22 +67,22 @@ enum CloseOutcome { ok, failed, timeout }
 @immutable
 class CloseResult {
   const CloseResult.ok()
-      : outcome = CloseOutcome.ok,
-        error = null,
-        stackTrace = null,
-        waited = null;
+    : outcome = CloseOutcome.ok,
+      error = null,
+      stackTrace = null,
+      waited = null;
 
   /// The platform release threw [error]; the camera may still be held.
   const CloseResult.failed(Object this.error, [this.stackTrace])
-      : outcome = CloseOutcome.failed,
-        waited = null;
+    : outcome = CloseOutcome.failed,
+      waited = null;
 
   /// The release had not finished after [waited]; it continues in the
   /// background.
   const CloseResult.timeout(Duration this.waited)
-      : outcome = CloseOutcome.timeout,
-        error = null,
-        stackTrace = null;
+    : outcome = CloseOutcome.timeout,
+      error = null,
+      stackTrace = null;
 
   final CloseOutcome outcome;
   final Object? error;
@@ -91,17 +93,18 @@ class CloseResult {
 
   @override
   String toString() => switch (outcome) {
-        CloseOutcome.ok => 'CloseResult.ok',
-        CloseOutcome.failed => 'CloseResult.failed($error)',
-        CloseOutcome.timeout => 'CloseResult.timeout(${waited!.inMilliseconds}ms)',
-      };
+    CloseOutcome.ok => 'CloseResult.ok',
+    CloseOutcome.failed => 'CloseResult.failed($error)',
+    CloseOutcome.timeout => 'CloseResult.timeout(${waited!.inMilliseconds}ms)',
+  };
 }
 
 /// One opened camera session (S04d). Closing it releases the resources of
 /// this session only; a session opened later is unaffected.
 abstract class SeatCameraHandle {
   /// Stops the stream and releases this session's camera. Idempotent: a
-  /// second call answers `ok` without doing anything. Never throws — a
+  /// second call performs no new release (and may join the first result).
+  /// Never throws — a
   /// failing or overdue release is reported in the result (S04e §3).
   Future<CloseResult> close();
 
@@ -158,9 +161,8 @@ abstract class LifecycleSource {
 
 /// `true` for the states in which the engine must not hold the camera.
 bool isBackgroundState(AppLifecycleState? state) => switch (state) {
-      AppLifecycleState.hidden ||
-      AppLifecycleState.paused ||
-      AppLifecycleState.detached =>
-        true,
-      AppLifecycleState.resumed || AppLifecycleState.inactive || null => false,
-    };
+  AppLifecycleState.hidden ||
+  AppLifecycleState.paused ||
+  AppLifecycleState.detached => true,
+  AppLifecycleState.resumed || AppLifecycleState.inactive || null => false,
+};

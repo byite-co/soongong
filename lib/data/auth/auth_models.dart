@@ -157,6 +157,7 @@ class ProfileSnapshot {
     required this.userId,
     required this.onboardingDone,
     required this.purgeEpoch,
+    this.purgeRequestId,
     this.consentAccountVersion,
     this.consentAccountAt,
     this.consentReadingVersion,
@@ -168,6 +169,7 @@ class ProfileSnapshot {
         userId: json['user_id'] as String,
         onboardingDone: json['onboarding_done'] == true,
         purgeEpoch: (json['purge_epoch'] as num?)?.toInt() ?? 0,
+        purgeRequestId: (json['purge_request_id'] as String?)?.toLowerCase(),
         consentAccountVersion: json['consent_account_version'] as String?,
         consentAccountAt: _date(json['consent_account_at']),
         consentReadingVersion: json['consent_reading_version'] as String?,
@@ -178,6 +180,10 @@ class ProfileSnapshot {
   final String userId;
   final bool onboardingDone;
   final int purgeEpoch;
+
+  /// The `purge-all` request id the server served last ([S09d]) — a client
+  /// that lost the answer compares it with its own stored intent.
+  final String? purgeRequestId;
   final String? consentAccountVersion;
   final DateTime? consentAccountAt;
   final String? consentReadingVersion;

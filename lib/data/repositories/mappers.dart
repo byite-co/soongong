@@ -18,27 +18,25 @@ SyncStamp stampOf({
   required int? serverSeq,
   required int purgeEpoch,
   DateTime? pendingDeleteUntil,
-}) =>
-    SyncStamp(
-      userId: userId,
-      createdAt: createdAt,
-      clientUpdatedAt: clientUpdatedAt,
-      deviceId: deviceId,
-      clientRev: clientRev,
-      baseServerVersion: baseServerVersion,
-      serverVersion: serverVersion,
-      serverSeq: serverSeq,
-      purgeEpoch: purgeEpoch,
-      pendingDeleteUntil: pendingDeleteUntil,
-    );
+}) => SyncStamp(
+  userId: userId,
+  createdAt: createdAt,
+  clientUpdatedAt: clientUpdatedAt,
+  deviceId: deviceId,
+  clientRev: clientRev,
+  baseServerVersion: baseServerVersion,
+  serverVersion: serverVersion,
+  serverSeq: serverSeq,
+  purgeEpoch: purgeEpoch,
+  pendingDeleteUntil: pendingDeleteUntil,
+);
 
 Tombstone tombstoneOf(
   String table,
   String id,
   DateTime deletedAt, [
   Map<String, String?> keepKeys = const <String, String?>{},
-]) =>
-    Tombstone(table: table, id: id, deletedAt: deletedAt, keepKeys: keepKeys);
+]) => Tombstone(table: table, id: id, deletedAt: deletedAt, keepKeys: keepKeys);
 
 Subject? subjectOf(SubjectRow r) {
   if (r.deletedAt != null) return null;
@@ -234,18 +232,18 @@ ReadingRequest? readingRequestOf(ReadingRequestRow r) {
 }
 
 Photo photoOf(PhotoRow r) => Photo(
-      id: r.id,
-      userId: r.userId,
-      requestId: r.requestId,
-      localPath: r.localPath,
-      takenAt: r.takenAt,
-      expiresAt: r.expiresAt,
-      width: r.width,
-      height: r.height,
-      pageIndex: r.pageIndex,
-      createdAt: r.createdAt,
-      deletedAt: r.deletedAt,
-    );
+  id: r.id,
+  userId: r.userId,
+  requestId: r.requestId,
+  localPath: r.localPath,
+  takenAt: r.takenAt,
+  expiresAt: r.expiresAt,
+  width: r.width,
+  height: r.height,
+  pageIndex: r.pageIndex,
+  createdAt: r.createdAt,
+  deletedAt: r.deletedAt,
+);
 
 WrongItem? wrongItemOf(WrongItemRow r) {
   if (r.deletedAt != null) return null;
@@ -268,7 +266,7 @@ WrongItem? wrongItemOf(WrongItemRow r) {
     pageIndex: r.pageIndex!,
     number: r.number!,
     mark: r.mark!,
-    confidence: r.confidence!,
+    confidence: r.confidence,
     userConfirmed: r.userConfirmed ?? false,
     status: r.status!,
     resolvedAt: r.resolvedAt,

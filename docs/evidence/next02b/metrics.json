@@ -1,0 +1,89 @@
+{
+  "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+  "historical": {
+    "source": "../next02/metrics.json",
+    "source_sha256": "73d2fd1ce516a480f8682b97849b67d7b14be08eab13139e453603b2c6f54d6a",
+    "mpo_rejections": 18,
+    "png_all": {
+      "v3": [
+        7,
+        9
+      ],
+      "v5": [
+        4,
+        9
+      ]
+    },
+    "png_eligible_v2_interpretation": {
+      "v3": [
+        7,
+        7
+      ],
+      "v5": [
+        4,
+        7
+      ]
+    },
+    "png_oversized_bytes": [
+      4540191,
+      4207053
+    ],
+    "eof_eligible_v5": 3,
+    "math": {
+      "strict_matches": 12,
+      "denominator": 60,
+      "strict": 0.2,
+      "strict_target_status": "FAIL",
+      "valid": [
+        60,
+        60
+      ],
+      "p95_seconds": 19.88304936600001,
+      "valid_target_status_on_old_printed_set": "PASS",
+      "latency_target_status_on_old_hardware": "PASS"
+    },
+    "rss_scope_correction": "old max_child_rss_kib was cumulative parent RUSAGE_CHILDREN, not independent request RSS"
+  },
+  "new": {
+    "actual_model_attempts": 0,
+    "accepted_stability_attempts": 0,
+    "expected_rejection_original_image_attempts": 0,
+    "stability_target": {
+      "valid": [
+        21,
+        21
+      ],
+      "rejection": [
+        6,
+        6
+      ],
+      "all": 27
+    },
+    "stability_status": "UNVERIFIED",
+    "v5_eof_cause": "unknown",
+    "v5_eof_input_hashes": null,
+    "synthetic_reported_byte_length_rejection_checks": 6,
+    "synthetic_checks_are_original_image_evaluation": false,
+    "math_diagnostic_samples": 0,
+    "math_new_holdout_samples": 0,
+    "math_strict": null,
+    "math_valid_rate": null,
+    "math_p95_seconds": null,
+    "korean_real_labeled_regions": 0,
+    "korean_verified_writers": 0,
+    "korean_cer_with_spaces": null,
+    "korean_cer_without_spaces": null,
+    "grading_real_labeled_items": 0,
+    "grading_macro_f1": null,
+    "grading_correct_precision": null,
+    "grading_number_link": null
+  },
+  "cost": {
+    "new_inference_api_calls": 0,
+    "new_inference_api_cost_krw": 0,
+    "infrastructure_total_cost_krw": null,
+    "hosted_ci_cost_krw": null,
+    "provider_failure_cost_inferred_zero": false
+  },
+  "reason": "Official assets redirect to us.aws.cdn.hf.co and CONNECT403; current instance has no complete models, original evaluation files or labeled handwriting/mark quality set."
+}

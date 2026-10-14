@@ -1,7 +1,13 @@
 // JSON responses + the error contract shared by every function:
 // { error: <code>, detail?: <string> } with the HTTP status that the code maps to.
+import { jsonObjectSchema, optionalStringSchema, requiredStringSchema } from "./validation.ts";
+
 export class HttpError extends Error {
-  constructor(public readonly status: number, public readonly code: string, public readonly detail?: string) {
+  constructor(
+    public readonly status: number,
+    public readonly code: string,
+    public readonly detail?: string,
+  ) {
     super(code);
   }
 }
@@ -20,9 +26,12 @@ export function error(status: number, code: string, detail?: string): Response {
 export async function readJson(req: Request): Promise<Record<string, unknown>> {
   try {
     const body = await req.json();
-    if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    const parsed = jsonObjectSchema.safeParse(body);
+    if (!parsed.success) {
       throw new HttpError(400, "invalid_json");
     }
+    // Validation must not rewrite unknown keys (including an own __proto__
+    // JSON key); SQL / each endpoint remains responsible for its own fields.
     return body as Record<string, unknown>;
   } catch (e) {
     if (e instanceof HttpError) throw e;
@@ -31,16 +40,19 @@ export async function readJson(req: Request): Promise<Record<string, unknown>> {
 }
 
 export function requireString(body: Record<string, unknown>, key: string, max = 4096): string {
-  const v = body[key];
-  if (typeof v !== "string" || v.length === 0 || v.length > max) throw new HttpError(400, "invalid_field", key);
-  return v;
+  const parsed = requiredStringSchema(max).safeParse(body[key]);
+  if (!parsed.success) throw new HttpError(400, "invalid_field", key);
+  return parsed.data;
 }
 
-export function optionalString(body: Record<string, unknown>, key: string, max = 4096): string | null {
-  const v = body[key];
-  if (v === undefined || v === null) return null;
-  if (typeof v !== "string" || v.length > max) throw new HttpError(400, "invalid_field", key);
-  return v;
+export function optionalString(
+  body: Record<string, unknown>,
+  key: string,
+  max = 4096,
+): string | null {
+  const parsed = optionalStringSchema(max).safeParse(body[key]);
+  if (!parsed.success) throw new HttpError(400, "invalid_field", key);
+  return parsed.data ?? null;
 }
 
 export function methodNotAllowed(req: Request, allowed = "POST"): Response | null {
@@ -63,6 +75,13 @@ const sqlStatus: Record<string, number> = {
   invalid_request: 400,
   invalid_outcome: 400,
   entry_id_reused: 409,
+  invalid_payload: 400, invalid_engine_result: 502, invalid_cost: 400,
+  request_conflict: 409, revision_conflict: 409, document_deleted: 409,
+  quote_unavailable: 409, policy_unavailable: 503, ledger_unavailable: 503,
+  study_access_denied: 403, body_unavailable: 404, asset_unavailable: 410,
+  job_unavailable: 404, points_insufficient: 409,
+  budget_unavailable: 503, budget_exceeded: 429,
+
 };
 
 export function statusForSqlError(message: string): number {
@@ -70,7 +89,10 @@ export function statusForSqlError(message: string): number {
 }
 
 /** Wraps a handler: HttpError → its status; anything else → 500 without leaking details. */
-export function serve(handler: (req: Request) => Promise<Response>, log: (msg: string) => void = console.error): void {
+export function serve(
+  handler: (req: Request) => Promise<Response>,
+  log: (msg: string) => void = console.error,
+): void {
   Deno.serve(async (req: Request) => {
     const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
     try {

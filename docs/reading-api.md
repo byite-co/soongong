@@ -118,6 +118,12 @@ create policy "reading photos upload own prefix" on storage.objects for insert t
   with check (bucket_id = 'reading-photos' and (storage.foldername(name))[1] = auth.uid()::text);
 ```
 
-## 10. S16 (엔진) 연결 지점
+## 10. NEXT-02 실제 개발 엔진 (CONTRACT-CHANGE)
 
-`supabase/functions/reading-worker/index.ts` 의 `callEngine(job)` — 입력 `{request_id, user_id, object_paths, subject_id, range_text, attempts}`, 반환 `{ok:true, result:{pages:[{index, items:[{number, mark, confidence, box?}]}], completed_at}}` 또는 `{ok:false, status, reason}`. `result` 가 그대로 `result_json` 이 된다(형식 확정은 S06/S16).
+`callEngine(job)`은 canonical `<owner>/<request>/pN.jpg`를 private Storage에서 읽어 제한된 HTTPS worker로 전달한다. handler 전체55초, worker50초, 자동재시도/fallback0, run당 job1개. worker envelope v1의 attempt/model/usage 검증 후 `schema_version:2,pages:[{index,items:[{number,mark,confidence,box,needs_review:true}]}]`를 저장한다. number0..999999, page0..19, 중복 금지, normalized ordered box, Mark5종 또는null, confidence0..1 또는null이다. 미검출/불확실을 정답·미풀이로 확정하지 않는다. 모든후보는 사용자 교정 대상이다.
+
+`reading_ai_begin(user,request,attempt)`은 기존 quota와 별도로 비용만 예약한다. 원래 월 `ai_budgets`를 신규 OCR과 공유하고 포인트 lot/지갑을 건드리지 않는다. unknown cost가 있으면 재호출하지 않는다. `reading_finish_attempt`은 현재 attempt/lease/deadline과 SQL 결과 검증을 통과해야 quota를 확정한다. terminal은 기존 삭제 큐로 처리한다.
+
+`RemoteReadingEngine`은2초/60초후5초 polling,404/410종료,active_exists/권리/동의/할당량/취소 outcome을 매핑한다. 상태 snapshot에 owner/epoch/created/client_updated/device/id stamp가 추가되어 서버에만 있는 active request를 복구할 수 있다. 로컬 tombstone은 부활시키지 않는다. 성공 save/updateMarks의 서버 wrong/review 행은 소유권/epoch/server_version 검사 후 반영하고 새 UUID/outbox를 만들지 않는다. 사용자 확정 전 오답 자동 저장은 없다. 새 수동 오답의 없는 confidence는null이다.
+
+신규 migration이 private reading-photos bucket과 자기 canonical 경로 insert 정책을 선언한다. 위 §9의 기존 수동 정책이 이미 있으면 정책 합집합을 확인해야 한다. select/update/delete client 권한은 새로 주지 않는다. 개발앱 `DEV_OCR_ENABLED`와 서버 `READING_AI_ENABLED/READING_AI_USER_IDS`는 기본OFF다. 일반 OCR 문자열 반환만으로 채점 품질 완료를 선언하지 않는다. [실제 평가 및 제한](handoff/NEXT-02.md)을 따른다.

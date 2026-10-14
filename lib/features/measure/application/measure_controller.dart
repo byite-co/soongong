@@ -14,6 +14,7 @@ import '../../../core/domain/ids.dart';
 import '../../../core/domain/local_date.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/platform/sleep_aware_clock.dart';
+import '../../../data/engines/seat_engine_impl.dart';
 import '../../../data/repositories/planner_repository.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../data/repositories/session_repository.dart';
@@ -163,13 +164,22 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     if (_disposed) throw StateError('MeasureController disposed');
   }
 
-  /// Every write of this controller goes through here ([S06d]): the alive
-  /// and account-ownership checks run inside the transaction, after the
-  /// database lock is acquired, so a write queued behind an account switch
-  /// (D27 wipe + rebind) is refused instead of re-creating the old
-  /// account's rows in the new account's database.
-  Future<T> _owned<T>(Future<T> Function() action) =>
-      sessions.writer.runOwnedTransaction(action, alive: () => !_disposed);
+  /// Every write of this controller goes through here ([S06d] · [S09c]):
+  /// the alive, account-ownership and purge-generation checks run inside
+  /// the transaction, after the database lock is acquired, so a write
+  /// queued behind an account switch (D27 wipe + rebind) or behind 모든
+  /// 기록 삭제 is refused instead of re-creating the old rows. While a
+  /// purge is pending only the session that already exists may be written
+  /// (checkpoint · save · corrections · recovery finish / discard — they
+  /// resolve the measurement the purge waits for); [newRecord] marks the
+  /// one write that starts a new session, which the barrier refuses.
+  Future<T> _owned<T>(Future<T> Function() action, {bool newRecord = false}) =>
+      sessions.writer.runOwnedTransaction(
+        action,
+        alive: () => !_disposed,
+        generation: sessions.writer.purgeGeneration,
+        purgeWork: !newRecord,
+      );
 
   String? get sessionId => _draft?.sessionId ?? _timeline?.sessionId;
   SessionMode get mode => _draft?.mode ?? _timeline?.mode ?? SessionMode.manual;
@@ -301,8 +311,11 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
         subjectId: subjectId,
         plannerItemId: task?.id,
       );
+      // Camera acquisition can fail or wait behind another owner. Persist the
+      // initial interval as paused until this run actually finishes opening.
+      if (mode == SessionMode.camera) _timeline!.pause(at);
       final first = _timeline!.snapshot(at);
-      await _owned(() => sessions.startActive(first));
+      await _owned(() => sessions.startActive(first), newRecord: true);
       _todayBaseSeconds = await _todaySeatedBefore(_timeline!.sessionId);
       if (_disposed) return false;
       phase = MeasurePhase.focus;
@@ -359,13 +372,15 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     // stop() must invalidate an opening camera immediately (S04c). Waiting
     // for start() to resolve would keep the camera open in the background.
     final next = engine.stop();
-    _engineWork = Future.wait([?_engineWork, next])
-        .then<void>((_) {})
-        .catchError((Object _) {});
+    _engineWork = Future.wait([
+      ?_engineWork,
+      next,
+    ]).then<void>((_) {}).catchError((Object _) {});
     return _engineWork!;
   }
 
   Future<void> _startEngine() async {
+    _timeline!.pause(now);
     await _stopEngine();
     if (!isLive || _background || _disposed) return;
     final token = ++_generation;
@@ -404,6 +419,21 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
     final next = engine.start(SeatEngineConfig(lowPower: lowPower));
     try {
       await next;
+      if (token == _generation &&
+          isLive &&
+          !_background &&
+          !_disposed &&
+          !cameraLost) {
+        // The real engine also completes start() after a handled failure.
+        // Its asynchronous SeatError can arrive after this continuation, so
+        // readiness must hold before any seated interval starts.
+        final currentEngine = engine;
+        if (currentEngine is SeatEngineImpl && !currentEngine.isRunning) {
+          cameraLost = true;
+        } else {
+          _timeline!.resume(now);
+        }
+      }
     } on Object {
       if (token == _generation) {
         cameraLost = true;
@@ -431,7 +461,6 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       _timeline!.pause(now);
       await _stopEngine();
       if (!isLive || _background) return;
-      _timeline!.resume(now);
       _resumeOnForeground = false;
       await _startEngine();
     }
@@ -493,8 +522,11 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       }
       cameraLost = false;
       reconnectFailed = false;
-      _timeline!.resume(now);
-      if (mode == SessionMode.camera) await _startEngine();
+      if (mode == SessionMode.camera) {
+        await _startEngine();
+      } else {
+        _timeline!.resume(now);
+      }
       if (cameraLost) reconnectFailed = true;
       await checkpoint();
     } on Object {
@@ -571,7 +603,9 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
       // wall clock is never consulted (D23: device time changes are ignored).
       _clock?.advance(shift);
       if (shift > const Duration(seconds: 1)) {
-        appLog.i('measure · session clock advanced by sleep ${shift.inSeconds}s');
+        appLog.i(
+          'measure · session clock advanced by sleep ${shift.inSeconds}s',
+        );
       }
     }
     await _wake(true);
@@ -674,7 +708,7 @@ class MeasureController extends ChangeNotifier with WidgetsBindingObserver {
         _clock = SessionClock(wall: FixedClock(anchor), monotonic: monotonic)
           ..start();
         _timeline = SessionTimeline.fromSnapshot(_draft!, newId: newUuid);
-        _timeline!.resume(now);
+        if (recoveryMode == SessionMode.manual) _timeline!.resume(now);
         _todayBaseSeconds = await _todaySeatedBefore(id);
         _draft = null;
         phase = MeasurePhase.focus;

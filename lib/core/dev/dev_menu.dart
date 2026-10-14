@@ -11,15 +11,16 @@ import 'package:go_router/go_router.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 import '../../data/export/export_service.dart';
-import '../../data/export/share_export.dart';
 import '../../data/repositories/repositories.dart';
 import '../../data/seed/dev_seeder.dart';
+import '../../features/privacy/application/privacy_providers.dart';
 import '../config/app_config.dart';
 import '../contracts/billing_gateway.dart';
 import '../contracts/fakes/fakes.dart';
 import '../contracts/providers.dart';
 import '../logging/app_logger.dart';
 import '../strings/dev_strings.dart';
+import '../strings/gaze_strings.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/widgets.dart';
@@ -232,6 +233,10 @@ class DevMenuSheet extends ConsumerWidget {
             (FakeSeatScenario.cameraBusy, DevStrings.seatCameraBusy),
           ],
         ),
+        AppButton.secondary(
+          label: GazeStrings.title,
+          onPressed: () { Navigator.of(context).pop(); GoRouter.of(context).push('/_gaze_lab'); },
+        ),
         section(DevStrings.sectionReading),
         choices<FakeReadingScenario>(
           value: s.reading,
@@ -320,10 +325,7 @@ class _DataSection extends ConsumerWidget {
     }
 
     Future<void> export(ExportFormat format) => run(
-          () async {
-            final file = await ref.read(exportServiceProvider).build(format);
-            await shareExportFile(file);
-          },
+          () => ref.read(privacyActionsProvider).export(format),
           '${_label(format)} · ${DevStrings.exportDone}',
         );
 

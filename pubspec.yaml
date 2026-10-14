@@ -30,6 +30,7 @@ dependencies:
   # Local DB (drift + drift_flutter → sqlite3 native assets; sqlite3_flutter_libs is EOL)
   drift: ^2.35.0
   drift_flutter: ^0.3.1
+  sqlite3: 3.5.2 # Native assets are hash-pinned by the package build hook.
 
   # Backend
   supabase_flutter: ^2.18.0
@@ -48,6 +49,9 @@ dependencies:
 
   # Notifications
   flutter_local_notifications: ^22.3.1
+  # [S09] flutter_local_notifications.zonedSchedule takes tz.TZDateTime; the
+  # app schedules explicit local instants (no zone-name lookup needed).
+  timezone: ^0.11.1
 
   # Billing (RevenueCat)
   purchases_flutter: ^10.13.2
@@ -80,6 +84,17 @@ dependencies:
   # sha256 of the Apple nonce (already a transitive dependency).
   crypto: ^3.0.7
   wakelock_plus: ^1.8.0
+  connectivity_plus: ^7.3.1
+  url_launcher: ^6.3.2
+  path: ^1.9.1
+
+# RC-02: exact locked platform sources, patched only for owned temporary files.
+# Public image_picker API/codecs retained. Provenance: third_party/owned_picker.md.
+dependency_overrides:
+  image_picker_android:
+    path: third_party/image_picker_android
+  image_picker_ios:
+    path: third_party/image_picker_ios
 
 dev_dependencies:
   flutter_test:
@@ -102,6 +117,8 @@ flutter:
 
   assets:
     - assets/fonts/LICENSE-Pretendard.txt
+    - assets/models/face_landmarker.task
+    - assets/licenses/
 
   # Pretendard Variable (OFL-1.1), wght 45–930. Weight is selected through the
   # `wght` axis; see core/theme/tokens.dart (AppTypography).
@@ -109,3 +126,9 @@ flutter:
     - family: Pretendard
       fonts:
         - asset: assets/fonts/PretendardVariable.ttf
+
+# EXT-04: upstream sqlite3 silently ignores key pragmas; a real codec is mandatory.
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlite3mc

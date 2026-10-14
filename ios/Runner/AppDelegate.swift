@@ -3,6 +3,9 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  private var gazeBridge: GazeBridge?
+  private var ownedShareBridge: OwnedShareBridge?
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -12,6 +15,19 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    let storage = FlutterMethodChannel(name: "co.byite.soongong/storage", binaryMessenger: engineBridge.applicationRegistrar.messenger())
+    storage.setMethodCallHandler { call, result in
+      guard call.method == "excludeDocumentsFromBackup" else { result(FlutterMethodNotImplemented); return }
+      do {
+        var directory = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try directory.setResourceValues(values)
+        result(nil)
+      } catch { result(FlutterError(code: "backup_policy_failed", message: nil, details: nil)) }
+    }
+    ownedShareBridge = OwnedShareBridge(messenger: engineBridge.applicationRegistrar.messenger())
+    gazeBridge = GazeBridge(messenger: engineBridge.applicationRegistrar.messenger())
     registerSleepAwareClock(messenger: engineBridge.applicationRegistrar.messenger())
   }
 

@@ -1,0 +1,63 @@
+{
+  "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+  "filesystem_write": "PASS: checkout and Git metadata create/read/fsync/delete",
+  "git_read_fetch_push": "PASS",
+  "github_api": "initial Forbidden resolved; PR9 OPEN and Draft confirmed",
+  "model_metadata": "official cards/configs/tokenizer small files received with expected SHA",
+  "model_assets": "CONNECT403 on official redirect to us.aws.cdn.hf.co",
+  "asset_redirects": [
+    {
+      "kind": "korean_image",
+      "redirects": [
+        {
+          "status": 302,
+          "from_host": "huggingface.co",
+          "to_host": "us.aws.cdn.hf.co"
+        }
+      ],
+      "error": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    },
+    {
+      "kind": "math_weights",
+      "redirects": [
+        {
+          "status": 302,
+          "from_host": "huggingface.co",
+          "to_host": "us.aws.cdn.hf.co"
+        }
+      ],
+      "error": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    },
+    {
+      "kind": "math_dataset",
+      "redirects": [
+        {
+          "status": 302,
+          "from_host": "huggingface.co",
+          "to_host": "us.aws.cdn.hf.co"
+        }
+      ],
+      "error": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    }
+  ],
+  "draft_network_domains": [
+    "api.github.com",
+    "docs.python.org",
+    "huggingface.co",
+    "us.aws.cdn.hf.co",
+    "jsr.io",
+    "storage.googleapis.com"
+  ],
+  "draft_saved": true,
+  "draft_is_runtime_apply_or_publish": false,
+  "paddle_dependencies": "70 pinned packages installed with --require-hashes, separate Python3.11 venv",
+  "android_sdk": false,
+  "adb": false,
+  "ios_xcode": false,
+  "gpu": false,
+  "approved_dev_endpoint_configured": false,
+  "cpu_quota": "400000 100000",
+  "memory_max_bytes": "34359738368",
+  "policy_bypass": false,
+  "merge_deploy_public_activation_paid_inference_calls": false
+}

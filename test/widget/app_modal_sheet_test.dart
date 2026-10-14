@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logger/logger.dart';
 import 'package:soongong/core/strings/common_strings.dart';
 import 'package:soongong/core/widgets/widgets.dart';
 
@@ -40,9 +41,39 @@ Future<bool? Function()> pumpModalHost(
 }
 
 void main() {
+  testWidgets('REG-04 cleanup error log omits paths, content and credentials', (
+    tester,
+  ) async {
+    const sensitive =
+        '/private/photo.jpg text=synthetic-answer token=secret key=123';
+    final logs = <LogEvent>[];
+    void record(LogEvent event) => logs.add(event);
+    Logger.addLogListener(record);
+    addTearDown(() => Logger.removeLogListener(record));
+    await pumpModalHost(
+      tester,
+      onConfirm: () async => throw StateError(sensitive),
+    );
+    await tester.tap(find.text('삭제'));
+    await tester.pumpAndSettle();
+    final failures = logs.where(
+      (event) => '${event.message}'.contains('AppModal'),
+    );
+    expect(failures, isNotEmpty);
+    for (final event in failures) {
+      expect(event.error, isNull);
+      expect(event.stackTrace, isNull);
+      expect('${event.message}', isNot(contains(sensitive)));
+      expect('${event.message}', contains('StateError'));
+    }
+    expect(find.text(CommonStrings.actionFailedRetry), findsOneWidget);
+    expect(find.textContaining(sensitive), findsNothing);
+  });
+
   group('showAppModal', () {
-    testWidgets('primary → true, secondary → false, barrier → false',
-        (tester) async {
+    testWidgets('primary → true, secondary → false, barrier → false', (
+      tester,
+    ) async {
       final result = await pumpModalHost(tester);
       expect(find.text('이 기록을 삭제할까요?'), findsOneWidget);
       await tester.tap(find.text('삭제'));
@@ -72,68 +103,76 @@ void main() {
     });
 
     testWidgets(
-        'while onConfirm runs: barrier tap, back and cancel are ignored; '
-        'resolves true afterwards', (tester) async {
-      final gate = Completer<void>();
-      var runs = 0;
-      final result = await pumpModalHost(
-        tester,
-        onConfirm: () {
-          runs++;
-          return gate.future;
-        },
-      );
-      await tester.tap(find.text('삭제'));
-      await tester.pump();
-      expect(runs, 1);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      'while onConfirm runs: barrier tap, back and cancel are ignored; '
+      'resolves true afterwards',
+      (tester) async {
+        final gate = Completer<void>();
+        var runs = 0;
+        final result = await pumpModalHost(
+          tester,
+          onConfirm: () {
+            runs++;
+            return gate.future;
+          },
+        );
+        await tester.tap(find.text('삭제'));
+        await tester.pump();
+        expect(runs, 1);
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-      await tester.tapAt(const Offset(5, 5)); // barrier
-      await tester.pump();
-      await tester.binding.handlePopRoute(); // back
-      await tester.pump();
-      await tester.tap(find.text(CommonStrings.cancel)); // secondary
-      await tester.pump();
-      await tester.tap(find.text('삭제'), warnIfMissed: false); // re-tap primary
-      await tester.pump();
-      expect(find.text('이 기록을 삭제할까요?'), findsOneWidget);
-      expect(result(), isNull);
-      expect(runs, 1);
+        await tester.tapAt(const Offset(5, 5)); // barrier
+        await tester.pump();
+        await tester.binding.handlePopRoute(); // back
+        await tester.pump();
+        await tester.tap(find.text(CommonStrings.cancel)); // secondary
+        await tester.pump();
+        await tester.tap(
+          find.text('삭제'),
+          warnIfMissed: false,
+        ); // re-tap primary
+        await tester.pump();
+        expect(find.text('이 기록을 삭제할까요?'), findsOneWidget);
+        expect(result(), isNull);
+        expect(runs, 1);
 
-      gate.complete();
-      await tester.pumpAndSettle();
-      expect(result(), isTrue);
-      expect(find.text('이 기록을 삭제할까요?'), findsNothing);
-    });
+        gate.complete();
+        await tester.pumpAndSettle();
+        expect(result(), isTrue);
+        expect(find.text('이 기록을 삭제할까요?'), findsNothing);
+      },
+    );
 
-    testWidgets('onConfirm throws: modal stays with error line, cancel → false',
-        (tester) async {
-      var calls = 0;
-      final result = await pumpModalHost(
-        tester,
-        onConfirm: () async {
-          calls++;
-          throw StateError('boom');
-        },
-      );
-      await tester.tap(find.text('삭제'));
-      await tester.pumpAndSettle();
-      expect(calls, 1);
-      expect(result(), isNull);
-      expect(find.text('이 기록을 삭제할까요?'), findsOneWidget);
-      expect(find.text(CommonStrings.actionFailedRetry), findsOneWidget);
+    testWidgets(
+      'onConfirm throws: modal stays with error line, cancel → false',
+      (tester) async {
+        var calls = 0;
+        final result = await pumpModalHost(
+          tester,
+          onConfirm: () async {
+            calls++;
+            throw StateError('boom');
+          },
+        );
+        await tester.tap(find.text('삭제'));
+        await tester.pumpAndSettle();
+        expect(calls, 1);
+        expect(result(), isNull);
+        expect(find.text('이 기록을 삭제할까요?'), findsOneWidget);
+        expect(find.text(CommonStrings.actionFailedRetry), findsOneWidget);
 
-      // Retry is possible, then cancel resolves false.
-      await tester.tap(find.text('삭제'));
-      await tester.pumpAndSettle();
-      expect(calls, 2);
-      await tester.tap(find.text(CommonStrings.cancel));
-      await tester.pumpAndSettle();
-      expect(result(), isFalse);
-    });
+        // Retry is possible, then cancel resolves false.
+        await tester.tap(find.text('삭제'));
+        await tester.pumpAndSettle();
+        expect(calls, 2);
+        await tester.tap(find.text(CommonStrings.cancel));
+        await tester.pumpAndSettle();
+        expect(result(), isFalse);
+      },
+    );
 
-    testWidgets('barrierDismissible: false ignores barrier taps when idle',
-        (tester) async {
+    testWidgets('barrierDismissible: false ignores barrier taps when idle', (
+      tester,
+    ) async {
       final result = await pumpModalHost(tester, barrierDismissible: false);
       await tester.tapAt(const Offset(5, 5));
       await tester.pumpAndSettle();
@@ -187,7 +226,10 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
       expect(find.text('내용'), findsOneWidget);
-      expect(tester.widget<AppSheet>(find.byType(AppSheet)).showHandle, isFalse);
+      expect(
+        tester.widget<AppSheet>(find.byType(AppSheet)).showHandle,
+        isFalse,
+      );
       // 520 card minus the 1px border on each side.
       expect(tester.getSize(find.byType(AppSheet)).width, 518);
     });

@@ -9,7 +9,8 @@
 //   3. D23 unfinished-session detection (logged; the home sheet asks)
 // It runs from ONE listener on the auth gate — a restored session
 // (Loading → signedIn) and a manual login (`PostLoginRoutine`) both reach the
-// same function; the second caller for the same user is a no-op.
+// same function; the second caller for the same user only re-runs the
+// 모든 기록 삭제 recovery (`PurgeRecovery.resume`, [S09c] — not a one-shot).
 // A failure is logged and never blocks the app.
 
 import 'dart:async';
@@ -23,9 +24,13 @@ import '../../core/domain/ids.dart';
 import '../../core/domain/local_date.dart';
 import '../../core/logging/app_logger.dart';
 import '../../features/home/domain/recovery_candidate.dart';
+import '../../features/privacy/application/photo_retention.dart';
+import '../../features/privacy/application/purge_recovery.dart';
+import '../../features/settings/application/notification_scheduler.dart';
 import '../auth/auth_gate.dart';
 import '../repositories/repositories.dart';
 import '../seed/dev_seeder.dart';
+import '../temp/temp_recovery.dart';
 
 part 'startup_tasks.g.dart';
 
@@ -50,7 +55,8 @@ class UserStartupTasks {
 
   final Ref _ref;
   final Set<String> _done = <String>{};
-  final Map<String, Future<StartupReport?>> _inFlight = <String, Future<StartupReport?>>{};
+  final Map<String, Future<StartupReport?>> _inFlight =
+      <String, Future<StartupReport?>>{};
 
   /// Users whose startup tasks ran in this app run.
   Set<String> get ranFor => Set<String>.unmodifiable(_done);
@@ -58,7 +64,11 @@ class UserStartupTasks {
   /// Runs the per-user tasks once for [userId]; later calls return the same
   /// future (while running) or null (already done).
   Future<StartupReport?> ensureRunFor(String userId) {
-    if (_done.contains(userId)) return Future<StartupReport?>.value();
+    if (_done.contains(userId)) {
+      // [S09c] A purge left open (blocked · unconfirmed · failed) is retried
+      // on every call, not only on the first one of the run.
+      return _ref.read(purgeRecoveryProvider).resume().then((_) => null);
+    }
     final running = _inFlight[userId];
     if (running != null) return running;
     // Block body on purpose: returning the removed Future from whenComplete
@@ -73,7 +83,21 @@ class UserStartupTasks {
   Future<StartupReport?> _run(String userId) async {
     _done.add(userId);
     try {
+      await _ref
+          .read(syncWriterProvider)
+          .refreshPurgeGeneration(); // [S09c] barrier mirror
       final settled = await _ref.read(deleteSettlerProvider).settle();
+      // S09: expired photos (D14 row 3) and the notification plan; S09b ·
+      // S09c: a 모든 기록 삭제 left open is continued (`PurgeRecovery`).
+      final expiredPhotos = await _ref
+          .read(photoRetentionProvider)
+          .purgeExpired();
+      final recovery = _ref.read(purgeRecoveryProvider)..start();
+      final pendingPurge = await recovery.resume();
+      if (pendingPurge != null) {
+        appLog.i('startup · pending local purge → ${pendingPurge.runtimeType}');
+      }
+      _ref.read(notificationSchedulerProvider).start();
       final today = LocalDate.of(_ref.read(appClockProvider).now());
       final created = await _ref.read(activityRepositoryProvider).touch(today);
       final sessions = _ref.read(sessionRepositoryProvider);
@@ -92,11 +116,12 @@ class UserStartupTasks {
       );
       appLog.i(
         'startup · pending deletes committed=${report.committed} restored=${report.restored} '
-        'activityCreated=${report.activityCreated} recoveryPending=${report.recoveryPending}',
+        'activityCreated=${report.activityCreated} recoveryPending=${report.recoveryPending} '
+        'expiredPhotos=$expiredPhotos',
       );
       return report;
-    } on Object catch (e, st) {
-      appLog.e('startup tasks failed', error: e, stackTrace: st);
+    } on Object catch (e) {
+      appLog.e('startup tasks failed (${e.runtimeType})');
       return null;
     }
   }
@@ -109,11 +134,19 @@ UserStartupTasks userStartupTasks(Ref ref) => UserStartupTasks(ref);
 /// tasks whenever a user becomes available (restored session, local-only
 /// build, or a login later in the run). Tests call this too.
 Future<void> runStartupTasks(ProviderContainer container) async {
+  // Recovery precedes any new picker, including before login. An unavailable
+  // store blocks the picker itself and is retried on foreground/privacy entry.
+  final temporary = await recoverTemporaryFilesAtStartup(container);
+  if (!temporary.complete) {
+    appLog.w(
+      'temporary cleanup pending (unknown=${temporary.unknown}, tasks=${temporary.remaining})',
+    );
+  }
   if (AppConfig.isDev) {
     try {
       await container.read(devSeederProvider).seedSubjects();
-    } on Object catch (e, st) {
-      appLog.e('dev seed failed', error: e, stackTrace: st);
+    } on Object catch (e) {
+      appLog.e('dev seed failed (${e.runtimeType})');
     }
   }
   attachStartupListener(container);
@@ -121,19 +154,17 @@ Future<void> runStartupTasks(ProviderContainer container) async {
 
 /// Listens to the auth gate and runs [UserStartupTasks.ensureRunFor] on every
 /// transition into a signed-in / local-only state.
-ProviderSubscription<AuthGateState> attachStartupListener(ProviderContainer container) {
-  return container.listen<AuthGateState>(
-    authGateProvider,
-    (_, next) {
-      final userId = next.userId;
-      if (userId == null) {
-        if (next is AuthGateSignedOut) {
-          appLog.i('startup · no signed-in user, user writes deferred');
-        }
-        return;
+ProviderSubscription<AuthGateState> attachStartupListener(
+  ProviderContainer container,
+) {
+  return container.listen<AuthGateState>(authGateProvider, (_, next) {
+    final userId = next.userId;
+    if (userId == null) {
+      if (next is AuthGateSignedOut) {
+        appLog.i('startup · no signed-in user, user writes deferred');
       }
-      unawaited(container.read(userStartupTasksProvider).ensureRunFor(userId));
-    },
-    fireImmediately: true,
-  );
+      return;
+    }
+    unawaited(container.read(userStartupTasksProvider).ensureRunFor(userId));
+  }, fireImmediately: true);
 }

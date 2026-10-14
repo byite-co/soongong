@@ -23,6 +23,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../core/logging/app_logger.dart';
 import '../repositories/repository_providers.dart';
+import '../temp/temp_providers.dart';
 import 'account_binding.dart';
 import 'auth_mode.dart';
 import 'auth_models.dart';
@@ -56,7 +57,11 @@ class AuthGateSignedOut extends AuthGateState {
 }
 
 class AuthGateSignedIn extends AuthGateState {
-  const AuthGateSignedIn({required this.userId, required this.profile, this.fromCache = false});
+  const AuthGateSignedIn({
+    required this.userId,
+    required this.profile,
+    this.fromCache = false,
+  });
 
   @override
   final String userId;
@@ -76,11 +81,19 @@ class AuthGateSignedIn extends AuthGateState {
 }
 
 class AuthGateProfileError extends AuthGateState {
-  const AuthGateProfileError({required this.userId, required this.reason});
+  const AuthGateProfileError({
+    required String userId,
+    required this.reason,
+    this.storageBlocked = false,
+    // Keep the public constructor name while access returns null when blocked.
+    // ignore: prefer_initializing_formals
+  }) : _userId = userId;
 
   @override
-  final String userId;
+  String? get userId => storageBlocked ? null : _userId;
+  final String _userId;
   final AuthRejection reason;
+  final bool storageBlocked;
 }
 
 /// User id of the dev build that runs without a backend (was S02's `'local'`).
@@ -94,6 +107,7 @@ class AuthGate extends _$AuthGate {
   StreamSubscription<AuthSession?>? _sub;
   Timer? _refreshTimer;
   int _generation = 0;
+  String? _sessionOwner;
 
   /// Set by the login screens around a sign-in call so the session event
   /// does not trigger a second profile read; [applySignIn] resolves instead.
@@ -114,16 +128,59 @@ class AuthGate extends _$AuthGate {
     final repo = ref.watch(authRepositoryProvider);
     _sub = repo.authState.listen(_onSession);
     ref.onDispose(() {
+      _generation++;
       _sub?.cancel();
       _refreshTimer?.cancel();
     });
     final session = repo.currentSession;
-    if (session == null) return const AuthGateSignedOut();
+    _sessionOwner = session?.userId;
+    if (session == null) {
+      unawaited(_revokeStoredOwner());
+      return const AuthGateSignedOut();
+    }
     unawaited(_resolve(session.userId));
     return const AuthGateLoading();
   }
 
+  Future<void> _revokeStoredOwner() async {
+    final gen = _generation;
+    try {
+      final previous = await ref.read(accountBindingProvider).current();
+      if (!ref.mounted ||
+          gen != _generation ||
+          previous == null ||
+          ref.read(authRepositoryProvider).currentSession != null) {
+        return;
+      }
+      final temporary = ref.read(tempOwnershipProvider);
+      temporary.beginBoundary(previous);
+      await temporary.revoke(previous);
+    } on Object {
+      // The encrypted binding remains, allowing the next startup to retry
+      // even when the independent filesystem marker could not be written.
+      appLog.w('auth gate: signed-out temporary cleanup pending');
+    }
+  }
+
   void _onSession(AuthSession? session) {
+    final previous = _sessionOwner;
+    _sessionOwner = session?.userId;
+    if (previous != null && previous != session?.userId) {
+      // Revoke starts with synchronous invalidation. Auth must still leave the
+      // old account immediately when disk/native cleanup is unavailable.
+      final temporary = ref.read(tempOwnershipProvider);
+      temporary.beginBoundary(previous);
+      unawaited(
+        temporary
+            .revoke(previous)
+            .then<void>(
+              (_) {},
+              onError: (Object _, StackTrace _) {
+                appLog.w('auth gate: temporary cleanup pending');
+              },
+            ),
+      );
+    }
     if (session == null) {
       _generation++;
       _refreshTimer?.cancel();
@@ -135,6 +192,7 @@ class AuthGate extends _$AuthGate {
       // Token refresh / duplicate event for the same user: nothing changes.
       return;
     }
+    _generation++;
     state = const AuthGateLoading();
     if (_loginInProgress) return; // the login flow hands over its result
     unawaited(_resolve(session.userId));
@@ -156,28 +214,65 @@ class AuthGate extends _$AuthGate {
     }
   }
 
-  Future<void> _resolve(String userId, {ProfileSnapshot? known, bool profileLoaded = false}) async {
+  Future<void> _resolve(
+    String userId, {
+    ProfileSnapshot? known,
+    bool profileLoaded = false,
+  }) async {
     final gen = ++_generation;
     _refreshTimer?.cancel();
+    bool alive() =>
+        ref.mounted &&
+        gen == _generation &&
+        ref.read(authRepositoryProvider).currentSession?.userId == userId;
     try {
       // A different account wipes the database (and with it the cache) first.
-      await ref.read(accountBindingProvider).bind(userId);
-    } on Object catch (e, st) {
-      appLog.e('auth gate: account binding failed', error: e, stackTrace: st);
+      await ref.read(accountBindingProvider).bind(userId, alive: alive);
+    } on AccountDeletedLocally {
+      if (!alive()) return;
+      state = const AuthGateSignedOut();
+      final binding = ref.read(accountBindingProvider);
+      unawaited(
+        ref
+            .read(authRepositoryProvider)
+            .signOut()
+            .then((_) => binding.clearDeletionReceipt(userId))
+            .catchError((Object _) {}),
+      );
+      return;
+    } on Object {
+      if (!alive()) return;
+      appLog.w('auth gate: account binding blocked');
+      state = AuthGateProfileError(
+        userId: userId,
+        reason: AuthRejection.unknown,
+        storageBlocked: true,
+      );
+      return;
     }
+    if (!alive()) return;
+    ref.read(tempOwnershipProvider).endBoundary(userId);
     try {
-      final profile = profileLoaded ? known : await ref.read(authRepositoryProvider).fetchProfile();
-      if (gen != _generation) return;
+      final profile = profileLoaded
+          ? known
+          : await ref.read(authRepositoryProvider).fetchProfile();
+      if (!alive()) return;
       state = AuthGateSignedIn(userId: userId, profile: profile);
       await _remember(userId, profile);
     } on Object catch (e) {
-      if (gen != _generation) return;
+      if (!alive()) return;
       final reason = AuthRejectionMapper.fromError(e);
       final cached = await _cachedFor(userId);
-      if (gen != _generation) return;
+      if (!alive()) return;
       if (cached != null) {
-        appLog.w('auth gate: profile read failed (${reason.name}) → cached profile, refresh scheduled');
-        state = AuthGateSignedIn(userId: userId, profile: cached.toSnapshot(), fromCache: true);
+        appLog.w(
+          'auth gate: profile read failed (${reason.name}) → cached profile, refresh scheduled',
+        );
+        state = AuthGateSignedIn(
+          userId: userId,
+          profile: cached.toSnapshot(),
+          fromCache: true,
+        );
         _scheduleRefresh();
         return;
       }
@@ -190,28 +285,45 @@ class AuthGate extends _$AuthGate {
     try {
       final cached = await ref.read(profileCacheProvider).read();
       return cached != null && cached.userId == userId ? cached : null;
-    } on Object catch (e, st) {
-      appLog.w('auth gate: profile cache read failed', error: e, stackTrace: st);
+    } on Object catch (e) {
+      appLog.w('auth gate: profile cache read failed (${e.runtimeType})');
       return null;
     }
   }
 
   Future<void> _remember(String userId, ProfileSnapshot? profile) async {
+    final gen = _generation;
     try {
       final cache = ref.read(profileCacheProvider);
-      if (profile == null) {
-        await cache.clear();
-      } else {
-        await cache.write(profile, verifiedAt: ref.read(appClockProvider).now());
-      }
-    } on Object catch (e, st) {
-      appLog.w('auth gate: profile cache write failed', error: e, stackTrace: st);
+      final db = ref.read(appDatabaseProvider);
+      await db.transaction(() async {
+        final owner = await ref.read(accountBindingProvider).current();
+        if (!ref.mounted ||
+            gen != _generation ||
+            owner != userId ||
+            (profile != null && profile.userId != userId)) {
+          return;
+        }
+        if (profile == null) {
+          await cache.clear();
+        } else {
+          await cache.write(
+            profile,
+            verifiedAt: ref.read(appClockProvider).now(),
+          );
+        }
+      });
+    } on Object catch (e) {
+      appLog.w('auth gate: profile cache write failed (${e.runtimeType})');
     }
   }
 
   void _scheduleRefresh() {
     _refreshTimer?.cancel();
-    _refreshTimer = Timer(kCachedProfileRefreshDelay, () => unawaited(refreshProfile()));
+    _refreshTimer = Timer(
+      kCachedProfileRefreshDelay,
+      () => unawaited(refreshProfile()),
+    );
   }
 
   /// Re-reads the profile without leaving the current state (background
@@ -229,7 +341,9 @@ class AuthGate extends _$AuthGate {
       appLog.i('auth gate: cached profile refreshed');
     } on Object catch (e) {
       if (gen != _generation) return;
-      appLog.w('auth gate: profile refresh failed (${AuthRejectionMapper.fromError(e).name})');
+      appLog.w(
+        'auth gate: profile refresh failed (${AuthRejectionMapper.fromError(e).name})',
+      );
       if (current.fromCache) _scheduleRefresh();
     }
   }
@@ -238,7 +352,11 @@ class AuthGate extends _$AuthGate {
   /// wait for the session stream (and does not read the profile twice).
   Future<void> applySignIn(SignedIn outcome) {
     _loginInProgress = false;
-    return _resolve(outcome.userId, known: outcome.profile, profileLoaded: outcome.profileLoaded);
+    return _resolve(
+      outcome.userId,
+      known: outcome.profile,
+      profileLoaded: outcome.profileLoaded,
+    );
   }
 
   /// After `complete-signup` / `update-consent` / `profile_set_onboarding_done`.
@@ -246,7 +364,7 @@ class AuthGate extends _$AuthGate {
     final current = state;
     if (current is AuthGateSignedIn && current.userId == profile.userId) {
       state = AuthGateSignedIn(userId: profile.userId, profile: profile);
-    } else if (current.userId == profile.userId || current is AuthGateLoading) {
+    } else if (current.userId == profile.userId) {
       state = AuthGateSignedIn(userId: profile.userId, profile: profile);
     } else {
       return;
