@@ -3,8 +3,10 @@ import json
 import os
 import re
 
+DEFAULT_CPU_THREADS = 1
 
-def load(root, *, cpu_threads=4):
+
+def load(root, *, cpu_threads=DEFAULT_CPU_THREADS):
     if type(cpu_threads) is not int or cpu_threads not in (1, 2, 4):
         raise ValueError('invalid_cpu_threads')
     os.environ['PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK'] = 'True'

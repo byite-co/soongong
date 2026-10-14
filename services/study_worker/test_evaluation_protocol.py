@@ -105,6 +105,11 @@ class EvaluationProtocolTests(unittest.TestCase):
             received=[]
             fake=SimpleNamespace(PaddleOCR=lambda **options: received.append(options))
             with patch.dict(sys.modules, {'paddleocr':fake}):
+                # Exercise the unmodified product child path, not an eval override.
+                paddle_adapter.load(folder)
+                self.assertEqual(received[-1]['cpu_threads'],1)
+                self.assertFalse(received[-1]['enable_mkldnn'])
+                self.assertEqual(received[-1]['device'],'cpu')
                 for count in (1,2,4):
                     with patch('worker.child', side_effect=lambda _b,_c:paddle_adapter.load(folder)):
                         original=paddle_adapter.load

@@ -16,6 +16,7 @@ import time
 import unicodedata
 from functools import partial
 from diagnostics import parent_children_usage
+from paddle_adapter import DEFAULT_CPU_THREADS
 
 
 def normalize(text, spaces=True):
@@ -160,7 +161,7 @@ def code_provenance():
 
 
 def paddle_evaluation_child(body, connection, *, cpu_threads):
-    """Local evaluation only. The HTTP worker always retains its default 4.
+    """Local evaluation override; the HTTP worker uses the adapter default.
 
     Spawned child mutation cannot affect the evaluator or a serving worker.
     All image validation, limits, process cleanup and receipt paths remain in
@@ -197,7 +198,7 @@ def run(args):
         'gpu': 'unmeasured'}, 'code':code_provenance(),
       'models_lock_sha256':hashlib.sha256((root/'models.lock.json').read_bytes()).hexdigest(),
       'repetitions':repetitions,'rows':[],
-      'paddle_cpu_threads_requested':threads if threads is not None else 4 if args.kind!='math' else None,
+      'paddle_cpu_threads_requested':threads if threads is not None else DEFAULT_CPU_THREADS if args.kind!='math' else None,
       'native_active_threads':'unverified; requested constructor setting is not observed native concurrency'}
     # Validate every input and fix eligible/rejected strata before any attempt.
     # Repeat failures stay in their original stratum; no post-hoc exclusions.
