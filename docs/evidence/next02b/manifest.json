@@ -1,0 +1,28 @@
+{
+  "baseline_commit": "c345c7335058affbc2c8a0adf7c31f186d241aab",
+  "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+  "evidence_scope": "code and protocol; no new model inference or real image evaluation",
+  "files_sha256": {
+    "services/study_worker/worker.py": "62ba962a13d2f6e814e5efbb3b04ee54674a5beecae5d792d356c0398232f948",
+    "services/study_worker/diagnostics.py": "e41aa99a0d8f9d63a1f873c0a812e32f948f63f6e41f9c82639aa838a02731f0",
+    "services/study_worker/process_ipc.py": "9f8c2f15b6b0b8de5f3746264ad2660007f4aa93f4e7a745bb595e66cbabd812",
+    "services/study_worker/ocr_evaluation.py": "ae3ececf05cda9ddecc2be3a2e53c99fb234a71ac551b741d143f6a7c4d04954",
+    "services/study_worker/paddle_adapter.py": "7491418a2c8e106612eaa3c1d2f5a93d4ffc73cf7713c940b338e3a02c902504",
+    "services/study_worker/unimernet_adapter.py": "b8f2766889331a53d92141f83d3bb690d40eca6840c478fc22c66346438a0797",
+    "services/study_worker/requirements-ocr.lock": "eacb0d7db74ec1eb255a16a856fdf5f9ecb877d8a0cccaacb177cbef75c2b301",
+    "services/study_worker/requirements-math-ocr.lock": "04766e3e76b1b9de5cae4480e17d4a130bc8ea76abfae2dad42a95f603c772fd",
+    "services/study_worker/models/paddle-v3.json": "e5fad668942487766272da215006cdf2c33713bb09caf798f137e8ae518a587b",
+    "services/study_worker/models/paddle-v5.json": "0f9226bc8c4bb793200bf5856705994510854d187e0d8781b48237559ad8f8e0",
+    "services/study_worker/models/unimernet-tiny.json": "5c5963dec1e3649f0176cd0a1e99a026edcc0e4f59805e47ded88715c6447410",
+    "tool/prepare_next02b_holdout.py": "ab59498a5cc9ae78fa65f13266943a145cfb2d5d0ed0048e95cb84c6e5a8ceee",
+    "tool/next02b_device_cycle.py": "5d54482bd973f949340957ae74a192dd59c7c62eac2840aedc3110a98dfd86e0"
+  },
+  "protocol_sha256": "fdaaa09c2ffdefee783f660df5f2fedcf0179026f97329bd3262d99963c65471",
+  "baseline_preserved": true,
+  "raw_previous_reports_present": false,
+  "new_model_runs": [],
+  "new_image_manifests": [],
+  "selection_seed": 20261014,
+  "new_holdout_selection_executed": false,
+  "partial_model_config_downloads": "verified metadata only, no complete model root"
+}

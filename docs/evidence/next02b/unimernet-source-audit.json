@@ -1,0 +1,53 @@
+{
+  "distribution": "unimernet==0.2.3",
+  "wheel_sha256": "538ebb3313bbb44f20778326696c8ba4dc6ba2dec28cc8baf225b44ae429f0ad",
+  "files": {
+    "unimernet/models/unimernet/unimernet.py": {
+      "wheel_sha256": "2729672dcb231b477f0221d9ea9ae67df0d3e17850ed08ce0818d24aa244edab",
+      "git_sha256": "2729672dcb231b477f0221d9ea9ae67df0d3e17850ed08ce0818d24aa244edab",
+      "same_as_reference_git": true
+    },
+    "unimernet/processors/formula_processor.py": {
+      "wheel_sha256": "1b5d5d98ac45c09939ab29c6ddf8f772470e9c2ce297d8ae7fc033fbaed53e95",
+      "git_sha256": "333dd01ba7e93ca679b95b9cd74db9f969e2d44ebf2eebe57bddc764b8480782",
+      "same_as_reference_git": false
+    },
+    "unimernet/models/base_model.py": {
+      "wheel_sha256": "a5c438c77fc182da7b81292facf6679c75eef1af7bc22941dd493a34e449dcb9",
+      "git_sha256": "a5c438c77fc182da7b81292facf6679c75eef1af7bc22941dd493a34e449dcb9",
+      "same_as_reference_git": true
+    },
+    "unimernet/models/blip2_models/blip2.py": {
+      "wheel_sha256": "2c9c78f56fd6e637429f77938d9a61fac5ee9c8b97c1494562d67def920327ad",
+      "git_sha256": "2c9c78f56fd6e637429f77938d9a61fac5ee9c8b97c1494562d67def920327ad",
+      "same_as_reference_git": true
+    }
+  },
+  "reference_git": "5a2c80d96b1d2dba447ff18d873e5fb73ba03c35",
+  "model_revision": "3f09ac4b1cd583be47ea20a7d7daef839473028a",
+  "config_findings": {
+    "image_size": [
+      192,
+      672
+    ],
+    "max_seq_len": 1536,
+    "official_tiny_yaml_and_demo_match": true,
+    "downloaded_preprocessor_size_matches": true,
+    "hf_transform_flags": "do_resize/do_thumbnail/do_pad/do_rescale/do_normalize/do_align_long_axis all false; formula_image_eval owns preprocessing",
+    "checkpoint": "demo pretrained path used; both base loaders read checkpoint[model] and load_state_dict(strict=False); actual weight keys unavailable",
+    "pil_preprocessor": "RGB margin crop, preserve aspect resize then thumbnail, centered black padding, ToGray, Normalize mean.7931/std.1738, ToTensor first channel",
+    "package_difference": "reference Git adds ndarray branch; used PIL path follows same crop/resize/pad operations. Source review only, no tensor equivalence experiment.",
+    "generation": "do_sample=False; max_new_tokens1536; BOS from pinned tokenizer; token2str; underlying EOS/config remain pinned",
+    "execution": "model.eval and torch.inference_mode; upstream maybe_autocast CUDA float16, CPU no autocast; current cloud no GPU",
+    "cause_proven": false,
+    "model_preprocessing_changed": false
+  },
+  "downloaded_metadata_sha256": {
+    "model/preprocessor_config.json": "d06c4b87fd6aa74b8b2cdbc4361227d8073ce37e8cfe9e6442802d0bee64da03",
+    "model/tokenizer.json": "02c318d9cfa95bf323371762b8f838a82709530274d36dba6eca880f0add6cc4",
+    "model/tokenizer_config.json": "fd4d94f8b9dbb7deeb3a3ef084ca0e16c43d45774a180730b7e9cfd6359a074b",
+    "model/README.md": "6eb0517fee84a0769e7415cf598080b900b196d6e182aa6496b8bdbd5801bf24",
+    "model/config.json": "f85c55bd4ec5f73f1a59bc0cf133e9d9622941ad9dbc6c78504c75d80b46f267"
+  },
+  "license_scope": "code PyPI/Git and model card Apache-2.0; dataset publisher rights and per-document limitations remain separate; no public redistribution or external raw upload"
+}

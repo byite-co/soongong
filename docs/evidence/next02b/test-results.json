@@ -1,0 +1,151 @@
+{
+  "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+  "runtime": {
+    "flutter": "3.47.5",
+    "dart": "3.13.4",
+    "python": "3.11.17",
+    "pillow": "12.3.0",
+    "deno": "2.9.6",
+    "postgres": "16.15",
+    "os": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "arch": "x86_64"
+  },
+  "results": [
+    {
+      "item_id": "flutter",
+      "status": "PASS",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+      "command": "flutter test --no-pub --concurrency=2 --reporter expanded",
+      "actual": "983 tests",
+      "log": "/workspace/soongong-state/next02b/flutter-tests.log",
+      "log_sha256": "340c3d6580be8933c5deb85ba81f240b3e99096c2e114b87dda112bd7115d123",
+      "scope": "local verification"
+    },
+    {
+      "item_id": "analyze",
+      "status": "PASS",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+      "command": "flutter analyze --fatal-infos --no-pub",
+      "actual": "No issues found",
+      "log": "/workspace/soongong-state/next02b/analyze-final.log",
+      "log_sha256": "542b3d9b09f48c13c8297c4348b8a71487af3e77e1f929a94fcb0a0af177ba30",
+      "scope": "local verification"
+    },
+    {
+      "item_id": "codegen",
+      "status": "PASS",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+      "command": "dart run build_runner build --delete-conflicting-outputs; git diff --exit-code -- lib pubspec.lock",
+      "actual": "887 outputs; committed generated files and lockfile unchanged",
+      "log": "/workspace/soongong-state/next02b/codegen.log",
+      "log_sha256": "81edbfde7901d5812e30c1e5fee4472371f5ef8e1688c3c59fa638bf912937fc",
+      "scope": "local verification"
+    },
+    {
+      "item_id": "clean-tree",
+      "status": "PASS",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+      "command": "sh tool/ci/check_clean_tree.sh",
+      "actual": "Working tree clean at code commit",
+      "log": "/workspace/soongong-state/next02b/clean-tree.log",
+      "log_sha256": "50e5673cd814aaff615b6e3dfb124aad4b3b6b030e46e66fee409cbe39352b33",
+      "scope": "local verification"
+    },
+    {
+      "item_id": "phrases",
+      "status": "PASS",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+      "command": "dart run tool/check_forbidden_phrases.dart",
+      "actual": "22 files clean",
+      "log": "/workspace/soongong-state/next02b/phrases.log",
+      "log_sha256": "83fd6e93d600088b3c284bb667758210cb9b136364a6c8ecef440d161a61e681",
+      "scope": "local verification"
+    },
+    {
+      "item_id": "worker",
+      "status": "PASS",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+      "command": "python -m unittest discover -s services/study_worker -v",
+      "actual": "58 tests; Python3.11.17",
+      "log": "/workspace/soongong-state/next02b/worker-final-isolated.log",
+      "log_sha256": "a6a38fc2500df0ce50a30ef67ef65d7b4c6cf0073e842f0999c0f3991bc6c86b",
+      "scope": "local verification"
+    },
+    {
+      "item_id": "pgtap",
+      "status": "PASS",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+      "command": "/workspace/soongong-tools/test-postgres.sh",
+      "actual": "508 assertions / 13 files",
+      "log": "/workspace/soongong-state/next02b/postgres-final.log",
+      "log_sha256": "b4e3902bb1de5bdc7900af3818191b7a90d2b69325b14269114e84f163c55834",
+      "scope": "local verification"
+    },
+    {
+      "item_id": "sql-static",
+      "status": "PASS",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+      "command": "psql -d soongong_test -v ON_ERROR_STOP=1 -f supabase/tests/local/plpgsql_diagnostics.sql",
+      "actual": "gate passed: two pre-existing allowlisted dynamic record errors, 36 performance,2 security,9 warning,1 extra warning",
+      "log": "/workspace/soongong-state/next02b/plpgsql.log",
+      "log_sha256": "8d44d9a972d26c6cd0284a05dc11d16325cde4f7d8064b8d93f928843fe2563f",
+      "scope": "local verification"
+    },
+    {
+      "item_id": "edge",
+      "status": "PASS",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+      "command": "deno test -A _tests/",
+      "actual": "53 tests",
+      "log": "/workspace/soongong-state/next02b/deno-tests.log",
+      "log_sha256": "e164b35e89c35812c7ca501e1ea2776cbcc1885174d9b58fe6273f454b8be0a5",
+      "scope": "local verification"
+    },
+    {
+      "item_id": "edge-types",
+      "status": "PASS",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+      "command": "deno check */index.ts ../dev/functions/e2e-runner/index.ts",
+      "actual": "19 entry points",
+      "log": "/workspace/soongong-state/next02b/deno-check.log",
+      "log_sha256": "c6f2f6c97c318b36c42bb8de925d451ec11905951472b895458a0fb84c684004",
+      "scope": "local verification"
+    },
+    {
+      "item_id": "db-edge",
+      "status": "PASS",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+      "command": "PGDATABASE=soongong_test GITHUB_ACTIONS=true deno test -A --config supabase/functions/deno.json supabase/functions/_db_tests/",
+      "actual": "14 tests; real socket-only PostgreSQL; synthetic providers; local wrapper, not hosted CI",
+      "log": "/workspace/soongong-state/next02b/db-edge.log",
+      "log_sha256": "73d14af3d7218cae7631dfa1f04a27915cf91a8fbe20b9784f4dac99f612eea3",
+      "scope": "local verification"
+    },
+    {
+      "item_id": "native-local",
+      "status": "UNVERIFIED",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+      "command": "flutter build apk --debug --flavor dev --no-pub --dart-define-from-file=env/app.dev.json",
+      "actual": "No Android SDK found; official SDK HEAD200; hosted native CI separately verifies builds",
+      "log": "/workspace/soongong-state/next02b/native-android-preflight.log",
+      "log_sha256": "19274a8b7e572772f96904342af140ead104635bec581b23f92e14204e5a50a5",
+      "scope": "local verification"
+    },
+    {
+      "item_id": "device-launcher",
+      "status": "UNVERIFIED",
+      "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+      "command": "python tool/next02b_device_cycle.py --serial test-only --operation text --checkpoint K1 --boundary-proof /tmp/not-used.json --output /tmp/next02b-unexecuted-device.json",
+      "actual": "adb unavailable; no device action or output evidence fabricated",
+      "log": "/workspace/soongong-state/next02b/device-preflight.log",
+      "log_sha256": "3498d29ded9c00d1ca7fcaddba17f2f7ea87ae5c8515e1aa2d540b1e1915a55d",
+      "scope": "local verification"
+    }
+  ],
+  "initial_failures_retained": {
+    "sandbox_socket": "6 HTTP tests EPERM, resolved through authorized escalated execution",
+    "cpu_fixture": "one CPU/wall race under concurrent heavy suites; unchanged isolated rerun passed",
+    "postgres_bind_read": "first postgres-UID mount read denied; existing test-helper root container UID resolved, not host sandbox bypass"
+  },
+  "hosted_ci": "recorded separately by run URL/head/base/merge checkout, not inferred from local results"
+}

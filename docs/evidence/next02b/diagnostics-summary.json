@@ -1,0 +1,28 @@
+{
+  "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+  "actual_model_diagnostics": null,
+  "scope": "synthetic worker processes and real isolated CAS regression",
+  "worker_tests": 58,
+  "status": "PASS",
+  "observations": [
+    "fixed numeric buffer excludes text, exception strings, paths and credentials",
+    "pre-cleanup WNOWAIT and cleanup signals separate; exit cause stays unknown",
+    "EOF exit23 observed; incomplete resource sample stays incomplete",
+    "partial IPC reaches bounded deadline and reaps own process group",
+    "cleanup failure closes admission, next HTTP429",
+    "small-large-small real child allocation shows request RSS independent of cumulative parent high-water",
+    "CPU45 / worker50 / Edge55 / 4MiB / 12M pixels / response256000 / one slot retained"
+  ],
+  "unmeasured": [
+    "Paddle actual native thread concurrency",
+    "real v5 EOF input hashes and causes",
+    "real model GPU and descendant memory",
+    "real model cold/warm latency and billing"
+  ],
+  "intermediate_failure": {
+    "log": "/workspace/soongong-state/next02b/worker-final.log",
+    "result": "57 pass, one existing CPU-limit fixture returned tool_timeout while Flutter and DB tests ran concurrently",
+    "resolution": "same unchanged 58 tests passed with heavy suites finished; limits and expected outcome unchanged",
+    "final_log": "/workspace/soongong-state/next02b/worker-final-isolated.log"
+  }
+}

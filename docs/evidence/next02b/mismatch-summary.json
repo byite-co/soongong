@@ -1,0 +1,32 @@
+{
+  "code_sha": "0b04efcf49a7016d10785f428a9a1ede5628029b",
+  "status": "UNVERIFIED",
+  "historical_mismatches": 48,
+  "historical_raw_required_sha256": "97b205d0b682e3ca9147846640ccb902b434d520b21762248a00637656e65541",
+  "historical_raw_available": false,
+  "reviewed_historical_rows": 0,
+  "primary_counts": {
+    "notation_only_confirmed": null,
+    "recognition_symbol": null,
+    "structure": null,
+    "reference_data": null,
+    "pipeline": null,
+    "undetermined": null
+  },
+  "primary_count_sum": null,
+  "reproduced_mismatch_set": null,
+  "reason": "Original GT/prediction table not in checkout/current workspace; blocked image/weight CDN prevents reproduction. Do not invent 48 undetermined reviews or claim a new output identical to historical output.",
+  "required_private_columns": [
+    "input_hash",
+    "image_reference",
+    "ground_truth",
+    "prediction",
+    "strict_result",
+    "render_status",
+    "primary_category",
+    "secondary_categories",
+    "evidence",
+    "uncertainty",
+    "minus_inequality_exponent_denominator_decimal_calculus_flags"
+  ]
+}
